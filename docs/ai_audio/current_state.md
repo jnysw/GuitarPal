@@ -8,7 +8,7 @@
 - Drift 数据库当前为 v9：`PracticeSources`、`PracticeSegments`、`PracticePlans`、`PracticeSessions`、`PracticeRecordings`、`SyncOutboxEntries`。
 - 本轮开始前，GitHub main 停留在 `aa5075d`；本机已有账号、提醒、反馈二级页和 outbox 改动尚未提交。本轮先单独归档这些改动，再提交 AI 音频基础，避免覆盖历史工作。
 - Supabase Auth 已接入；真实邮箱回跳与登录恢复仍需实际邮箱验证，Google Provider 未配置。尚无 AI API、对象存储上传、模型、云端业务表或推理 worker。
-- 本地 Python 为 3.9.6；未发现 Docker/uv 命令。尚未提供目标 GPU、已实测模型目录、运行命令、权重、配置或基准音频。
+- 当前 Mac 的 Python 为 3.9.6，未发现 Docker/uv 命令。用户随后补充 Windows 实验硬件：RTX 5070 Ti 16GB、AMD 9600X、DDR5 32GB，报告两个模型已返回结果；月预算低于人民币 100 元。已实测模型目录、运行命令、权重、配置和基准音频仍未提供。
 
 ## 能力与复用点
 
