@@ -14,8 +14,8 @@ void main() {
     await database.close();
   });
 
-  test('schema version includes practice recordings', () {
-    expect(database.schemaVersion, 8);
+  test('schema version includes the local sync outbox', () {
+    expect(database.schemaVersion, 9);
   });
 
   test('practice source can be stored in the initial schema', () async {

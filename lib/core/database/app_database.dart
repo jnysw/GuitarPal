@@ -169,6 +169,30 @@ class PracticeRecordings extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+/// Coalesced local metadata changes waiting to be synchronized.
+///
+/// There is at most one row per entity. [revision] is incremented whenever a
+/// newer local mutation replaces a queued one, so a slow upload cannot
+/// accidentally acknowledge a change that happened while it was in flight.
+class SyncOutboxEntries extends Table {
+  TextColumn get entityType => text()();
+
+  TextColumn get entityId => text()();
+
+  TextColumn get operation => text()();
+
+  IntColumn get revision => integer().withDefault(const Constant(1))();
+
+  DateTimeColumn get changedAt => dateTime()();
+
+  IntColumn get attemptCount => integer().withDefault(const Constant(0))();
+
+  TextColumn get lastError => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {entityType, entityId};
+}
+
 @DriftDatabase(
   tables: [
     PracticeSources,
@@ -176,6 +200,7 @@ class PracticeRecordings extends Table {
     PracticePlans,
     PracticeSessions,
     PracticeRecordings,
+    SyncOutboxEntries,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -183,7 +208,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'guitar_pal'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -216,9 +241,62 @@ class AppDatabase extends _$AppDatabase {
       if (from < 8) {
         await migrator.createTable(practiceRecordings);
       }
+      if (from < 9) {
+        await migrator.createTable(syncOutboxEntries);
+        await _backfillSyncOutbox();
+      }
     },
     beforeOpen: (_) async {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  Future<void> _backfillSyncOutbox() async {
+    if (await _tableExists('practice_sources')) {
+      await customStatement('''
+        INSERT OR REPLACE INTO sync_outbox_entries (
+          entity_type, entity_id, operation, revision, changed_at, attempt_count
+        )
+        SELECT 'practiceSource', id, 'upsert', 1, updated_at, 0
+        FROM practice_sources
+      ''');
+    }
+    if (await _tableExists('practice_segments')) {
+      await customStatement('''
+        INSERT OR REPLACE INTO sync_outbox_entries (
+          entity_type, entity_id, operation, revision, changed_at, attempt_count
+        )
+        SELECT 'practiceSegment', id, 'upsert', 1, updated_at, 0
+        FROM practice_segments
+      ''');
+    }
+    if (await _tableExists('practice_plans')) {
+      await customStatement('''
+        INSERT OR REPLACE INTO sync_outbox_entries (
+          entity_type, entity_id, operation, revision, changed_at, attempt_count
+        )
+        SELECT 'practicePlan', id, 'upsert', 1, updated_at, 0
+        FROM practice_plans
+      ''');
+    }
+    if (await _tableExists('practice_sessions')) {
+      await customStatement('''
+        INSERT OR REPLACE INTO sync_outbox_entries (
+          entity_type, entity_id, operation, revision, changed_at, attempt_count
+        )
+        SELECT 'practiceSession', id, 'upsert', 1,
+          COALESCE(ended_at, started_at), 0
+        FROM practice_sessions
+      ''');
+    }
+  }
+
+  Future<bool> _tableExists(String name) async {
+    final row = await customSelect(
+      'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+      variables: [Variable.withString('table'), Variable.withString(name)],
+      readsFrom: const {},
+    ).getSingleOrNull();
+    return row != null;
+  }
 }

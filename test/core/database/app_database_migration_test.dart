@@ -573,4 +573,80 @@ void main() {
       await tempDirectory.delete(recursive: true);
     }
   });
+
+  test('migrates version 8 metadata into the local sync outbox', () async {
+    final tempDirectory = await Directory.systemTemp.createTemp(
+      'guitar_pal_schema_v8_',
+    );
+    final databaseFile = File('${tempDirectory.path}/guitar_pal.sqlite');
+    final timestamp =
+        DateTime.utc(2026, 10, 27, 8).millisecondsSinceEpoch ~/ 1000;
+    final migratedDatabase = AppDatabase(
+      NativeDatabase(
+        databaseFile,
+        setup: (rawDatabase) {
+          rawDatabase.execute('''
+            CREATE TABLE practice_sources (
+              id TEXT NOT NULL PRIMARY KEY,
+              updated_at INTEGER NOT NULL
+            )
+          ''');
+          rawDatabase.execute('''
+            CREATE TABLE practice_segments (
+              id TEXT NOT NULL PRIMARY KEY,
+              updated_at INTEGER NOT NULL
+            )
+          ''');
+          rawDatabase.execute('''
+            CREATE TABLE practice_plans (
+              id TEXT NOT NULL PRIMARY KEY,
+              updated_at INTEGER NOT NULL
+            )
+          ''');
+          rawDatabase.execute('''
+            CREATE TABLE practice_sessions (
+              id TEXT NOT NULL PRIMARY KEY,
+              started_at INTEGER NOT NULL,
+              ended_at INTEGER NULL
+            )
+          ''');
+          rawDatabase.execute('INSERT INTO practice_sources VALUES (?, ?)', [
+            'legacy-source',
+            timestamp,
+          ]);
+          rawDatabase.execute('INSERT INTO practice_segments VALUES (?, ?)', [
+            'legacy-segment',
+            timestamp + 1,
+          ]);
+          rawDatabase.execute('INSERT INTO practice_plans VALUES (?, ?)', [
+            'legacy-plan',
+            timestamp + 2,
+          ]);
+          rawDatabase.execute(
+            'INSERT INTO practice_sessions VALUES (?, ?, ?)',
+            ['legacy-session', timestamp + 3, timestamp + 4],
+          );
+          rawDatabase.execute('PRAGMA user_version = 8');
+        },
+      ),
+    );
+
+    try {
+      final queued = await migratedDatabase
+          .select(migratedDatabase.syncOutboxEntries)
+          .get();
+      expect(queued, hasLength(4));
+      expect(queued.map((row) => row.entityType).toSet(), {
+        'practiceSource',
+        'practiceSegment',
+        'practicePlan',
+        'practiceSession',
+      });
+      expect(queued.every((row) => row.operation == 'upsert'), isTrue);
+      expect(queued.every((row) => row.revision == 1), isTrue);
+    } finally {
+      await migratedDatabase.close();
+      await tempDirectory.delete(recursive: true);
+    }
+  });
 }

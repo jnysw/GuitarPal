@@ -443,6 +443,9 @@ class _PixelEvidence {
 final class _EmptyPracticeSegmentRepository
     implements PracticeSegmentRepository {
   @override
+  Stream<List<PracticeSegment>> watchAll() => Stream.value(const []);
+
+  @override
   Future<void> delete(String id) async {}
 
   @override

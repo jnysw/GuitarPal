@@ -3701,6 +3701,479 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
   }
 }
 
+class $SyncOutboxEntriesTable extends SyncOutboxEntries
+    with TableInfo<$SyncOutboxEntriesTable, SyncOutboxEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncOutboxEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationMeta = const VerificationMeta(
+    'operation',
+  );
+  @override
+  late final GeneratedColumn<String> operation = GeneratedColumn<String>(
+    'operation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _changedAtMeta = const VerificationMeta(
+    'changedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> changedAt = GeneratedColumn<DateTime>(
+    'changed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptCountMeta = const VerificationMeta(
+    'attemptCount',
+  );
+  @override
+  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
+    'attempt_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'last_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    entityType,
+    entityId,
+    operation,
+    revision,
+    changedAt,
+    attemptCount,
+    lastError,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_outbox_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncOutboxEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('operation')) {
+      context.handle(
+        _operationMeta,
+        operation.isAcceptableOrUnknown(data['operation']!, _operationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_operationMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('changed_at')) {
+      context.handle(
+        _changedAtMeta,
+        changedAt.isAcceptableOrUnknown(data['changed_at']!, _changedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_changedAtMeta);
+    }
+    if (data.containsKey('attempt_count')) {
+      context.handle(
+        _attemptCountMeta,
+        attemptCount.isAcceptableOrUnknown(
+          data['attempt_count']!,
+          _attemptCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entityType, entityId};
+  @override
+  SyncOutboxEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncOutboxEntry(
+      entityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_type'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      operation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      changedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}changed_at'],
+      )!,
+      attemptCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempt_count'],
+      )!,
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error'],
+      ),
+    );
+  }
+
+  @override
+  $SyncOutboxEntriesTable createAlias(String alias) {
+    return $SyncOutboxEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class SyncOutboxEntry extends DataClass implements Insertable<SyncOutboxEntry> {
+  final String entityType;
+  final String entityId;
+  final String operation;
+  final int revision;
+  final DateTime changedAt;
+  final int attemptCount;
+  final String? lastError;
+  const SyncOutboxEntry({
+    required this.entityType,
+    required this.entityId,
+    required this.operation,
+    required this.revision,
+    required this.changedAt,
+    required this.attemptCount,
+    this.lastError,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entity_type'] = Variable<String>(entityType);
+    map['entity_id'] = Variable<String>(entityId);
+    map['operation'] = Variable<String>(operation);
+    map['revision'] = Variable<int>(revision);
+    map['changed_at'] = Variable<DateTime>(changedAt);
+    map['attempt_count'] = Variable<int>(attemptCount);
+    if (!nullToAbsent || lastError != null) {
+      map['last_error'] = Variable<String>(lastError);
+    }
+    return map;
+  }
+
+  SyncOutboxEntriesCompanion toCompanion(bool nullToAbsent) {
+    return SyncOutboxEntriesCompanion(
+      entityType: Value(entityType),
+      entityId: Value(entityId),
+      operation: Value(operation),
+      revision: Value(revision),
+      changedAt: Value(changedAt),
+      attemptCount: Value(attemptCount),
+      lastError: lastError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastError),
+    );
+  }
+
+  factory SyncOutboxEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncOutboxEntry(
+      entityType: serializer.fromJson<String>(json['entityType']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      operation: serializer.fromJson<String>(json['operation']),
+      revision: serializer.fromJson<int>(json['revision']),
+      changedAt: serializer.fromJson<DateTime>(json['changedAt']),
+      attemptCount: serializer.fromJson<int>(json['attemptCount']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entityType': serializer.toJson<String>(entityType),
+      'entityId': serializer.toJson<String>(entityId),
+      'operation': serializer.toJson<String>(operation),
+      'revision': serializer.toJson<int>(revision),
+      'changedAt': serializer.toJson<DateTime>(changedAt),
+      'attemptCount': serializer.toJson<int>(attemptCount),
+      'lastError': serializer.toJson<String?>(lastError),
+    };
+  }
+
+  SyncOutboxEntry copyWith({
+    String? entityType,
+    String? entityId,
+    String? operation,
+    int? revision,
+    DateTime? changedAt,
+    int? attemptCount,
+    Value<String?> lastError = const Value.absent(),
+  }) => SyncOutboxEntry(
+    entityType: entityType ?? this.entityType,
+    entityId: entityId ?? this.entityId,
+    operation: operation ?? this.operation,
+    revision: revision ?? this.revision,
+    changedAt: changedAt ?? this.changedAt,
+    attemptCount: attemptCount ?? this.attemptCount,
+    lastError: lastError.present ? lastError.value : this.lastError,
+  );
+  SyncOutboxEntry copyWithCompanion(SyncOutboxEntriesCompanion data) {
+    return SyncOutboxEntry(
+      entityType: data.entityType.present
+          ? data.entityType.value
+          : this.entityType,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      operation: data.operation.present ? data.operation.value : this.operation,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      changedAt: data.changedAt.present ? data.changedAt.value : this.changedAt,
+      attemptCount: data.attemptCount.present
+          ? data.attemptCount.value
+          : this.attemptCount,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncOutboxEntry(')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('operation: $operation, ')
+          ..write('revision: $revision, ')
+          ..write('changedAt: $changedAt, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('lastError: $lastError')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    entityType,
+    entityId,
+    operation,
+    revision,
+    changedAt,
+    attemptCount,
+    lastError,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncOutboxEntry &&
+          other.entityType == this.entityType &&
+          other.entityId == this.entityId &&
+          other.operation == this.operation &&
+          other.revision == this.revision &&
+          other.changedAt == this.changedAt &&
+          other.attemptCount == this.attemptCount &&
+          other.lastError == this.lastError);
+}
+
+class SyncOutboxEntriesCompanion extends UpdateCompanion<SyncOutboxEntry> {
+  final Value<String> entityType;
+  final Value<String> entityId;
+  final Value<String> operation;
+  final Value<int> revision;
+  final Value<DateTime> changedAt;
+  final Value<int> attemptCount;
+  final Value<String?> lastError;
+  final Value<int> rowid;
+  const SyncOutboxEntriesCompanion({
+    this.entityType = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.operation = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.changedAt = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncOutboxEntriesCompanion.insert({
+    required String entityType,
+    required String entityId,
+    required String operation,
+    this.revision = const Value.absent(),
+    required DateTime changedAt,
+    this.attemptCount = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : entityType = Value(entityType),
+       entityId = Value(entityId),
+       operation = Value(operation),
+       changedAt = Value(changedAt);
+  static Insertable<SyncOutboxEntry> custom({
+    Expression<String>? entityType,
+    Expression<String>? entityId,
+    Expression<String>? operation,
+    Expression<int>? revision,
+    Expression<DateTime>? changedAt,
+    Expression<int>? attemptCount,
+    Expression<String>? lastError,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entityType != null) 'entity_type': entityType,
+      if (entityId != null) 'entity_id': entityId,
+      if (operation != null) 'operation': operation,
+      if (revision != null) 'revision': revision,
+      if (changedAt != null) 'changed_at': changedAt,
+      if (attemptCount != null) 'attempt_count': attemptCount,
+      if (lastError != null) 'last_error': lastError,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncOutboxEntriesCompanion copyWith({
+    Value<String>? entityType,
+    Value<String>? entityId,
+    Value<String>? operation,
+    Value<int>? revision,
+    Value<DateTime>? changedAt,
+    Value<int>? attemptCount,
+    Value<String?>? lastError,
+    Value<int>? rowid,
+  }) {
+    return SyncOutboxEntriesCompanion(
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      operation: operation ?? this.operation,
+      revision: revision ?? this.revision,
+      changedAt: changedAt ?? this.changedAt,
+      attemptCount: attemptCount ?? this.attemptCount,
+      lastError: lastError ?? this.lastError,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (operation.present) {
+      map['operation'] = Variable<String>(operation.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (changedAt.present) {
+      map['changed_at'] = Variable<DateTime>(changedAt.value);
+    }
+    if (attemptCount.present) {
+      map['attempt_count'] = Variable<int>(attemptCount.value);
+    }
+    if (lastError.present) {
+      map['last_error'] = Variable<String>(lastError.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncOutboxEntriesCompanion(')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('operation: $operation, ')
+          ..write('revision: $revision, ')
+          ..write('changedAt: $changedAt, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('lastError: $lastError, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3716,6 +4189,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $PracticeRecordingsTable practiceRecordings =
       $PracticeRecordingsTable(this);
+  late final $SyncOutboxEntriesTable syncOutboxEntries =
+      $SyncOutboxEntriesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3726,6 +4201,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     practicePlans,
     practiceSessions,
     practiceRecordings,
+    syncOutboxEntries,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -6352,6 +6828,266 @@ typedef $$PracticeRecordingsTableProcessedTableManager =
       PracticeRecording,
       PrefetchHooks Function()
     >;
+typedef $$SyncOutboxEntriesTableCreateCompanionBuilder =
+    SyncOutboxEntriesCompanion Function({
+      required String entityType,
+      required String entityId,
+      required String operation,
+      Value<int> revision,
+      required DateTime changedAt,
+      Value<int> attemptCount,
+      Value<String?> lastError,
+      Value<int> rowid,
+    });
+typedef $$SyncOutboxEntriesTableUpdateCompanionBuilder =
+    SyncOutboxEntriesCompanion Function({
+      Value<String> entityType,
+      Value<String> entityId,
+      Value<String> operation,
+      Value<int> revision,
+      Value<DateTime> changedAt,
+      Value<int> attemptCount,
+      Value<String?> lastError,
+      Value<int> rowid,
+    });
+
+class $$SyncOutboxEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncOutboxEntriesTable> {
+  $$SyncOutboxEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncOutboxEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncOutboxEntriesTable> {
+  $$SyncOutboxEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncOutboxEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncOutboxEntriesTable> {
+  $$SyncOutboxEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<String> get operation =>
+      $composableBuilder(column: $table.operation, builder: (column) => column);
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get changedAt =>
+      $composableBuilder(column: $table.changedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
+}
+
+class $$SyncOutboxEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncOutboxEntriesTable,
+          SyncOutboxEntry,
+          $$SyncOutboxEntriesTableFilterComposer,
+          $$SyncOutboxEntriesTableOrderingComposer,
+          $$SyncOutboxEntriesTableAnnotationComposer,
+          $$SyncOutboxEntriesTableCreateCompanionBuilder,
+          $$SyncOutboxEntriesTableUpdateCompanionBuilder,
+          (
+            SyncOutboxEntry,
+            BaseReferences<
+              _$AppDatabase,
+              $SyncOutboxEntriesTable,
+              SyncOutboxEntry
+            >,
+          ),
+          SyncOutboxEntry,
+          PrefetchHooks Function()
+        > {
+  $$SyncOutboxEntriesTableTableManager(
+    _$AppDatabase db,
+    $SyncOutboxEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncOutboxEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncOutboxEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncOutboxEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> entityType = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<String> operation = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> changedAt = const Value.absent(),
+                Value<int> attemptCount = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncOutboxEntriesCompanion(
+                entityType: entityType,
+                entityId: entityId,
+                operation: operation,
+                revision: revision,
+                changedAt: changedAt,
+                attemptCount: attemptCount,
+                lastError: lastError,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entityType,
+                required String entityId,
+                required String operation,
+                Value<int> revision = const Value.absent(),
+                required DateTime changedAt,
+                Value<int> attemptCount = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncOutboxEntriesCompanion.insert(
+                entityType: entityType,
+                entityId: entityId,
+                operation: operation,
+                revision: revision,
+                changedAt: changedAt,
+                attemptCount: attemptCount,
+                lastError: lastError,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SyncOutboxEntriesTable, SyncOutboxEntry>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncOutboxEntriesTable,
+                    SyncOutboxEntry
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncOutboxEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncOutboxEntriesTable,
+      SyncOutboxEntry,
+      $$SyncOutboxEntriesTableFilterComposer,
+      $$SyncOutboxEntriesTableOrderingComposer,
+      $$SyncOutboxEntriesTableAnnotationComposer,
+      $$SyncOutboxEntriesTableCreateCompanionBuilder,
+      $$SyncOutboxEntriesTableUpdateCompanionBuilder,
+      (
+        SyncOutboxEntry,
+        BaseReferences<_$AppDatabase, $SyncOutboxEntriesTable, SyncOutboxEntry>,
+      ),
+      SyncOutboxEntry,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6366,4 +7102,6 @@ class $AppDatabaseManager {
       $$PracticeSessionsTableTableManager(_db, _db.practiceSessions);
   $$PracticeRecordingsTableTableManager get practiceRecordings =>
       $$PracticeRecordingsTableTableManager(_db, _db.practiceRecordings);
+  $$SyncOutboxEntriesTableTableManager get syncOutboxEntries =>
+      $$SyncOutboxEntriesTableTableManager(_db, _db.syncOutboxEntries);
 }
