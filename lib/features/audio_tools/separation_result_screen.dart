@@ -9,6 +9,7 @@ import 'algorithm_providers.dart';
 import 'data/algorithm_stem_store.dart';
 import 'domain/algorithm_task.dart';
 import 'domain/legacy_algorithm_models.dart';
+import 'stem_mix_screen.dart';
 
 class SeparationResultScreen extends ConsumerStatefulWidget {
   const SeparationResultScreen({required this.task, super.key});
@@ -134,6 +135,33 @@ class _SeparationResultScreenState extends ConsumerState<SeparationResultScreen>
     }
   }
 
+  Future<void> _openMix() async {
+    if (_busy || _local.isEmpty || _result == null) return;
+    setState(() => _busy = true);
+    try {
+      await _player.stop();
+      if (!mounted) return;
+      setState(() {
+        _playing = false;
+        _active = null;
+        _position = Duration.zero;
+      });
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => StemMixScreen(
+            taskId: widget.task.id,
+            title: widget.task.inputName,
+            result: _result!,
+          ),
+        ),
+      );
+    } on Object {
+      _message('无法打开分轨练习，请稍后重试');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _poll() async {
     if (_polling || !_playing || !mounted) return;
     _polling = true;
@@ -212,7 +240,12 @@ class _SeparationResultScreenState extends ConsumerState<SeparationResultScreen>
                       ? '服务器文件已到期；已下载的音轨仍可离线试听。'
                       : '服务器文件到期：${result.expiresAt.toLocal()}。需要保留的音轨请下载到本机。',
                 ),
-                const Text('当前支持单条音轨试听和拖动进度；多轨混音及练习播放器联动将在后续接入。'),
+                const Text('下载音轨后可进入分轨练习，调节音量、独奏、倍速和 A-B 循环。'),
+                FilledButton.icon(
+                  onPressed: _busy || _local.isEmpty ? null : _openMix,
+                  icon: const Icon(Icons.tune),
+                  label: const Text('进入分轨练习'),
+                ),
                 for (final stem in result.stems)
                   Card(
                     child: Padding(
