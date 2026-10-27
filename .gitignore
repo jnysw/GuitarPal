@@ -33,6 +33,7 @@ migrate_working_dir/
 /build/
 /coverage/
 /config/supabase.local.json
+/config/algorithm.local.json
 /server/.venv/
 __pycache__/
 .pytest_cache/

@@ -1,42 +1,49 @@
 # Windows 算法客户端联调
 
-当前可以开发完成后再配置实际服务器地址，无需在本机或仓库提供 Windows 登录信息。当前代码仅实现现有和弦服务的客户端流程；没有访问 Windows 主机、启动模型或租用服务器。
+更新：2026-10-28。已通过 Tailscale Serve HTTPS 跑通实际和弦、分轨任务，以及 Android 模拟器上的 Flutter 下载和本机试听。该服务仅供同一 tailnet 的开发测试，普通互联网用户不能访问。
 
-## 打开入口
+## 配置和入口
 
-运行 Debug 构建后，从“我的 → 音频工具（实验）”进入。填写 Windows 的局域网服务地址和端口，再点“检查连接”。该检查只调用 `/api/v1/health/ping`，不能证明权重已经加载。
-
-也可在原有构建参数后追加：
+真实源地址写入本机 `config/algorithm.local.json`（已忽略，不进入 GitHub），格式见 `config/algorithm.example.json`。与既有账号配置一起启动：
 
 ```bash
-flutter run --dart-define-from-file=config/supabase.local.json --dart-define=ALGORITHM_BASE_URL=http://YOUR_PRIVATE_HOST:8000
+flutter run --dart-define-from-file=config/supabase.local.json --dart-define-from-file=config/algorithm.local.json
 ```
 
-示例地址必须在真实联调时替换；项目没有默认指向可运行服务。手机的 localhost 指手机自身。调试配置允许局域网 HTTP，Release 隐藏实验入口且不添加明文流量许可；无鉴权的上游 API 不能作为生产入口。
+也可只追加 `--dart-define=API_BASE_URL=https://YOUR_TAILNET_HOST`。`API_BASE_URL` 是统一配置键；兼容旧构建的 `ALGORITHM_BASE_URL`，前者优先。地址只包含 HTTPS 源，不加 `/api/v1`，不内嵌密码。没有构建配置时仍可在页面填写；已有任务保存自己的源地址，不随新配置迁移到另一服务。
 
-## 本批流程
+Debug 构建：“我的 → 音频工具（实验）”。Mac 的 Tailscale 需保持连接，Windows 需开机并运行算法服务。模拟器通过 Mac 网络访问，独立 Android 真机也需要可访问该 tailnet。TLS 使用正常校验，不绕过证书。
 
-1. 选择自有音频文件或已有练习录音；音频文件由 Android 系统选择器复制到应用私有 `algorithm_inputs`。限制 2 秒至 10 分钟、50 MiB。客户端检查容器元数据，服务端仍必须独立校验真实编码/解码时长。
-2. 点“分析和弦”，查看接收服务器、文件大小和上传说明，再确认。
-3. 实际字节上传后收到 202 才表示取得可恢复的远端任务 ID。队列和执行阶段按服务端响应显示。
-4. 可以离开页面或进入后台；停止的是查询，服务器任务继续执行。重新进入页面会从 Drift 数据库恢复查询。
-5. 成功后 JSON 落盘，点“查看离线结果”。结果属于这份音频，不会覆盖原曲或已有练习片段。
-6. “移除本机记录”清理该任务缓存及其导入音频副本；选择已有录音时原录音保留。当前 API 没有远端取消或删除能力。
+“检查连接”只调用 `/api/v1/health/ping`，不能证明模型已就绪。Release 仍隐藏无内置账号鉴权的实验服务入口。
 
-## 协议兼容与限制
+## 操作流程
 
-- 使用交接文档中真实存在的 `/api/v1/jobs`、`/status`、`/result`；没有调用旧 README 中未注册的 `/api/analyze`。
-- `audio` 是 multipart 文件字段，其余参数放 query；不发送 Supabase token 或长期 API 密钥到这个无鉴权实验服务。
-- 客户端不发送设备选项；当前上游 API 默认 CPU，不能根据用户机器有 GPU 就声称已使用 CUDA。模型设备与缓存应由服务端固定后在联调时核对。
-- POST 没有服务端幂等保证。响应丢失后只记录接收未知，必须由用户决定是否另建任务，不会循环上传或伪造可恢复 ID。
-- 服务器重启/过期可能使任务返回 404，本机无法恢复上游已丢失的执行状态；已经下载的 JSON 保留。
-- 当前 v1 会裁掉首尾静音且丢失偏移，因此结果列表只展示分析坐标，不开放原曲定位、时间轴同步或 A-B；需要后端版本化修复后再接这些功能。
-- 上游填充的 1.0 不显示成置信度，也不将 tempo 的 120 兜底当成可靠 BPM。
-- 分轨 HTTP 仍标为 proposed-not-implemented。已准备类型及响应链接校验，但未开放分轨上传入口、七轨播放或同步承诺。
-- 视频按区间精确提取、源媒体修订、上传断点续传、跨账户权限与生产持久任务系统仍未交付。
+1. 选择音频文件或已有练习录音，选择“和弦分析”或“分离音轨”。系统文件导入会创建私有副本；支持 MP3/WAV/FLAC/OGG/M4A，2–600 秒且不超过 50 MiB。
+2. 确认接收服务器、文件和上传用途后提交。multipart 字段为 `audio`，参数放 query。客户端不发送 Supabase token，也不根据显卡型号擅自选择设备，沿用服务端默认配置。
+3. 收到 202 后保存任务 ID 和类型，前台每 2 秒查询。处理阶段进度与上传字节进度分开；服务端未提供处理百分比时显示不定进度。
+4. 离开任务页/打开结果页/进入后台会停止后续轮询；回到任务页恢复查询。停止查询不等于远端取消。响应丢失的 POST 不自动重传；重启或过期引起的 404/410 明确提示任务失效。
+5. 和弦 JSON 可离线查看。旧接口时间基于裁剪静音后的音频，尚不用于原曲定位、同步或 A-B；默认 1.0 不作为模型置信度展示，不显示兜底 BPM。
+6. 分轨结果列出人声、鼓、贝斯、吉他、钢琴、其他、伴奏七轨。伴奏保留 `derived` 含义。清单落盘不代表音频已下载；到期前需逐条“下载到本机”。显示服务端 `expires_at` 的本地时间。
+7. 下载以流式写入 `.part`，检查长度、类型和 WAV/FLAC 头，再原子改名到持久私有目录 `algorithm_stems`。失败/中断不显示为已下载，重试从头获取；当前没有断点续传。服务器已到期时仍能试听本机完整文件。
+8. 点击“试听”播放单条音轨，支持暂停、恢复和拖动进度。离开结果页或进入后台停止试听；当前未实现多轨同时混音、独奏/静音、原播放器同步及随速 A-B。
+9. “移除本机记录”清理本机 JSON、导入副本和已下载音轨，不删除用户原有练习录音，也不取消远端任务。正在下载时不能删除该任务。离开结果页后已开始的下载可继续，应用进程被系统终止时下次需重试。
 
-## 验证方式
+## 验证与后续
 
-本地测试使用合成协议样例及 loopback HTTP 服务，验证真实 multipart 文件字段/query、数值转换、错误/退避、同源链接、提交响应丢失、任务查询与缓存流程。页面测试中的结果是 fixture，不是模型预测。
+实测记录见 [2026-10-28 联调](live_validation_2026-10-28.md)。协议/页面测试仍使用明确标记的合成 fixture，不能据此声明模型准确率。
 
-数据库迁移测试验证 v9 → v10 后来源、A-B、历史练习和录音路径可读。真实 Android 文件选择器与 Windows 模型的端到端测试留到后续联调，届时记录地址以外的模型配置、版本和音频基准。
+视频区间精确提取、源媒体修订、和弦原曲时间轴、指法库、多轨混音、跨账户权限及生产持久任务系统继续按规划开发。Windows 上游内存任务服务不具备生产队列的重启恢复保证。
+
+复现真实接口冒烟（仅上传脚本生成的节奏音频）：
+
+```bash
+python3 tools/smoke_legacy_algorithm.py --base-url https://YOUR_TAILNET_HOST
+```
+
+输出与下载默认位于 `/tmp/guitarpal-live-smoke`，不提交到 Git。独立 Android 原生试听测试：
+
+```bash
+flutter test integration_test/algorithm_stem_playback_test.dart -d emulator-5554
+```
+
+若提供 `--dart-define-from-file=config/algorithm.local.json --dart-define=SMOKE_SEPARATION_JOB=<未过期的已完成任务ID>`，还会执行 Flutter HTTPS 下载真实吉他音轨并本机试听的测试；不提供时仅跳过该联网项。

@@ -196,6 +196,7 @@ class SyncOutboxEntries extends Table {
 /// Private development-service jobs. Never part of metadata cloud sync.
 class AlgorithmTasks extends Table {
   TextColumn get id => text()();
+  TextColumn get operation => text().withDefault(const Constant('chords'))();
   TextColumn get endpoint => text()();
   TextColumn get inputPath => text()();
   TextColumn get inputName => text()();
@@ -234,7 +235,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'guitar_pal'));
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -273,6 +274,8 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 10) {
         await migrator.createTable(algorithmTasks);
+      } else if (from < 11) {
+        await migrator.addColumn(algorithmTasks, algorithmTasks.operation);
       }
     },
     beforeOpen: (_) async {

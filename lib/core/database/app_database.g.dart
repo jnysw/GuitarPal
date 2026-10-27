@@ -4189,6 +4189,18 @@ class $AlgorithmTasksTable extends AlgorithmTasks
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _operationMeta = const VerificationMeta(
+    'operation',
+  );
+  @override
+  late final GeneratedColumn<String> operation = GeneratedColumn<String>(
+    'operation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('chords'),
+  );
   static const VerificationMeta _endpointMeta = const VerificationMeta(
     'endpoint',
   );
@@ -4370,6 +4382,7 @@ class $AlgorithmTasksTable extends AlgorithmTasks
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    operation,
     endpoint,
     inputPath,
     inputName,
@@ -4403,6 +4416,12 @@ class $AlgorithmTasksTable extends AlgorithmTasks
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('operation')) {
+      context.handle(
+        _operationMeta,
+        operation.isAcceptableOrUnknown(data['operation']!, _operationMeta),
+      );
     }
     if (data.containsKey('endpoint')) {
       context.handle(
@@ -4547,6 +4566,10 @@ class $AlgorithmTasksTable extends AlgorithmTasks
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      operation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation'],
+      )!,
       endpoint: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}endpoint'],
@@ -4622,6 +4645,7 @@ class $AlgorithmTasksTable extends AlgorithmTasks
 
 class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   final String id;
+  final String operation;
   final String endpoint;
   final String inputPath;
   final String inputName;
@@ -4640,6 +4664,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   final DateTime updatedAt;
   const AlgorithmTask({
     required this.id,
+    required this.operation,
     required this.endpoint,
     required this.inputPath,
     required this.inputName,
@@ -4661,6 +4686,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['operation'] = Variable<String>(operation);
     map['endpoint'] = Variable<String>(endpoint);
     map['input_path'] = Variable<String>(inputPath);
     map['input_name'] = Variable<String>(inputName);
@@ -4695,6 +4721,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   AlgorithmTasksCompanion toCompanion(bool nullToAbsent) {
     return AlgorithmTasksCompanion(
       id: Value(id),
+      operation: Value(operation),
       endpoint: Value(endpoint),
       inputPath: Value(inputPath),
       inputName: Value(inputName),
@@ -4733,6 +4760,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return AlgorithmTask(
       id: serializer.fromJson<String>(json['id']),
+      operation: serializer.fromJson<String>(json['operation']),
       endpoint: serializer.fromJson<String>(json['endpoint']),
       inputPath: serializer.fromJson<String>(json['inputPath']),
       inputName: serializer.fromJson<String>(json['inputName']),
@@ -4758,6 +4786,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'operation': serializer.toJson<String>(operation),
       'endpoint': serializer.toJson<String>(endpoint),
       'inputPath': serializer.toJson<String>(inputPath),
       'inputName': serializer.toJson<String>(inputName),
@@ -4779,6 +4808,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
 
   AlgorithmTask copyWith({
     String? id,
+    String? operation,
     String? endpoint,
     String? inputPath,
     String? inputName,
@@ -4797,6 +4827,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     DateTime? updatedAt,
   }) => AlgorithmTask(
     id: id ?? this.id,
+    operation: operation ?? this.operation,
     endpoint: endpoint ?? this.endpoint,
     inputPath: inputPath ?? this.inputPath,
     inputName: inputName ?? this.inputName,
@@ -4817,6 +4848,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   AlgorithmTask copyWithCompanion(AlgorithmTasksCompanion data) {
     return AlgorithmTask(
       id: data.id.present ? data.id.value : this.id,
+      operation: data.operation.present ? data.operation.value : this.operation,
       endpoint: data.endpoint.present ? data.endpoint.value : this.endpoint,
       inputPath: data.inputPath.present ? data.inputPath.value : this.inputPath,
       inputName: data.inputName.present ? data.inputName.value : this.inputName,
@@ -4854,6 +4886,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   String toString() {
     return (StringBuffer('AlgorithmTask(')
           ..write('id: $id, ')
+          ..write('operation: $operation, ')
           ..write('endpoint: $endpoint, ')
           ..write('inputPath: $inputPath, ')
           ..write('inputName: $inputName, ')
@@ -4877,6 +4910,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   @override
   int get hashCode => Object.hash(
     id,
+    operation,
     endpoint,
     inputPath,
     inputName,
@@ -4899,6 +4933,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
       identical(this, other) ||
       (other is AlgorithmTask &&
           other.id == this.id &&
+          other.operation == this.operation &&
           other.endpoint == this.endpoint &&
           other.inputPath == this.inputPath &&
           other.inputName == this.inputName &&
@@ -4919,6 +4954,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
 
 class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
   final Value<String> id;
+  final Value<String> operation;
   final Value<String> endpoint;
   final Value<String> inputPath;
   final Value<String> inputName;
@@ -4938,6 +4974,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
   final Value<int> rowid;
   const AlgorithmTasksCompanion({
     this.id = const Value.absent(),
+    this.operation = const Value.absent(),
     this.endpoint = const Value.absent(),
     this.inputPath = const Value.absent(),
     this.inputName = const Value.absent(),
@@ -4958,6 +4995,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
   });
   AlgorithmTasksCompanion.insert({
     required String id,
+    this.operation = const Value.absent(),
     required String endpoint,
     required String inputPath,
     required String inputName,
@@ -4986,6 +5024,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
        updatedAt = Value(updatedAt);
   static Insertable<AlgorithmTask> custom({
     Expression<String>? id,
+    Expression<String>? operation,
     Expression<String>? endpoint,
     Expression<String>? inputPath,
     Expression<String>? inputName,
@@ -5006,6 +5045,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (operation != null) 'operation': operation,
       if (endpoint != null) 'endpoint': endpoint,
       if (inputPath != null) 'input_path': inputPath,
       if (inputName != null) 'input_name': inputName,
@@ -5029,6 +5069,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
 
   AlgorithmTasksCompanion copyWith({
     Value<String>? id,
+    Value<String>? operation,
     Value<String>? endpoint,
     Value<String>? inputPath,
     Value<String>? inputName,
@@ -5049,6 +5090,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
   }) {
     return AlgorithmTasksCompanion(
       id: id ?? this.id,
+      operation: operation ?? this.operation,
       endpoint: endpoint ?? this.endpoint,
       inputPath: inputPath ?? this.inputPath,
       inputName: inputName ?? this.inputName,
@@ -5074,6 +5116,9 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (operation.present) {
+      map['operation'] = Variable<String>(operation.value);
     }
     if (endpoint.present) {
       map['endpoint'] = Variable<String>(endpoint.value);
@@ -5133,6 +5178,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
   String toString() {
     return (StringBuffer('AlgorithmTasksCompanion(')
           ..write('id: $id, ')
+          ..write('operation: $operation, ')
           ..write('endpoint: $endpoint, ')
           ..write('inputPath: $inputPath, ')
           ..write('inputName: $inputName, ')
@@ -8074,6 +8120,7 @@ typedef $$SyncOutboxEntriesTableProcessedTableManager =
 typedef $$AlgorithmTasksTableCreateCompanionBuilder =
     AlgorithmTasksCompanion Function({
       required String id,
+      Value<String> operation,
       required String endpoint,
       required String inputPath,
       required String inputName,
@@ -8095,6 +8142,7 @@ typedef $$AlgorithmTasksTableCreateCompanionBuilder =
 typedef $$AlgorithmTasksTableUpdateCompanionBuilder =
     AlgorithmTasksCompanion Function({
       Value<String> id,
+      Value<String> operation,
       Value<String> endpoint,
       Value<String> inputPath,
       Value<String> inputName,
@@ -8125,6 +8173,11 @@ class $$AlgorithmTasksTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operation => $composableBuilder(
+    column: $table.operation,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8223,6 +8276,11 @@ class $$AlgorithmTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get endpoint => $composableBuilder(
     column: $table.endpoint,
     builder: (column) => ColumnOrderings(column),
@@ -8315,6 +8373,9 @@ class $$AlgorithmTasksTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get operation =>
+      $composableBuilder(column: $table.operation, builder: (column) => column);
 
   GeneratedColumn<String> get endpoint =>
       $composableBuilder(column: $table.endpoint, builder: (column) => column);
@@ -8413,6 +8474,7 @@ class $$AlgorithmTasksTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> operation = const Value.absent(),
                 Value<String> endpoint = const Value.absent(),
                 Value<String> inputPath = const Value.absent(),
                 Value<String> inputName = const Value.absent(),
@@ -8432,6 +8494,7 @@ class $$AlgorithmTasksTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => AlgorithmTasksCompanion(
                 id: id,
+                operation: operation,
                 endpoint: endpoint,
                 inputPath: inputPath,
                 inputName: inputName,
@@ -8453,6 +8516,7 @@ class $$AlgorithmTasksTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String> operation = const Value.absent(),
                 required String endpoint,
                 required String inputPath,
                 required String inputName,
@@ -8472,6 +8536,7 @@ class $$AlgorithmTasksTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => AlgorithmTasksCompanion.insert(
                 id: id,
+                operation: operation,
                 endpoint: endpoint,
                 inputPath: inputPath,
                 inputName: inputName,

@@ -128,14 +128,7 @@ class LegacyAlgorithmApi implements AlgorithmApi {
     if (operation == AlgorithmOperation.chords) {
       LegacyChordResult.fromJson(data);
     } else {
-      final stems = algorithmList(data['stems'])
-          .map(
-            (s) => LegacyStemFile.fromJson(algorithmObject(s), endpoint, jobId),
-          )
-          .toList();
-      if (stems.length != 7 || stems.map((s) => s.id).toSet().length != 7) {
-        throw const FormatException('当前模型必须返回七个互不重复的真实音轨');
-      }
+      LegacySeparationResult.fromJson(data, endpoint);
     }
     return data;
   }

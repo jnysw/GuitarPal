@@ -7,12 +7,85 @@ import 'package:guitar_pal/features/audio_tools/domain/legacy_algorithm_models.d
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../../support/algorithm_fixtures.dart';
+
 Map<String, Object?> legacyFixture() => jsonDecode(
   File('contracts/legacy_algorithm/fixtures/chords_result.json')
       .readAsStringSync(),
 ) as Map<String, Object?>;
 
 void main() {
+  test('separation POST uses its route/query and accepts unknown processing progress and structured failure', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'gp_separation_post_',
+    );
+    final file = File('${directory.path}/test.wav');
+    await file.writeAsBytes(syntheticAlgorithmWav());
+    final endpoint = AlgorithmEndpoint(
+      'https://algorithm.example',
+      allowLocalHttp: false,
+    );
+    final api = LegacyAlgorithmApi(
+      endpoint,
+      client: MockClient((request) async {
+        if (request.method == 'POST') {
+          expect(request.url.path, '/api/v1/separation/jobs');
+          expect(request.url.queryParameters, {'output_format': 'wav_s16'});
+          expect(
+            utf8.decode(request.bodyBytes, allowMalformed: true),
+            contains('name="audio"'),
+          );
+          return http.Response(
+            jsonEncode({
+              'job_id': 'job-1',
+              'status': 'queued',
+              'poll_url': '/api/v1/separation/jobs/job-1/status',
+              'result_url': '/api/v1/separation/jobs/job-1/result',
+            }),
+            202,
+          );
+        }
+        if (request.url.path.endsWith('/result')) {
+          return http.Response(
+            jsonEncode(separationFixture(jobId: 'job-1')),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'job_id': 'job-1',
+            'status': 'failed',
+            'progress': null,
+            'message': 'failed',
+            'error': {
+              'code': 'processing_failed',
+              'message': '可读推理错误',
+              'retryable': false,
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+    try {
+      await api.upload(
+        file.path,
+        'test.wav',
+        operation: AlgorithmOperation.separation,
+      );
+      final status = await api.status('job-1', AlgorithmOperation.separation);
+      expect(status.error, '可读推理错误');
+      expect(status.progress, isNull);
+      expect(
+        (await api.result('job-1', AlgorithmOperation.separation))['stems'],
+        hasLength(7),
+      );
+    } finally {
+      api.close();
+      await directory.delete(recursive: true);
+    }
+  });
   test(
     'real HTTP multipart uses audio, query options and source filename',
     () async {

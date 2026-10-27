@@ -11,6 +11,8 @@ import 'package:guitar_pal/features/audio_tools/data/legacy_algorithm_api.dart';
 import 'package:guitar_pal/features/audio_tools/domain/algorithm_task.dart';
 import 'package:guitar_pal/features/audio_tools/domain/legacy_algorithm_models.dart';
 
+import '../../support/algorithm_fixtures.dart';
+
 void main() {
   group('task service', () {
     late AppDatabase database;
@@ -119,6 +121,25 @@ void main() {
       },
     );
 
+    test(
+      'separation operation survives persistence, polling and caching',
+      () async {
+        await service.submit(
+          _task('separate', operation: AlgorithmOperation.separation),
+        );
+        expect(
+          (await repository.get('separate'))!.operation,
+          AlgorithmOperation.separation,
+        );
+        api.state = LegacyJobState.completed;
+        await service.refresh('separate');
+        expect(api.lastOperation, AlgorithmOperation.separation);
+        final task = (await repository.get('separate'))!;
+        expect(task.state, AlgorithmTaskState.completed);
+        expect(jsonDecode(task.resultJson!)['stems'], hasLength(7));
+      },
+    );
+
     test('late query responses do not revive deleted local history', () async {
       await service.submit(_task('deleted'));
       api.pending = Completer<void>();
@@ -131,6 +152,36 @@ void main() {
       await first;
       expect(await repository.get('deleted'), isNull);
     });
+  });
+  test('v10 migration preserves old chord tasks and cached results', () async {
+    final dir = await Directory.systemTemp.createTemp('gp_v10_');
+    final file = File('${dir.path}/test.sqlite');
+    final old = AppDatabase(NativeDatabase(file));
+    await AlgorithmTaskRepository(old).insert(_task('old-chords'));
+    await AlgorithmTaskRepository(old).update(
+      'old-chords',
+      AlgorithmTaskState.completed,
+      resultJson: '{"cached":true}',
+    );
+    await old.close();
+    final migrated = AppDatabase(
+      NativeDatabase(
+        file,
+        setup: (raw) {
+          raw.execute('ALTER TABLE algorithm_tasks DROP COLUMN operation');
+          raw.execute('PRAGMA user_version = 10');
+        },
+      ),
+    );
+    try {
+      final task = (await AlgorithmTaskRepository(migrated).get('old-chords'))!;
+      expect(task.operation, AlgorithmOperation.chords);
+      expect(task.state, AlgorithmTaskState.completed);
+      expect(task.resultJson, '{"cached":true}');
+    } finally {
+      await migrated.close();
+      await dir.delete(recursive: true);
+    }
   });
   test(
     'v9 migration preserves source, A-B, sessions and recording paths',
@@ -230,10 +281,14 @@ void main() {
   );
 }
 
-AlgorithmTaskRecord _task(String id) {
+AlgorithmTaskRecord _task(
+  String id, {
+  AlgorithmOperation operation = AlgorithmOperation.chords,
+}) {
   final time = DateTime.utc(2026, 10, 27);
   return AlgorithmTaskRecord(
     id: id,
+    operation: operation,
     endpoint: 'http://127.0.0.1:8000',
     inputPath: '/private/test.wav',
     inputName: 'test.wav',
@@ -248,6 +303,7 @@ AlgorithmTaskRecord _task(String id) {
 }
 
 class _Api implements AlgorithmApi {
+  AlgorithmOperation? lastOperation;
   int uploadCalls = 0, statusCalls = 0, resultCalls = 0;
   LegacyJobState state = LegacyJobState.queued;
   AlgorithmApiError? uploadError, error;
@@ -262,13 +318,14 @@ class _Api implements AlgorithmApi {
     void Function(int, int)? onProgress,
   }) async {
     uploadCalls++;
+    lastOperation = operation;
     if (uploadError != null) throw uploadError!;
     return LegacyUploadReceipt.fromJson(
       {
         'job_id': 'contract_job_1',
         'status': 'queued',
-        'poll_url': '/api/v1/jobs/contract_job_1/status',
-        'result_url': '/api/v1/jobs/contract_job_1/result',
+        'poll_url': '${algorithmJobRoot(operation, 'contract_job_1')}/status',
+        'result_url': '${algorithmJobRoot(operation, 'contract_job_1')}/result',
       },
       AlgorithmEndpoint('http://127.0.0.1:8000', allowLocalHttp: true),
       operation,
@@ -281,6 +338,7 @@ class _Api implements AlgorithmApi {
     AlgorithmOperation operation,
   ) async {
     statusCalls++;
+    lastOperation = operation;
     if (pending != null) await pending!.future;
     if (error != null) throw error!;
     return LegacyAlgorithmStatus.fromJson({
@@ -298,6 +356,8 @@ class _Api implements AlgorithmApi {
     AlgorithmOperation operation,
   ) async {
     resultCalls++;
+    lastOperation = operation;
+    if (operation == AlgorithmOperation.separation) return separationFixture();
     return jsonDecode(
       File('contracts/legacy_algorithm/fixtures/chords_result.json')
           .readAsStringSync(),

@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart' as db;
 import '../domain/algorithm_task.dart';
+import '../domain/legacy_algorithm_models.dart';
 
 class AlgorithmTaskRepository {
   const AlgorithmTaskRepository(this.database);
@@ -25,6 +26,7 @@ class AlgorithmTaskRepository {
       .insert(
         db.AlgorithmTasksCompanion.insert(
           id: value.id,
+          operation: Value(value.operation.name),
           endpoint: value.endpoint,
           inputPath: value.inputPath,
           inputName: value.inputName,
@@ -91,6 +93,7 @@ class AlgorithmTaskRepository {
 
   AlgorithmTaskRecord _map(db.AlgorithmTask row) => AlgorithmTaskRecord(
     id: row.id,
+    operation: AlgorithmOperation.values.byName(row.operation),
     endpoint: row.endpoint,
     inputPath: row.inputPath,
     inputName: row.inputName,

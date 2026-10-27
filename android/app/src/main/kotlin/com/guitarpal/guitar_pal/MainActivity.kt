@@ -15,6 +15,7 @@ class MainActivity : FlutterActivity() {
     private var appSettingsPlugin: AppSettingsPlugin? = null
     private var practiceAudioRecordingPlugin: PracticeAudioRecordingPlugin? = null
     private var algorithmAudioImportPlugin: AlgorithmAudioImportPlugin? = null
+    private var algorithmStemPlugin: AlgorithmStemPlugin? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         pendingSharedText = extractSharedText(intent)
@@ -83,6 +84,7 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
         )
         algorithmAudioImportPlugin = AlgorithmAudioImportPlugin(this, flutterEngine.dartExecutor.binaryMessenger)
+        algorithmStemPlugin = AlgorithmStemPlugin(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -133,6 +135,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onStop() {
+        algorithmStemPlugin?.stop()
         practiceAudioRecordingPlugin?.onHostStop()
         super.onStop()
     }
@@ -150,6 +153,8 @@ class MainActivity : FlutterActivity() {
         practiceAudioRecordingPlugin = null
         algorithmAudioImportPlugin?.dispose()
         algorithmAudioImportPlugin = null
+        algorithmStemPlugin?.dispose()
+        algorithmStemPlugin = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

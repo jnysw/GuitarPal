@@ -1,3 +1,5 @@
+import 'legacy_algorithm_models.dart';
+
 enum AlgorithmTaskState {
   submitting,
   submissionUnknown,
@@ -29,9 +31,11 @@ class AlgorithmTaskRecord {
     this.message,
     this.resultJson,
     this.nextPollAt,
+    this.operation = AlgorithmOperation.chords,
   });
 
   final String id;
+  final AlgorithmOperation operation;
   final String endpoint;
   final String inputPath;
   final String inputName;

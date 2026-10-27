@@ -13,7 +13,9 @@ import 'algorithm_providers.dart';
 import 'data/algorithm_audio_import.dart';
 import 'data/legacy_algorithm_api.dart';
 import 'domain/algorithm_task.dart';
+import 'domain/algorithm_configuration.dart';
 import 'domain/legacy_algorithm_models.dart';
+import 'separation_result_screen.dart';
 
 class AlgorithmToolsScreen extends ConsumerStatefulWidget {
   const AlgorithmToolsScreen({super.key});
@@ -24,16 +26,16 @@ class AlgorithmToolsScreen extends ConsumerStatefulWidget {
 
 class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
     with WidgetsBindingObserver {
-  final _endpoint = TextEditingController(
-    text: const String.fromEnvironment('ALGORITHM_BASE_URL'),
-  );
+  final _endpoint = TextEditingController(text: AlgorithmConfiguration.baseUrl);
   AlgorithmAudioInput? _input;
   Timer? _timer;
   bool _busy = false, _polling = false, _foreground = true;
   bool _inputInSubmission = false;
+  bool _showingResult = false;
   late final AlgorithmAudioImport _importer;
   double? _uploadProgress;
   List<AlgorithmTaskRecord> _tasks = [];
+  AlgorithmOperation _operation = AlgorithmOperation.chords;
 
   @override
   void initState() {
@@ -52,6 +54,7 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
 
   void _startPolling() {
     _timer?.cancel();
+    if (!mounted || !_foreground || _showingResult) return;
     _timer = Timer.periodic(
       const Duration(seconds: 2),
       (_) => unawaited(_refreshPending()),
@@ -60,12 +63,12 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
   }
 
   Future<void> _refreshPending() async {
-    if (_polling || !_foreground || !mounted) return;
+    if (_polling || !_foreground || _showingResult || !mounted) return;
     _polling = true;
     final service = ref.read(algorithmTaskServiceProvider);
     try {
       for (final task in _tasks.where((t) => t.shouldPoll).take(5).toList()) {
-        if (!mounted || !_foreground) break;
+        if (!mounted || !_foreground || _showingResult) break;
         await service.refresh(task.id);
       }
     } finally {
@@ -193,11 +196,13 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('上传音频进行和弦分析？'),
+        title: Text(
+          _operation == AlgorithmOperation.chords ? '上传音频进行和弦分析？' : '上传音频进行分轨？',
+        ),
         content: Text(
           '「${input.name}」\n${(input.sizeBytes / 1048576).toStringAsFixed(2)} MiB，${input.duration.inSeconds} 秒\n'
           '接收服务器：${endpoint.origin}\n\n仅本次所选音频会上传。当前测试服务无内置账号鉴权；'
-          '旧版结果不能精确同步原曲，置信度不可用。',
+          '${_operation == AlgorithmOperation.chords ? '旧版结果不能精确同步原曲，置信度不可用。' : '服务器音轨仅保留 24 小时，请及时下载到本机。'}',
         ),
         actions: [
           TextButton(
@@ -216,6 +221,7 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
     final now = DateTime.now().toUtc();
     final task = AlgorithmTaskRecord(
       id: const Uuid().v4(),
+      operation: _operation,
       endpoint: endpoint.origin.toString(),
       inputPath: input.path,
       inputName: input.name,
@@ -284,7 +290,7 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('移除本机任务记录？'),
-        content: const Text('仅移除本机分析结果和为分析导入的音频副本，已有练习录音保留。服务器任务会继续执行。'),
+        content: const Text('移除本机分析结果、已下载音轨和为分析导入的音频副本，已有练习录音保留。服务器任务会继续执行。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -299,6 +305,9 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
     );
     if (confirmed != true || !mounted) return;
     try {
+      if (task.operation == AlgorithmOperation.separation) {
+        await ref.read(algorithmStemStoreProvider).deleteTask(task.id);
+      }
       if (task.ownsInput) {
         await ref
             .read(algorithmAudioImportProvider)
@@ -345,11 +354,11 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
           padding: const EdgeInsets.all(20),
           children: [
             const Text(
-              '和弦分析测试',
+              '音频分析测试',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text('先选择自有音频或练习录音，确认后上传。视频区间提取与分轨服务仍在开发。'),
+            const Text('选择自有音频或练习录音，确认后上传到你的算法服务。视频区间提取仍在开发。'),
             const SizedBox(height: 16),
             TextField(
               key: const Key('algorithm_endpoint'),
@@ -359,7 +368,7 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
               autocorrect: false,
               decoration: const InputDecoration(
                 labelText: '算法服务地址',
-                hintText: '填写 Windows 局域网地址及端口',
+                hintText: '填写 Tailscale HTTPS 服务源地址',
               ),
             ),
             Align(
@@ -370,6 +379,25 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
                 label: const Text('检查连接'),
               ),
             ),
+            SegmentedButton<AlgorithmOperation>(
+              segments: const [
+                ButtonSegment(
+                  value: AlgorithmOperation.chords,
+                  label: Text('和弦分析'),
+                  icon: Icon(Icons.music_note),
+                ),
+                ButtonSegment(
+                  value: AlgorithmOperation.separation,
+                  label: Text('分离音轨'),
+                  icon: Icon(Icons.multitrack_audio),
+                ),
+              ],
+              selected: {_operation},
+              onSelectionChanged: _busy
+                  ? null
+                  : (values) => setState(() => _operation = values.single),
+            ),
+            const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               children: [
@@ -398,19 +426,17 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
               key: const Key('algorithm_submit'),
               onPressed: _busy || _input == null ? null : _submit,
               icon: const Icon(Icons.music_note_outlined),
-              label: const Text('分析和弦'),
+              label: Text(
+                _operation == AlgorithmOperation.chords ? '分析和弦' : '开始分轨',
+              ),
             ),
             if (_uploadProgress != null) ...[
               LinearProgressIndicator(value: _uploadProgress),
               const Text('上传字节进度；上传完成后仍需等待服务器分析'),
             ],
             const SizedBox(height: 20),
-            const ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.multitrack_audio),
-              title: Text('分离音轨'),
-              subtitle: Text('服务端 HTTP 适配待实现，当前暂未开放'),
-            ),
+            if (_operation == AlgorithmOperation.separation)
+              const Text('分离人声、鼓、贝斯、吉他、钢琴、其他，以及派生伴奏。完成后逐条下载，可离线试听。'),
             const Divider(),
             const Text(
               '分析任务',
@@ -441,6 +467,11 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
                               ),
                             ),
                             Text(_taskLabel(task.state)),
+                            Text(
+                              task.operation == AlgorithmOperation.chords
+                                  ? '和弦分析'
+                                  : '分离音轨',
+                            ),
                             if (task.message != null) Text(task.message!),
                             if (task.shouldPoll)
                               LinearProgressIndicator(
@@ -453,12 +484,25 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
                               children: [
                                 if (task.resultJson != null)
                                   TextButton(
-                                    onPressed: () => Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) =>
-                                            _ChordResultScreen(task: task),
-                                      ),
-                                    ),
+                                    onPressed: () async {
+                                      _showingResult = true;
+                                      _timer?.cancel();
+                                      await Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              task.operation ==
+                                                  AlgorithmOperation.chords
+                                              ? _ChordResultScreen(task: task)
+                                              : SeparationResultScreen(
+                                                  task: task,
+                                                ),
+                                        ),
+                                      );
+                                      _showingResult = false;
+                                      if (mounted && _foreground) {
+                                        _startPolling();
+                                      }
+                                    },
                                     child: const Text('查看离线结果'),
                                   ),
                                 if (task.remoteJobId != null &&

@@ -183,7 +183,8 @@ class LegacyStemFile {
       sizeBytes = algorithmInteger(json['size_bytes']),
       duration = algorithmSeconds(json['duration_seconds']),
       sampleRate = algorithmInteger(json['sample_rate']),
-      channels = algorithmInteger(json['channels']) {
+      channels = algorithmInteger(json['channels']),
+      contentType = algorithmText(json['content_type']) {
     if (!{
           'bass',
           'drums',
@@ -195,6 +196,9 @@ class LegacyStemFile {
         }.contains(id) ||
         origin != (id == 'instrumental' ? 'derived' : 'model') ||
         sizeBytes <= 0 ||
+        sizeBytes > 256 * 1024 * 1024 ||
+        duration <= Duration.zero ||
+        duration > const Duration(minutes: 10) ||
         sampleRate <= 0 ||
         !{1, 2}.contains(channels) ||
         !{'audio/wav', 'audio/flac'}.contains(json['content_type'])) {
@@ -211,7 +215,47 @@ class LegacyStemFile {
   final Duration duration;
   final int sampleRate;
   final int channels;
+  final String contentType;
+  String get extension => contentType == 'audio/flac' ? 'flac' : 'wav';
+  String get displayName => const {
+    'vocals': '人声',
+    'drums': '鼓',
+    'bass': '贝斯',
+    'guitar': '吉他',
+    'piano': '钢琴',
+    'other': '其他',
+    'instrumental': '伴奏',
+  }[id]!;
   late final Uri downloadUri;
+}
+
+class LegacySeparationResult {
+  LegacySeparationResult.fromJson(
+    Map<String, Object?> json,
+    AlgorithmEndpoint endpoint,
+  ) : jobId = algorithmId(json['job_id']),
+      expiresAt = DateTime.parse(algorithmText(json['expires_at'])).toUtc(),
+      duration = algorithmSeconds(json['duration_seconds']) {
+    if (json['status'] != 'completed' ||
+        duration <= Duration.zero ||
+        duration > const Duration(minutes: 10)) {
+      throw const FormatException('分轨结果状态或时长无效');
+    }
+    stems = List.unmodifiable(
+      algorithmList(json['stems']).map(
+        (s) => LegacyStemFile.fromJson(algorithmObject(s), endpoint, jobId),
+      ),
+    );
+    if (stems.length != 7 ||
+        stems.map((s) => s.id).toSet().length != 7 ||
+        stems.any((s) => (s.duration - duration).inMilliseconds.abs() > 100)) {
+      throw const FormatException('分轨结果必须包含七条完整且时长一致的音轨');
+    }
+  }
+  final String jobId;
+  final DateTime expiresAt;
+  final Duration duration;
+  late final List<LegacyStemFile> stems;
 }
 
 String algorithmJobRoot(AlgorithmOperation operation, String jobId) =>

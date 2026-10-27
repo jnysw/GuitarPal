@@ -5,6 +5,7 @@ import '../../core/database/database_providers.dart';
 import 'application/algorithm_task_service.dart';
 import 'data/algorithm_audio_import.dart';
 import 'data/algorithm_task_repository.dart';
+import 'data/algorithm_stem_store.dart';
 import 'domain/algorithm_task.dart';
 
 final algorithmAudioImportProvider = Provider<AlgorithmAudioImport>(
@@ -21,4 +22,11 @@ final algorithmTaskServiceProvider = Provider<AlgorithmTaskService>(
 );
 final algorithmTasksProvider = StreamProvider<List<AlgorithmTaskRecord>>(
   (ref) => ref.watch(algorithmTaskRepositoryProvider).watchAll(),
+);
+final algorithmStemPlatformProvider = Provider<AlgorithmStemPlatform>(
+  (ref) => const AlgorithmStemPlatform(),
+);
+final algorithmStemStoreProvider = Provider<AlgorithmStemStore>(
+  (ref) =>
+      AlgorithmStemStore(ref.watch(algorithmStemPlatformProvider).directory),
 );

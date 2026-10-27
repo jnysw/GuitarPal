@@ -35,6 +35,7 @@ class AlgorithmTaskService {
       final receipt = await api.upload(
         task.inputPath,
         task.inputName,
+        operation: task.operation,
         onProgress: onProgress,
       );
       await repository.update(
@@ -88,10 +89,7 @@ class AlgorithmTaskService {
         AlgorithmEndpoint(task.endpoint, allowLocalHttp: allowLocalHttp),
       );
       try {
-        final status = await api.status(
-          task.remoteJobId!,
-          AlgorithmOperation.chords,
-        );
+        final status = await api.status(task.remoteJobId!, task.operation);
         if (status.state == LegacyJobState.failed) {
           await repository.update(
             id,
@@ -99,17 +97,16 @@ class AlgorithmTaskService {
             message: status.error ?? '服务器分析失败',
           );
         } else if (status.state == LegacyJobState.completed) {
-          final result = await api.result(
-            task.remoteJobId!,
-            AlgorithmOperation.chords,
-          );
+          final result = await api.result(task.remoteJobId!, task.operation);
           await repository.update(
             id,
             AlgorithmTaskState.completed,
             progress: 100,
             resultJson: jsonEncode(result),
             failures: 0,
-            message: '和弦结果已保存在本机',
+            message: task.operation == AlgorithmOperation.chords
+                ? '和弦结果已保存在本机'
+                : '分轨清单已保存在本机，请在过期前下载音轨',
           );
         } else {
           await repository.update(
