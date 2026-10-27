@@ -92,7 +92,7 @@ class ProfileScreen extends ConsumerWidget {
                         const _StatusTile(
                           icon: Icons.shield_outlined,
                           title: '本地数据与隐私',
-                          subtitle: '数据当前仅保存在这台设备上',
+                          subtitle: '练习数据默认保存在本机，实验分析需确认上传',
                           status: '已启用',
                           available: true,
                         ),
