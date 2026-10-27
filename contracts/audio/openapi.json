@@ -1,0 +1,955 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GuitarPal Audio API",
+    "version": "0.1.0-contract-draft",
+    "description": "M1 contract draft. No running service is delivered by this specification. Remaining endpoints (usage, pagination, retry, download and deletion) are tracked in docs/ai_audio/progress.md."
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/capabilities": {
+      "get": {
+        "operationId": "getCapabilities",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/uploads": {
+      "post": {
+        "operationId": "createUpload",
+        "description": "Only client-owned audio. The server independently verifies bytes, duration, format and checksum.",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Upload"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUpload"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Scoped to authenticated owner and route; different body for the same key returns 409."
+          }
+        ]
+      }
+    },
+    "/v1/uploads/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getUpload",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Upload"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/uploads/{id}/complete": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "completeUpload",
+        "description": "Idempotent. Freeze object version before marking ready; a signed URL alone is not immutable.",
+        "responses": {
+          "202": {
+            "description": "Accepted; processing is asynchronous",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/uploads/{id}/abort": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "abortUpload",
+        "description": "Idempotent; cancel validation and clean staged objects.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Upload"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/assets/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getAsset",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs": {
+      "post": {
+        "operationId": "createJob",
+        "description": "Requires a ready asset and an enabled server-side profile. Reserve quota and enqueue an outbox event in the same transaction.",
+        "responses": {
+          "202": {
+            "description": "Accepted; processing is asynchronous",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJob"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Scoped to authenticated owner and route; different body for the same key returns 409."
+          }
+        ]
+      }
+    },
+    "/v1/jobs/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getJob",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{id}/cancel": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "cancelJob",
+        "description": "Idempotent; terminal jobs cannot regress. Successful branch artifacts remain available.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{id}/result": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getResult",
+        "description": "409 until a publishable successful or partially successful result exists. Times are source_media_ms; do not add the offset again.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analyses/{id}/revisions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "saveRevision",
+        "description": "Persist full edited snapshot separately from immutable machine result. Return 412 on stale If-Match.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Structured error. Authenticated handlers must check resource ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Revisions"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Reuse existing Supabase identity. API must verify signature, issuer, audience and expiration; never accept owner_id from a request body."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message",
+              "retryable",
+              "request_id"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "\\S"
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "\\S"
+              },
+              "retryable": {
+                "type": "boolean"
+              },
+              "request_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "details": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "CreateUpload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "display_name",
+          "content_type",
+          "size_bytes",
+          "sha256",
+          "client_source_id",
+          "client_media_revision_id",
+          "mapping"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "\\S"
+          },
+          "content_type": {
+            "enum": [
+              "audio/wav",
+              "audio/flac",
+              "audio/mpeg",
+              "audio/mp4",
+              "audio/ogg"
+            ]
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 104857600
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "client_source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_media_revision_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mapping": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_offset_ms",
+              "source_duration_ms",
+              "input_duration_ms",
+              "alignment_status"
+            ],
+            "properties": {
+              "source_offset_ms": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "source_duration_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              },
+              "input_duration_ms": {
+                "type": "integer",
+                "minimum": 2000,
+                "maximum": 600000
+              },
+              "alignment_status": {
+                "enum": [
+                  "exact_extraction",
+                  "native_audio",
+                  "pending_calibration",
+                  "manually_aligned"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "Upload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "upload_id",
+          "asset_id",
+          "status",
+          "expires_at",
+          "upload"
+        ],
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "asset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "enum": [
+              "created",
+              "uploaded",
+              "validating",
+              "ready",
+              "rejected",
+              "aborted",
+              "expired"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "upload": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "method",
+                  "url",
+                  "headers"
+                ],
+                "properties": {
+                  "method": {
+                    "enum": [
+                      "PUT",
+                      "POST"
+                    ]
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "Asset": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "asset_id",
+          "upload_state",
+          "verified_duration_ms"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "upload_state": {
+            "enum": [
+              "pending",
+              "validating",
+              "ready",
+              "rejected",
+              "deleting",
+              "deleted"
+            ]
+          },
+          "verified_duration_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 2000,
+            "maximum": 600000
+          }
+        }
+      },
+      "CreateJob": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "asset_id",
+          "client_request_id",
+          "operations"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operations": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [],
+            "properties": {
+              "chords": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "profile_id",
+                  "input",
+                  "smoothing"
+                ],
+                "properties": {
+                  "profile_id": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+                  },
+                  "input": {
+                    "const": "original"
+                  },
+                  "smoothing": {
+                    "enum": [
+                      "hmm",
+                      "median",
+                      "none"
+                    ]
+                  }
+                }
+              },
+              "separation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "profile_id"
+                ],
+                "properties": {
+                  "profile_id": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+                  }
+                }
+              }
+            },
+            "minProperties": 1
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "job_id",
+          "status",
+          "state_version",
+          "stage",
+          "progress",
+          "error_code"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "enum": [
+              "created",
+              "queued",
+              "running",
+              "retry_wait",
+              "cancel_requested",
+              "succeeded",
+              "partially_succeeded",
+              "failed",
+              "canceled"
+            ]
+          },
+          "state_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "stage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "progress": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 100
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "progress": {
+                  "const": 100
+                }
+              },
+              "required": [
+                "progress"
+              ]
+            },
+            "then": {
+              "properties": {
+                "status": {
+                  "const": "succeeded"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Capabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "profiles",
+          "limits"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": 1
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "profile_id",
+                "operation",
+                "targets"
+              ],
+              "properties": {
+                "profile_id": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+                },
+                "operation": {
+                  "enum": [
+                    "chords",
+                    "separation"
+                  ]
+                },
+                "targets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            }
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "minimum_duration_ms",
+              "maximum_duration_ms",
+              "maximum_upload_bytes"
+            ],
+            "properties": {
+              "minimum_duration_ms": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maximum_duration_ms": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maximum_upload_bytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      },
+      "Result": {
+        "$ref": "./result-v1.schema.json"
+      },
+      "Revisions": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "base_revision",
+          "segments"
+        ],
+        "properties": {
+          "base_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "segments": {
+            "type": "array",
+            "maxItems": 20000,
+            "items": {
+              "$ref": "./result-v1.schema.json#/$defs/segment"
+            }
+          }
+        }
+      }
+    }
+  }
+}
