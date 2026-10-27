@@ -14,6 +14,7 @@ class MainActivity : FlutterActivity() {
     private var practiceReminderPlugin: PracticeReminderPlugin? = null
     private var appSettingsPlugin: AppSettingsPlugin? = null
     private var practiceAudioRecordingPlugin: PracticeAudioRecordingPlugin? = null
+    private var algorithmAudioImportPlugin: AlgorithmAudioImportPlugin? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         pendingSharedText = extractSharedText(intent)
@@ -81,6 +82,7 @@ class MainActivity : FlutterActivity() {
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         )
+        algorithmAudioImportPlugin = AlgorithmAudioImportPlugin(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -97,6 +99,7 @@ class MainActivity : FlutterActivity() {
 
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (algorithmAudioImportPlugin?.onActivityResult(requestCode, resultCode, data) == true) return
         if (localVideoImportPlugin?.onActivityResult(requestCode, resultCode, data) == true) {
             return
         }
@@ -145,6 +148,8 @@ class MainActivity : FlutterActivity() {
         appSettingsPlugin = null
         practiceAudioRecordingPlugin?.dispose()
         practiceAudioRecordingPlugin = null
+        algorithmAudioImportPlugin?.dispose()
+        algorithmAudioImportPlugin = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

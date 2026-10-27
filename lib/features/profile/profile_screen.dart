@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -76,6 +77,18 @@ class ProfileScreen extends ConsumerWidget {
                     margin: EdgeInsets.zero,
                     child: Column(
                       children: [
+                        if (kDebugMode) ...[
+                          _StatusTile(
+                            key: const Key('profile_audio_tools_entry'),
+                            icon: Icons.graphic_eq_rounded,
+                            title: '音频工具（实验）',
+                            subtitle: '上传自有音频、查看和弦分析与任务记录',
+                            status: '联调',
+                            available: true,
+                            onTap: () => context.push('/audio-tools'),
+                          ),
+                          const Divider(height: 1, indent: 64),
+                        ],
                         const _StatusTile(
                           icon: Icons.shield_outlined,
                           title: '本地数据与隐私',

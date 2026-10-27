@@ -14,8 +14,8 @@ void main() {
     await database.close();
   });
 
-  test('schema version includes the local sync outbox', () {
-    expect(database.schemaVersion, 9);
+  test('schema version includes persisted algorithm tasks', () {
+    expect(database.schemaVersion, 10);
   });
 
   test('practice source can be stored in the initial schema', () async {

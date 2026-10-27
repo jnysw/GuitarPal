@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/create/create_practice_screen.dart';
+import '../features/audio_tools/algorithm_tools_screen.dart';
 import '../features/create/local_video_draft_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/inbox/domain/shared_item.dart';
@@ -25,6 +26,10 @@ final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/today',
   routes: [
+    GoRoute(
+      path: '/audio-tools',
+      builder: (context, state) => const AlgorithmToolsScreen(),
+    ),
     GoRoute(path: '/', redirect: (context, state) => '/today'),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>

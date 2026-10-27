@@ -1,6 +1,6 @@
 # GuitarPal
 
-AI 扒和弦与分轨开发已启动：先完成现有能力审计、原媒体时间轴和结果契约，再接真实模型与任务平台。当前尚无可用 AI 分析入口。范围见 [AI 音频规划](docs/ai_audio/development_plan.md)，每批实现、验证和依赖见 [阶段进度](docs/ai_audio/progress.md)。
+AI 扒和弦与分轨开发已启动：已完成现有能力审计、原媒体时间轴与结果契约，并新增 Debug 专用“我的 → 音频工具（实验）”。它可选择音频/已有录音、确认上传到 Windows 和弦 API、恢复任务并缓存结果；实际地址待联调时配置。旧 v1 裁剪偏移未知，尚不开放原曲同步/A-B；分轨 HTTP 尚待服务端实现。操作见 [客户端联调说明](docs/ai_audio/windows_client_setup.md)，范围见 [AI 音频规划](docs/ai_audio/development_plan.md)，每批实现、验证和依赖见 [阶段进度](docs/ai_audio/progress.md)。
 
 把值得学习的视频内容整理成可重复、可跟踪的吉他练习。
 

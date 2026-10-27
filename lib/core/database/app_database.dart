@@ -193,6 +193,31 @@ class SyncOutboxEntries extends Table {
   Set<Column<Object>> get primaryKey => {entityType, entityId};
 }
 
+/// Private development-service jobs. Never part of metadata cloud sync.
+class AlgorithmTasks extends Table {
+  TextColumn get id => text()();
+  TextColumn get endpoint => text()();
+  TextColumn get inputPath => text()();
+  TextColumn get inputName => text()();
+  IntColumn get inputSizeBytes => integer()();
+  IntColumn get inputDurationMs => integer()();
+  BoolColumn get ownsInput => boolean().withDefault(const Constant(false))();
+  TextColumn get recordingId => text().nullable()();
+  TextColumn get status => text()();
+  TextColumn get remoteJobId => text().nullable()();
+  IntColumn get progress => integer().nullable()();
+  TextColumn get message => text().nullable()();
+  TextColumn get resultJson => text().nullable()();
+  IntColumn get consecutiveFailures =>
+      integer().withDefault(const Constant(0))();
+  DateTimeColumn get nextPollAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 @DriftDatabase(
   tables: [
     PracticeSources,
@@ -201,6 +226,7 @@ class SyncOutboxEntries extends Table {
     PracticeSessions,
     PracticeRecordings,
     SyncOutboxEntries,
+    AlgorithmTasks,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -208,7 +234,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'guitar_pal'));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -244,6 +270,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 9) {
         await migrator.createTable(syncOutboxEntries);
         await _backfillSyncOutbox();
+      }
+      if (from < 10) {
+        await migrator.createTable(algorithmTasks);
       }
     },
     beforeOpen: (_) async {
