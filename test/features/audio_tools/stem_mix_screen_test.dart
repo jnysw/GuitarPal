@@ -1,5 +1,9 @@
 import 'dart:io';
 
+import 'package:drift/native.dart';
+import 'package:guitar_pal/core/database/app_database.dart';
+import 'package:guitar_pal/core/database/database_providers.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +14,12 @@ import 'package:guitar_pal/features/audio_tools/domain/legacy_algorithm_models.d
 import 'package:guitar_pal/features/audio_tools/domain/stem_mix_settings.dart';
 import 'package:guitar_pal/features/audio_tools/stem_mix_screen.dart';
 import 'package:guitar_pal/features/player/widgets/precise_playback_speed_control.dart';
+import 'package:guitar_pal/features/audio_tools/data/algorithm_task_repository.dart';
+import 'package:guitar_pal/features/audio_tools/data/stem_practice_target_repository.dart';
+import 'package:guitar_pal/features/audio_tools/domain/algorithm_task.dart';
+import 'package:guitar_pal/features/plans/practice_plan_providers.dart';
+import 'package:guitar_pal/features/plans/application/practice_session_service.dart';
+import 'package:guitar_pal/features/plans/data/drift_practice_session_repository.dart';
 
 import '../../support/algorithm_fixtures.dart';
 
@@ -18,6 +28,7 @@ void main() {
     'shared controls, exact speed, loop editor, modes and saved settings',
     (tester) async {
       final player = _Mix();
+      final database = AppDatabase(NativeDatabase.memory());
       final preferences = _Preferences();
       final result = LegacySeparationResult.fromJson(
         separationFixture(),
@@ -26,6 +37,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            databaseProvider.overrideWithValue(database),
             algorithmMixPlatformProvider.overrideWithValue(player),
             algorithmStemStoreProvider.overrideWithValue(_Files()),
             stemMixPreferencesProvider.overrideWithValue(preferences),
@@ -45,6 +57,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(player.playing, isFalse);
 
+      await tester.ensureVisible(
+        find.byKey(PrecisePlaybackSpeedControlKeys.exactValue),
+      );
       await tester.tap(find.byKey(PrecisePlaybackSpeedControlKeys.exactValue));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -110,7 +125,121 @@ void main() {
       expect(player.settings.mode, StemMixMode.vocalsAndBacking);
       expect(player.playing, isFalse);
       await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await database.close();
       expect(player.stops, greaterThan(0));
+    },
+  );
+  testWidgets(
+    'linked playback, mode reset, background and back produce one finalized practice session',
+    (tester) async {
+      final database = AppDatabase(NativeDatabase.memory());
+      final player = _Mix();
+      var now = DateTime(2026, 10, 28, 12);
+      final result = LegacySeparationResult.fromJson(
+        separationFixture(),
+        AlgorithmEndpoint('https://algorithm.example', allowLocalHttp: false),
+      );
+      await tester.runAsync(() async {
+        await database
+            .into(database.practiceSources)
+            .insert(
+              PracticeSourcesCompanion.insert(
+                id: 'source',
+                platform: 'local',
+                kind: 'video',
+                title: '统计曲目',
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+        await AlgorithmTaskRepository(database).insert(
+          AlgorithmTaskRecord(
+            id: 'task',
+            endpoint: 'https://algorithm.example',
+            inputPath: '/test',
+            inputName: 'test.wav',
+            inputSizeBytes: 100,
+            inputDurationMs: 8000,
+            ownsInput: false,
+            state: AlgorithmTaskState.completed,
+            createdAt: now,
+            updatedAt: now,
+            failures: 0,
+          ),
+        );
+        await StemPracticeTargetRepository(database)
+            .link('task', sourceId: 'source');
+      });
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(database),
+            algorithmMixPlatformProvider.overrideWithValue(player),
+            algorithmStemStoreProvider.overrideWithValue(_Files()),
+            stemMixPreferencesProvider.overrideWithValue(_Preferences()),
+            practiceSessionServiceProvider.overrideWithValue(
+              PracticeSessionService(
+                DriftPracticeSessionRepository(database),
+                clock: () => now,
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => StemMixScreen(
+                        taskId: 'task',
+                        title: '练习',
+                        result: result,
+                      ),
+                    ),
+                  ),
+                  child: const Text('打开练习'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开练习'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('统计归属：统计曲目'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('mix_play')));
+      await tester.pump();
+      now = now.add(const Duration(seconds: 3));
+      player.loops = 2;
+      await tester.pump(const Duration(milliseconds: 120));
+      await tester.tap(find.byKey(const Key('mix_play')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('人声＋伴奏'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('mix_play')));
+      await tester.pump();
+      now = now.add(const Duration(seconds: 2));
+      player.loops = 1;
+      await tester.pump(const Duration(milliseconds: 120));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      now = now.add(const Duration(minutes: 2));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.text('打开练习'), findsOneWidget);
+      final rows = (await tester.runAsync(
+        () => database.select(database.practiceSessions).get(),
+      ))!;
+      expect(rows, hasLength(1));
+      expect(rows.single.activeDurationMilliseconds, 5000);
+      expect(rows.single.loopCount, 3);
+      expect(rows.single.completed, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await database.close();
     },
   );
 }
@@ -139,12 +268,13 @@ class _Mix extends AlgorithmMixPlatform {
   Map<String, String> paths = {};
   StemMixSettings settings = StemMixSettings();
   bool playing = false;
-  int position = 0, stops = 0;
+  int position = 0, stops = 0, loops = 0;
   @override
   Future<void> load(Map<String, String> paths) async {
     this.paths = paths;
     playing = false;
     position = 0;
+    loops = 0;
   }
 
   @override
@@ -182,7 +312,7 @@ class _Mix extends AlgorithmMixPlatform {
     'isPlaying': playing,
     'positionMs': position,
     'durationMs': 8000,
-    'completedLoops': 0,
+    'completedLoops': loops,
     'error': null,
   };
 }

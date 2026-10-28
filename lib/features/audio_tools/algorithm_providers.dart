@@ -8,6 +8,7 @@ import 'data/algorithm_task_repository.dart';
 import 'data/algorithm_stem_store.dart';
 import 'data/algorithm_mix_platform.dart';
 import 'domain/algorithm_task.dart';
+import 'data/stem_practice_target_repository.dart';
 
 final algorithmAudioImportProvider = Provider<AlgorithmAudioImport>(
   (ref) => const MethodChannelAlgorithmAudioImport(),
@@ -38,3 +39,7 @@ final stemMixPreferencesProvider = Provider<StemMixPreferences>(
   (ref) =>
       StemMixPreferences(ref.watch(algorithmStemPlatformProvider).directory),
 );
+final stemPracticeTargetRepositoryProvider =
+    Provider<StemPracticeTargetRepository>(
+      (ref) => StemPracticeTargetRepository(ref.watch(databaseProvider)),
+    );

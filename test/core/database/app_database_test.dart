@@ -15,7 +15,7 @@ void main() {
   });
 
   test('schema version includes persisted algorithm tasks', () {
-    expect(database.schemaVersion, 11);
+    expect(database.schemaVersion, 12);
   });
 
   test('practice source can be stored in the initial schema', () async {

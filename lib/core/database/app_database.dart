@@ -204,6 +204,16 @@ class AlgorithmTasks extends Table {
   IntColumn get inputDurationMs => integer()();
   BoolColumn get ownsInput => boolean().withDefault(const Constant(false))();
   TextColumn get recordingId => text().nullable()();
+  TextColumn get linkedSourceId => text().nullable().references(
+    PracticeSources,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
+  TextColumn get linkedPlanId => text().nullable().references(
+    PracticePlans,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
   TextColumn get status => text()();
   TextColumn get remoteJobId => text().nullable()();
   IntColumn get progress => integer().nullable()();
@@ -235,7 +245,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'guitar_pal'));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -274,8 +284,17 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 10) {
         await migrator.createTable(algorithmTasks);
-      } else if (from < 11) {
-        await migrator.addColumn(algorithmTasks, algorithmTasks.operation);
+      } else {
+        if (from < 11) {
+          await migrator.addColumn(algorithmTasks, algorithmTasks.operation);
+        }
+        if (from < 12) {
+          await migrator.addColumn(
+            algorithmTasks,
+            algorithmTasks.linkedSourceId,
+          );
+          await migrator.addColumn(algorithmTasks, algorithmTasks.linkedPlanId);
+        }
       }
     },
     beforeOpen: (_) async {

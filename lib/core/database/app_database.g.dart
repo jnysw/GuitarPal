@@ -4282,6 +4282,34 @@ class $AlgorithmTasksTable extends AlgorithmTasks
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _linkedSourceIdMeta = const VerificationMeta(
+    'linkedSourceId',
+  );
+  @override
+  late final GeneratedColumn<String> linkedSourceId = GeneratedColumn<String>(
+    'linked_source_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES practice_sources (id) ON DELETE SET NULL',
+    ),
+  );
+  static const VerificationMeta _linkedPlanIdMeta = const VerificationMeta(
+    'linkedPlanId',
+  );
+  @override
+  late final GeneratedColumn<String> linkedPlanId = GeneratedColumn<String>(
+    'linked_plan_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES practice_plans (id) ON DELETE SET NULL',
+    ),
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -4390,6 +4418,8 @@ class $AlgorithmTasksTable extends AlgorithmTasks
     inputDurationMs,
     ownsInput,
     recordingId,
+    linkedSourceId,
+    linkedPlanId,
     status,
     remoteJobId,
     progress,
@@ -4481,6 +4511,24 @@ class $AlgorithmTasksTable extends AlgorithmTasks
         recordingId.isAcceptableOrUnknown(
           data['recording_id']!,
           _recordingIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('linked_source_id')) {
+      context.handle(
+        _linkedSourceIdMeta,
+        linkedSourceId.isAcceptableOrUnknown(
+          data['linked_source_id']!,
+          _linkedSourceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('linked_plan_id')) {
+      context.handle(
+        _linkedPlanIdMeta,
+        linkedPlanId.isAcceptableOrUnknown(
+          data['linked_plan_id']!,
+          _linkedPlanIdMeta,
         ),
       );
     }
@@ -4598,6 +4646,14 @@ class $AlgorithmTasksTable extends AlgorithmTasks
         DriftSqlType.string,
         data['${effectivePrefix}recording_id'],
       ),
+      linkedSourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}linked_source_id'],
+      ),
+      linkedPlanId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}linked_plan_id'],
+      ),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
@@ -4653,6 +4709,8 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   final int inputDurationMs;
   final bool ownsInput;
   final String? recordingId;
+  final String? linkedSourceId;
+  final String? linkedPlanId;
   final String status;
   final String? remoteJobId;
   final int? progress;
@@ -4672,6 +4730,8 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     required this.inputDurationMs,
     required this.ownsInput,
     this.recordingId,
+    this.linkedSourceId,
+    this.linkedPlanId,
     required this.status,
     this.remoteJobId,
     this.progress,
@@ -4695,6 +4755,12 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     map['owns_input'] = Variable<bool>(ownsInput);
     if (!nullToAbsent || recordingId != null) {
       map['recording_id'] = Variable<String>(recordingId);
+    }
+    if (!nullToAbsent || linkedSourceId != null) {
+      map['linked_source_id'] = Variable<String>(linkedSourceId);
+    }
+    if (!nullToAbsent || linkedPlanId != null) {
+      map['linked_plan_id'] = Variable<String>(linkedPlanId);
     }
     map['status'] = Variable<String>(status);
     if (!nullToAbsent || remoteJobId != null) {
@@ -4731,6 +4797,12 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
       recordingId: recordingId == null && nullToAbsent
           ? const Value.absent()
           : Value(recordingId),
+      linkedSourceId: linkedSourceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(linkedSourceId),
+      linkedPlanId: linkedPlanId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(linkedPlanId),
       status: Value(status),
       remoteJobId: remoteJobId == null && nullToAbsent
           ? const Value.absent()
@@ -4768,6 +4840,8 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
       inputDurationMs: serializer.fromJson<int>(json['inputDurationMs']),
       ownsInput: serializer.fromJson<bool>(json['ownsInput']),
       recordingId: serializer.fromJson<String?>(json['recordingId']),
+      linkedSourceId: serializer.fromJson<String?>(json['linkedSourceId']),
+      linkedPlanId: serializer.fromJson<String?>(json['linkedPlanId']),
       status: serializer.fromJson<String>(json['status']),
       remoteJobId: serializer.fromJson<String?>(json['remoteJobId']),
       progress: serializer.fromJson<int?>(json['progress']),
@@ -4794,6 +4868,8 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
       'inputDurationMs': serializer.toJson<int>(inputDurationMs),
       'ownsInput': serializer.toJson<bool>(ownsInput),
       'recordingId': serializer.toJson<String?>(recordingId),
+      'linkedSourceId': serializer.toJson<String?>(linkedSourceId),
+      'linkedPlanId': serializer.toJson<String?>(linkedPlanId),
       'status': serializer.toJson<String>(status),
       'remoteJobId': serializer.toJson<String?>(remoteJobId),
       'progress': serializer.toJson<int?>(progress),
@@ -4816,6 +4892,8 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     int? inputDurationMs,
     bool? ownsInput,
     Value<String?> recordingId = const Value.absent(),
+    Value<String?> linkedSourceId = const Value.absent(),
+    Value<String?> linkedPlanId = const Value.absent(),
     String? status,
     Value<String?> remoteJobId = const Value.absent(),
     Value<int?> progress = const Value.absent(),
@@ -4835,6 +4913,10 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     inputDurationMs: inputDurationMs ?? this.inputDurationMs,
     ownsInput: ownsInput ?? this.ownsInput,
     recordingId: recordingId.present ? recordingId.value : this.recordingId,
+    linkedSourceId: linkedSourceId.present
+        ? linkedSourceId.value
+        : this.linkedSourceId,
+    linkedPlanId: linkedPlanId.present ? linkedPlanId.value : this.linkedPlanId,
     status: status ?? this.status,
     remoteJobId: remoteJobId.present ? remoteJobId.value : this.remoteJobId,
     progress: progress.present ? progress.value : this.progress,
@@ -4862,6 +4944,12 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
       recordingId: data.recordingId.present
           ? data.recordingId.value
           : this.recordingId,
+      linkedSourceId: data.linkedSourceId.present
+          ? data.linkedSourceId.value
+          : this.linkedSourceId,
+      linkedPlanId: data.linkedPlanId.present
+          ? data.linkedPlanId.value
+          : this.linkedPlanId,
       status: data.status.present ? data.status.value : this.status,
       remoteJobId: data.remoteJobId.present
           ? data.remoteJobId.value
@@ -4894,6 +4982,8 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
           ..write('inputDurationMs: $inputDurationMs, ')
           ..write('ownsInput: $ownsInput, ')
           ..write('recordingId: $recordingId, ')
+          ..write('linkedSourceId: $linkedSourceId, ')
+          ..write('linkedPlanId: $linkedPlanId, ')
           ..write('status: $status, ')
           ..write('remoteJobId: $remoteJobId, ')
           ..write('progress: $progress, ')
@@ -4918,6 +5008,8 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     inputDurationMs,
     ownsInput,
     recordingId,
+    linkedSourceId,
+    linkedPlanId,
     status,
     remoteJobId,
     progress,
@@ -4941,6 +5033,8 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
           other.inputDurationMs == this.inputDurationMs &&
           other.ownsInput == this.ownsInput &&
           other.recordingId == this.recordingId &&
+          other.linkedSourceId == this.linkedSourceId &&
+          other.linkedPlanId == this.linkedPlanId &&
           other.status == this.status &&
           other.remoteJobId == this.remoteJobId &&
           other.progress == this.progress &&
@@ -4962,6 +5056,8 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
   final Value<int> inputDurationMs;
   final Value<bool> ownsInput;
   final Value<String?> recordingId;
+  final Value<String?> linkedSourceId;
+  final Value<String?> linkedPlanId;
   final Value<String> status;
   final Value<String?> remoteJobId;
   final Value<int?> progress;
@@ -4982,6 +5078,8 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     this.inputDurationMs = const Value.absent(),
     this.ownsInput = const Value.absent(),
     this.recordingId = const Value.absent(),
+    this.linkedSourceId = const Value.absent(),
+    this.linkedPlanId = const Value.absent(),
     this.status = const Value.absent(),
     this.remoteJobId = const Value.absent(),
     this.progress = const Value.absent(),
@@ -5003,6 +5101,8 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     required int inputDurationMs,
     this.ownsInput = const Value.absent(),
     this.recordingId = const Value.absent(),
+    this.linkedSourceId = const Value.absent(),
+    this.linkedPlanId = const Value.absent(),
     required String status,
     this.remoteJobId = const Value.absent(),
     this.progress = const Value.absent(),
@@ -5032,6 +5132,8 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     Expression<int>? inputDurationMs,
     Expression<bool>? ownsInput,
     Expression<String>? recordingId,
+    Expression<String>? linkedSourceId,
+    Expression<String>? linkedPlanId,
     Expression<String>? status,
     Expression<String>? remoteJobId,
     Expression<int>? progress,
@@ -5053,6 +5155,8 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
       if (inputDurationMs != null) 'input_duration_ms': inputDurationMs,
       if (ownsInput != null) 'owns_input': ownsInput,
       if (recordingId != null) 'recording_id': recordingId,
+      if (linkedSourceId != null) 'linked_source_id': linkedSourceId,
+      if (linkedPlanId != null) 'linked_plan_id': linkedPlanId,
       if (status != null) 'status': status,
       if (remoteJobId != null) 'remote_job_id': remoteJobId,
       if (progress != null) 'progress': progress,
@@ -5077,6 +5181,8 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     Value<int>? inputDurationMs,
     Value<bool>? ownsInput,
     Value<String?>? recordingId,
+    Value<String?>? linkedSourceId,
+    Value<String?>? linkedPlanId,
     Value<String>? status,
     Value<String?>? remoteJobId,
     Value<int?>? progress,
@@ -5098,6 +5204,8 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
       inputDurationMs: inputDurationMs ?? this.inputDurationMs,
       ownsInput: ownsInput ?? this.ownsInput,
       recordingId: recordingId ?? this.recordingId,
+      linkedSourceId: linkedSourceId ?? this.linkedSourceId,
+      linkedPlanId: linkedPlanId ?? this.linkedPlanId,
       status: status ?? this.status,
       remoteJobId: remoteJobId ?? this.remoteJobId,
       progress: progress ?? this.progress,
@@ -5140,6 +5248,12 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     }
     if (recordingId.present) {
       map['recording_id'] = Variable<String>(recordingId.value);
+    }
+    if (linkedSourceId.present) {
+      map['linked_source_id'] = Variable<String>(linkedSourceId.value);
+    }
+    if (linkedPlanId.present) {
+      map['linked_plan_id'] = Variable<String>(linkedPlanId.value);
     }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
@@ -5186,6 +5300,8 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
           ..write('inputDurationMs: $inputDurationMs, ')
           ..write('ownsInput: $ownsInput, ')
           ..write('recordingId: $recordingId, ')
+          ..write('linkedSourceId: $linkedSourceId, ')
+          ..write('linkedPlanId: $linkedPlanId, ')
           ..write('status: $status, ')
           ..write('remoteJobId: $remoteJobId, ')
           ..write('progress: $progress, ')
@@ -5261,6 +5377,20 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('practice_sessions', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'practice_sources',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('algorithm_tasks', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'practice_plans',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('algorithm_tasks', kind: UpdateKind.update)],
     ),
   ]);
 }
@@ -5344,6 +5474,24 @@ final class $$PracticeSourcesTableReferences
     ).filter((f) => f.sourceId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_practicePlansRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$AlgorithmTasksTable, List<AlgorithmTask>>
+  _algorithmTasksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.algorithmTasks,
+    aliasName: 'practice_sources__id__algorithm_tasks__linked_source_id',
+  );
+
+  $$AlgorithmTasksTableProcessedTableManager get algorithmTasksRefs {
+    final manager = $$AlgorithmTasksTableTableManager(
+      $_db,
+      $_db.algorithmTasks,
+    ).filter((f) => f.linkedSourceId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_algorithmTasksRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -5470,6 +5618,31 @@ class $$PracticeSourcesTableFilterComposer
           }) => $$PracticePlansTableFilterComposer(
             $db: $db,
             $table: $db.practicePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> algorithmTasksRefs(
+    Expression<bool> Function($$AlgorithmTasksTableFilterComposer f) f,
+  ) {
+    final $$AlgorithmTasksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.algorithmTasks,
+      getReferencedColumn: (t) => t.linkedSourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AlgorithmTasksTableFilterComposer(
+            $db: $db,
+            $table: $db.algorithmTasks,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5674,6 +5847,31 @@ class $$PracticeSourcesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> algorithmTasksRefs<T extends Object>(
+    Expression<T> Function($$AlgorithmTasksTableAnnotationComposer a) f,
+  ) {
+    final $$AlgorithmTasksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.algorithmTasks,
+      getReferencedColumn: (t) => t.linkedSourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AlgorithmTasksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.algorithmTasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$PracticeSourcesTableTableManager
@@ -5692,6 +5890,7 @@ class $$PracticeSourcesTableTableManager
           PrefetchHooks Function({
             bool practiceSegmentsRefs,
             bool practicePlansRefs,
+            bool algorithmTasksRefs,
           })
         > {
   $$PracticeSourcesTableTableManager(
@@ -5784,12 +5983,17 @@ class $$PracticeSourcesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({practiceSegmentsRefs = false, practicePlansRefs = false}) {
+              ({
+                practiceSegmentsRefs = false,
+                practicePlansRefs = false,
+                algorithmTasksRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (practiceSegmentsRefs) db.practiceSegments,
                     if (practicePlansRefs) db.practicePlans,
+                    if (algorithmTasksRefs) db.algorithmTasks,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -5836,6 +6040,27 @@ class $$PracticeSourcesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (algorithmTasksRefs)
+                        await $_getPrefetchedData<
+                          PracticeSource,
+                          $PracticeSourcesTable,
+                          AlgorithmTask
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PracticeSourcesTableReferences
+                              ._algorithmTasksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PracticeSourcesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).algorithmTasksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.linkedSourceId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -5859,6 +6084,7 @@ typedef $$PracticeSourcesTableProcessedTableManager =
       PrefetchHooks Function({
         bool practiceSegmentsRefs,
         bool practicePlansRefs,
+        bool algorithmTasksRefs,
       })
     >;
 typedef $$PracticeSegmentsTableCreateCompanionBuilder =
@@ -6457,6 +6683,24 @@ final class $$PracticePlansTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$AlgorithmTasksTable, List<AlgorithmTask>>
+  _algorithmTasksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.algorithmTasks,
+    aliasName: 'practice_plans__id__algorithm_tasks__linked_plan_id',
+  );
+
+  $$AlgorithmTasksTableProcessedTableManager get algorithmTasksRefs {
+    final manager = $$AlgorithmTasksTableTableManager(
+      $_db,
+      $_db.algorithmTasks,
+    ).filter((f) => f.linkedPlanId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_algorithmTasksRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$PracticePlansTableFilterComposer
@@ -6585,6 +6829,31 @@ class $$PracticePlansTableFilterComposer
           }) => $$PracticeSessionsTableFilterComposer(
             $db: $db,
             $table: $db.practiceSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> algorithmTasksRefs(
+    Expression<bool> Function($$AlgorithmTasksTableFilterComposer f) f,
+  ) {
+    final $$AlgorithmTasksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.algorithmTasks,
+      getReferencedColumn: (t) => t.linkedPlanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AlgorithmTasksTableFilterComposer(
+            $db: $db,
+            $table: $db.algorithmTasks,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -6826,6 +7095,31 @@ class $$PracticePlansTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> algorithmTasksRefs<T extends Object>(
+    Expression<T> Function($$AlgorithmTasksTableAnnotationComposer a) f,
+  ) {
+    final $$AlgorithmTasksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.algorithmTasks,
+      getReferencedColumn: (t) => t.linkedPlanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AlgorithmTasksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.algorithmTasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$PracticePlansTableTableManager
@@ -6845,6 +7139,7 @@ class $$PracticePlansTableTableManager
             bool sourceId,
             bool segmentId,
             bool practiceSessionsRefs,
+            bool algorithmTasksRefs,
           })
         > {
   $$PracticePlansTableTableManager(_$AppDatabase db, $PracticePlansTable table)
@@ -6935,11 +7230,13 @@ class $$PracticePlansTableTableManager
                 sourceId = false,
                 segmentId = false,
                 practiceSessionsRefs = false,
+                algorithmTasksRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (practiceSessionsRefs) db.practiceSessions,
+                    if (algorithmTasksRefs) db.algorithmTasks,
                   ],
                   addJoins:
                       <
@@ -7005,6 +7302,27 @@ class $$PracticePlansTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (algorithmTasksRefs)
+                        await $_getPrefetchedData<
+                          PracticePlan,
+                          $PracticePlansTable,
+                          AlgorithmTask
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PracticePlansTableReferences
+                              ._algorithmTasksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PracticePlansTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).algorithmTasksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.linkedPlanId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -7029,6 +7347,7 @@ typedef $$PracticePlansTableProcessedTableManager =
         bool sourceId,
         bool segmentId,
         bool practiceSessionsRefs,
+        bool algorithmTasksRefs,
       })
     >;
 typedef $$PracticeSessionsTableCreateCompanionBuilder =
@@ -8128,6 +8447,8 @@ typedef $$AlgorithmTasksTableCreateCompanionBuilder =
       required int inputDurationMs,
       Value<bool> ownsInput,
       Value<String?> recordingId,
+      Value<String?> linkedSourceId,
+      Value<String?> linkedPlanId,
       required String status,
       Value<String?> remoteJobId,
       Value<int?> progress,
@@ -8150,6 +8471,8 @@ typedef $$AlgorithmTasksTableUpdateCompanionBuilder =
       Value<int> inputDurationMs,
       Value<bool> ownsInput,
       Value<String?> recordingId,
+      Value<String?> linkedSourceId,
+      Value<String?> linkedPlanId,
       Value<String> status,
       Value<String?> remoteJobId,
       Value<int?> progress,
@@ -8161,6 +8484,51 @@ typedef $$AlgorithmTasksTableUpdateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<int> rowid,
     });
+
+final class $$AlgorithmTasksTableReferences
+    extends BaseReferences<_$AppDatabase, $AlgorithmTasksTable, AlgorithmTask> {
+  $$AlgorithmTasksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PracticeSourcesTable _linkedSourceIdTable(_$AppDatabase db) => db
+      .practiceSources
+      .createAlias('algorithm_tasks__linked_source_id__practice_sources__id');
+
+  $$PracticeSourcesTableProcessedTableManager? get linkedSourceId {
+    final $_column = $_itemColumn<String>('linked_source_id');
+    if ($_column == null) return null;
+    final manager = $$PracticeSourcesTableTableManager(
+      $_db,
+      $_db.practiceSources,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_linkedSourceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $PracticePlansTable _linkedPlanIdTable(_$AppDatabase db) => db
+      .practicePlans
+      .createAlias('algorithm_tasks__linked_plan_id__practice_plans__id');
+
+  $$PracticePlansTableProcessedTableManager? get linkedPlanId {
+    final $_column = $_itemColumn<String>('linked_plan_id');
+    if ($_column == null) return null;
+    final manager = $$PracticePlansTableTableManager(
+      $_db,
+      $_db.practicePlans,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_linkedPlanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
 
 class $$AlgorithmTasksTableFilterComposer
     extends Composer<_$AppDatabase, $AlgorithmTasksTable> {
@@ -8260,6 +8628,52 @@ class $$AlgorithmTasksTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$PracticeSourcesTableFilterComposer get linkedSourceId {
+    final $$PracticeSourcesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedSourceId,
+      referencedTable: $db.practiceSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticeSourcesTableFilterComposer(
+            $db: $db,
+            $table: $db.practiceSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$PracticePlansTableFilterComposer get linkedPlanId {
+    final $$PracticePlansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedPlanId,
+      referencedTable: $db.practicePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticePlansTableFilterComposer(
+            $db: $db,
+            $table: $db.practicePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$AlgorithmTasksTableOrderingComposer
@@ -8360,6 +8774,52 @@ class $$AlgorithmTasksTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$PracticeSourcesTableOrderingComposer get linkedSourceId {
+    final $$PracticeSourcesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedSourceId,
+      referencedTable: $db.practiceSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticeSourcesTableOrderingComposer(
+            $db: $db,
+            $table: $db.practiceSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$PracticePlansTableOrderingComposer get linkedPlanId {
+    final $$PracticePlansTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedPlanId,
+      referencedTable: $db.practicePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticePlansTableOrderingComposer(
+            $db: $db,
+            $table: $db.practicePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$AlgorithmTasksTableAnnotationComposer
@@ -8438,6 +8898,52 @@ class $$AlgorithmTasksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$PracticeSourcesTableAnnotationComposer get linkedSourceId {
+    final $$PracticeSourcesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedSourceId,
+      referencedTable: $db.practiceSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticeSourcesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.practiceSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$PracticePlansTableAnnotationComposer get linkedPlanId {
+    final $$PracticePlansTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedPlanId,
+      referencedTable: $db.practicePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticePlansTableAnnotationComposer(
+            $db: $db,
+            $table: $db.practicePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$AlgorithmTasksTableTableManager
@@ -8451,12 +8957,9 @@ class $$AlgorithmTasksTableTableManager
           $$AlgorithmTasksTableAnnotationComposer,
           $$AlgorithmTasksTableCreateCompanionBuilder,
           $$AlgorithmTasksTableUpdateCompanionBuilder,
-          (
-            AlgorithmTask,
-            BaseReferences<_$AppDatabase, $AlgorithmTasksTable, AlgorithmTask>,
-          ),
+          (AlgorithmTask, $$AlgorithmTasksTableReferences),
           AlgorithmTask,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool linkedSourceId, bool linkedPlanId})
         > {
   $$AlgorithmTasksTableTableManager(
     _$AppDatabase db,
@@ -8482,6 +8985,8 @@ class $$AlgorithmTasksTableTableManager
                 Value<int> inputDurationMs = const Value.absent(),
                 Value<bool> ownsInput = const Value.absent(),
                 Value<String?> recordingId = const Value.absent(),
+                Value<String?> linkedSourceId = const Value.absent(),
+                Value<String?> linkedPlanId = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String?> remoteJobId = const Value.absent(),
                 Value<int?> progress = const Value.absent(),
@@ -8502,6 +9007,8 @@ class $$AlgorithmTasksTableTableManager
                 inputDurationMs: inputDurationMs,
                 ownsInput: ownsInput,
                 recordingId: recordingId,
+                linkedSourceId: linkedSourceId,
+                linkedPlanId: linkedPlanId,
                 status: status,
                 remoteJobId: remoteJobId,
                 progress: progress,
@@ -8524,6 +9031,8 @@ class $$AlgorithmTasksTableTableManager
                 required int inputDurationMs,
                 Value<bool> ownsInput = const Value.absent(),
                 Value<String?> recordingId = const Value.absent(),
+                Value<String?> linkedSourceId = const Value.absent(),
+                Value<String?> linkedPlanId = const Value.absent(),
                 required String status,
                 Value<String?> remoteJobId = const Value.absent(),
                 Value<int?> progress = const Value.absent(),
@@ -8544,6 +9053,8 @@ class $$AlgorithmTasksTableTableManager
                 inputDurationMs: inputDurationMs,
                 ownsInput: ownsInput,
                 recordingId: recordingId,
+                linkedSourceId: linkedSourceId,
+                linkedPlanId: linkedPlanId,
                 status: status,
                 remoteJobId: remoteJobId,
                 progress: progress,
@@ -8559,15 +9070,61 @@ class $$AlgorithmTasksTableTableManager
               .map(
                 (e) => (
                   e.readTable<$AlgorithmTasksTable, AlgorithmTask>(table),
-                  BaseReferences<
-                    _$AppDatabase,
-                    $AlgorithmTasksTable,
-                    AlgorithmTask
-                  >(db, table, e),
+                  $$AlgorithmTasksTableReferences(db, table, e),
                 ),
               )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback:
+              ({linkedSourceId = false, linkedPlanId = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (linkedSourceId) {
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.linkedSourceId,
+                            referencedTable: $$AlgorithmTasksTableReferences
+                                ._linkedSourceIdTable(db),
+                            referencedColumn: $$AlgorithmTasksTableReferences
+                                ._linkedSourceIdTable(db)
+                                .id,
+                          ) as T;
+                        }
+                        if (linkedPlanId) {
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.linkedPlanId,
+                            referencedTable: $$AlgorithmTasksTableReferences
+                                ._linkedPlanIdTable(db),
+                            referencedColumn: $$AlgorithmTasksTableReferences
+                                ._linkedPlanIdTable(db)
+                                .id,
+                          ) as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
         ),
       );
 }
@@ -8582,12 +9139,9 @@ typedef $$AlgorithmTasksTableProcessedTableManager =
       $$AlgorithmTasksTableAnnotationComposer,
       $$AlgorithmTasksTableCreateCompanionBuilder,
       $$AlgorithmTasksTableUpdateCompanionBuilder,
-      (
-        AlgorithmTask,
-        BaseReferences<_$AppDatabase, $AlgorithmTasksTable, AlgorithmTask>,
-      ),
+      (AlgorithmTask, $$AlgorithmTasksTableReferences),
       AlgorithmTask,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool linkedSourceId, bool linkedPlanId})
     >;
 
 class $AppDatabaseManager {

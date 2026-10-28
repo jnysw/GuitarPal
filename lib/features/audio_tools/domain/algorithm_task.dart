@@ -32,6 +32,8 @@ class AlgorithmTaskRecord {
     this.resultJson,
     this.nextPollAt,
     this.operation = AlgorithmOperation.chords,
+    this.linkedSourceId,
+    this.linkedPlanId,
   });
 
   final String id;
@@ -43,6 +45,8 @@ class AlgorithmTaskRecord {
   final int inputDurationMs;
   final bool ownsInput;
   final String? recordingId;
+  final String? linkedSourceId;
+  final String? linkedPlanId;
   final AlgorithmTaskState state;
   final String? remoteJobId;
   final int? progress;

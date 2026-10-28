@@ -10,6 +10,12 @@ import 'data/algorithm_mix_platform.dart';
 import 'data/algorithm_stem_store.dart';
 import 'domain/legacy_algorithm_models.dart';
 import 'domain/stem_mix_settings.dart';
+import 'domain/stem_practice_target.dart';
+import 'data/stem_practice_target_repository.dart';
+import 'application/stem_practice_tracker.dart';
+import '../plans/application/practice_session_service.dart';
+import '../plans/practice_plan_providers.dart';
+import 'stem_practice_target_picker.dart';
 
 class StemMixScreen extends ConsumerStatefulWidget {
   const StemMixScreen({
@@ -40,6 +46,137 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
   int _position = 0, _duration = 1, _loops = 0, _a = 0, _b = 1;
   String? _error;
   Timer? _ticker;
+  Timer? _checkpointTimer;
+  late final StemPracticeTargetRepository _targets;
+  late final PracticeSessionService _sessions;
+  StemPracticeTarget? _target;
+  StemPracticeTracker _tracker = StemPracticeTracker.untracked();
+  String? _statsError;
+  bool _savingStats = false, _allowPop = false, _leaving = false;
+  bool _waitingForChoice = false;
+  int _playbackRevision = 0;
+
+  StemPracticeTracker _newTracker() => StemPracticeTracker(
+    _target == null
+        ? null
+        : _sessions.trackPlayback(
+            sourceId: _target!.sourceId,
+            planId: _target!.planId,
+          ),
+    initialNativeLoops: _loops,
+  );
+
+  Future<void> _checkpoint() async {
+    if (_savingStats) return;
+    _savingStats = true;
+    try {
+      await _tracker.checkpoint();
+      if (mounted && _statsError != null) setState(() => _statsError = null);
+    } on Object {
+      if (mounted) setState(() => _statsError = '练习记录暂未保存，请重试。上次成功的检查点仍保留。');
+    } finally {
+      _savingStats = false;
+    }
+  }
+
+  Future<void> _validateTarget() async {
+    final current = await _targets.load(widget.taskId);
+    if (current?.sourceId != _target?.sourceId ||
+        current?.planId != _target?.planId) {
+      await _tracker.finish();
+      _target = current;
+      _tracker = _newTracker();
+      _message('统计归属已变更，后续播放将从新会话记录');
+    } else {
+      _target = current;
+    }
+  }
+
+  Future<void> _editTarget({bool clear = false}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    _playbackRevision++;
+    _tracker.pause();
+    try {
+      await _player.pause();
+      await _poll(force: true);
+      await _checkpoint();
+      if (!mounted) return;
+      if (!clear) setState(() => _waitingForChoice = true);
+      final selection = clear
+          ? null
+          : await chooseStemPracticeTarget(context, ref);
+      if (mounted) setState(() => _waitingForChoice = false);
+      if (!mounted || (!clear && selection == null)) return;
+      await _tracker.finish();
+      try {
+        await _targets.link(
+          widget.taskId,
+          sourceId: selection?.sourceId,
+          planId: selection?.planId,
+        );
+        _target = await _targets.load(widget.taskId);
+      } finally {
+        _tracker = _newTracker();
+      }
+      if (mounted) setState(() => _statsError = null);
+    } on Object catch (e) {
+      _message(e is FormatException ? e.message : '统计关联或记录保存失败，请重试');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _playing = false;
+          _waitingForChoice = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _leave() async {
+    if (_leaving || !mounted) return;
+    setState(() => _busy = true);
+    _leaving = true;
+    _playbackRevision++;
+    _tracker.pause();
+    try {
+      await _player.pause();
+      await _poll(force: true);
+      await _tracker.finish();
+    } on Object {
+      if (!mounted) return;
+      setState(() => _waitingForChoice = true);
+      final leave = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('练习记录保存失败'),
+          content: const Text('可以返回页面重试保存；直接退出会保留此前成功保存的检查点。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('返回重试'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('直接退出'),
+            ),
+          ],
+        ),
+      );
+      if (mounted) setState(() => _waitingForChoice = false);
+      if (leave != true) {
+        _leaving = false;
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _allowPop = true);
+    // PopScope must rebuild before issuing the permitted pop.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
 
   @override
   void initState() {
@@ -48,6 +185,8 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
     _player = ref.read(algorithmMixPlatformProvider);
     _store = ref.read(algorithmStemStoreProvider);
     _preferences = ref.read(stemMixPreferencesProvider);
+    _targets = ref.read(stemPracticeTargetRepositoryProvider);
+    _sessions = ref.read(practiceSessionServiceProvider);
     _duration = widget.result.duration.inMilliseconds;
     _b = _duration;
     unawaited(_initialize());
@@ -55,6 +194,9 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
       const Duration(milliseconds: 100),
       (_) => unawaited(_poll()),
     );
+    _checkpointTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_playing) unawaited(_checkpoint());
+    });
   }
 
   void _message(String value) {
@@ -71,6 +213,12 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
       : '无法操作本机混音，请重新载入音轨';
 
   Future<void> _initialize() async {
+    try {
+      _target = await _targets.load(widget.taskId);
+      _tracker = _newTracker();
+    } on Object {
+      _statsError = '统计关联读取失败，本次暂不记录。可重新关联曲目。';
+    }
     try {
       _settings =
           await _preferences.load(widget.taskId, _duration) ??
@@ -89,6 +237,8 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
     bool initial = false,
   }) async {
     if (!mounted || (_busy && !initial)) return;
+    _playbackRevision++;
+    _tracker.pause();
     setState(() {
       _busy = true;
       _error = null;
@@ -101,8 +251,13 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
         final previous = await _player.snapshot();
         if (previous['isLoaded'] == true) {
           _position = algorithmInteger(previous['positionMs']);
+          _tracker.observe(
+            playing: false,
+            nativeLoops: algorithmInteger(previous['completedLoops']),
+          );
         }
       }
+      await _checkpoint();
       final paths = <String, String>{};
       for (final stem in widget.result.stems.where(
         (s) => settings.includes(s.id) && s.extension == 'wav',
@@ -115,6 +270,7 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
       }
       if (!mounted) return;
       await _player.load(paths);
+      _tracker.resetNativeCounter();
       final actualDuration = algorithmInteger(
         (await _player.snapshot())['durationMs'],
       );
@@ -179,19 +335,26 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
   }
 
   Future<void> _poll({bool force = false}) async {
-    if (_polling ||
+    if ((_polling && !force) ||
         !mounted ||
         !_loaded ||
         (!force && (!_playing || _busy || _dragging))) {
       return;
     }
     _polling = true;
+    final revision = _playbackRevision;
     try {
       final data = await _player.snapshot();
+      if (!mounted || revision != _playbackRevision) return;
       if (data['error'] is String) {
         throw FormatException(data['error'] as String);
       }
       if (data['isLoaded'] != true) throw const FormatException('混音已释放，请重新载入');
+      _tracker.observe(
+        playing: data['isPlaying'] == true,
+        nativeLoops: algorithmInteger(data['completedLoops']),
+      );
+      final stopped = _playing && data['isPlaying'] != true;
       if (mounted) {
         setState(() {
           _playing = data['isPlaying'] == true;
@@ -199,7 +362,10 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
           _loops = algorithmInteger(data['completedLoops']);
         });
       }
+      if (stopped) unawaited(_checkpoint());
     } on Object catch (e) {
+      _tracker.pause();
+      unawaited(_checkpoint());
       if (mounted) {
         setState(() {
           _loaded = false;
@@ -215,13 +381,17 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
   Future<void> _toggle() async {
     if (_busy || !_loaded) return;
     setState(() => _busy = true);
+    _playbackRevision++;
     try {
       if (_playing) {
+        _tracker.pause();
         await _player.pause();
       } else {
+        await _validateTarget();
         await _player.play();
       }
       await _poll(force: true);
+      if (!_playing) await _checkpoint();
     } on Object catch (e) {
       _message(_errorText(e));
     } finally {
@@ -283,10 +453,15 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _playbackRevision++;
     if (state != AppLifecycleState.resumed) {
+      _tracker.suspend();
+      unawaited(_checkpoint());
       unawaited(_player.pause().catchError((Object _) {}));
       if (mounted) setState(() => _playing = false);
       _dragging = false;
+    } else {
+      _tracker.resume();
     }
   }
 
@@ -294,6 +469,9 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
+    _checkpointTimer?.cancel();
+    _tracker.suspend();
+    unawaited(_tracker.finish().catchError((Object _) {}));
     unawaited(_player.stop().catchError((Object _) {}));
     super.dispose();
   }
@@ -301,117 +479,166 @@ class _StemMixScreenState extends ConsumerState<StemMixScreen>
   @override
   Widget build(BuildContext context) {
     final enabled = _loaded && !_busy;
-    return Scaffold(
-      appBar: AppBar(title: const Text('分轨练习')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
-          const Text('使用已下载的 PCM16 WAV 音轨；本页练习暂不计入计划统计。'),
-          const SizedBox(height: 12),
-          SegmentedButton<StemMixMode>(
-            segments: const [
-              ButtonSegment(
-                value: StemMixMode.instruments,
-                label: Text('分轨混音'),
+    return PopScope(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_leave());
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('分轨练习')),
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+            const Text('使用已下载的 PCM16 WAV 音轨，关联曲目后记录实际播放时间。'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _target == null
+                          ? '尚未关联曲目 · 当前为试听'
+                          : '统计归属：${_target!.label}',
+                    ),
+                    Text(
+                      '本次有效练习 ${_time(_tracker.activeDuration.inMilliseconds)} · ${_tracker.loops} 次循环',
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        TextButton(
+                          key: const Key('mix_link_target'),
+                          onPressed: _busy ? null : () => _editTarget(),
+                          child: const Text('关联曲目／计划'),
+                        ),
+                        if (_target != null)
+                          TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _editTarget(clear: true),
+                            child: const Text('解除关联（保留历史）'),
+                          ),
+                      ],
+                    ),
+                    if (_statsError != null) ...[
+                      Text(_statsError!),
+                      TextButton(
+                        onPressed: _savingStats ? null : _checkpoint,
+                        child: const Text('重试保存统计'),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              ButtonSegment(
-                value: StemMixMode.vocalsAndBacking,
-                label: Text('人声＋伴奏'),
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<StemMixMode>(
+              segments: const [
+                ButtonSegment(
+                  value: StemMixMode.instruments,
+                  label: Text('分轨混音'),
+                ),
+                ButtonSegment(
+                  value: StemMixMode.vocalsAndBacking,
+                  label: Text('人声＋伴奏'),
+                ),
+              ],
+              selected: {_settings.mode},
+              onSelectionChanged: _busy
+                  ? null
+                  : (v) => _loadMode(_settings.copyWith(mode: v.single)),
+            ),
+            if (_busy && !_waitingForChoice) const LinearProgressIndicator(),
+            if (_error != null) ...[
+              Text(_error!),
+              TextButton(
+                onPressed: _busy ? null : () => _loadMode(_settings),
+                child: const Text('重新载入'),
               ),
             ],
-            selected: {_settings.mode},
-            onSelectionChanged: _busy
-                ? null
-                : (v) => _loadMode(_settings.copyWith(mode: v.single)),
-          ),
-          if (_busy) const LinearProgressIndicator(),
-          if (_error != null) ...[
-            Text(_error!),
-            TextButton(
-              onPressed: _busy ? null : () => _loadMode(_settings),
-              child: const Text('重新载入'),
+            const SizedBox(height: 12),
+            if (_loaded) Text('已载入 ${_loadedIds.length} 条音轨，控制会作用于同一播放进度。'),
+            FilledButton.icon(
+              key: const Key('mix_play'),
+              onPressed: enabled ? _toggle : null,
+              icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+              label: Text(_playing ? '暂停混音' : '播放混音'),
+            ),
+            Slider(
+              key: const Key('mix_progress'),
+              value: _position.toDouble().clamp(0, _duration.toDouble()),
+              max: _duration.toDouble(),
+              onChangeStart: enabled
+                  ? (_) => setState(() => _dragging = true)
+                  : null,
+              onChanged: enabled
+                  ? (v) => setState(() => _position = v.round())
+                  : null,
+              onChangeEnd: enabled ? (v) => _seek(v.round()) : null,
+            ),
+            Text('${_time(_position)} / ${_time(_duration)}'),
+            PrecisePlaybackSpeedControl(
+              value: _settings.speed,
+              enabled: enabled,
+              presets: const [.5, 1, 1.5, 2],
+              onChanged: (speed) =>
+                  setState(() => _settings = _settings.copyWith(speed: speed)),
+              onChangeEnd: (speed) => _commit(_settings.copyWith(speed: speed)),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('A-B 循环'),
+              subtitle: Text('A ${_time(_a)} · B ${_time(_b)} · 已循环 $_loops 次'),
+              value: _settings.loop != null,
+              onChanged: enabled
+                  ? (v) => v
+                        ? _setLoop(_a, _b)
+                        : _commit(_settings.copyWith(clearLoop: true))
+                  : null,
+            ),
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton(
+                  onPressed: enabled ? () => _setLoop(_position, _b) : null,
+                  child: const Text('当前位置设 A'),
+                ),
+                OutlinedButton(
+                  onPressed: enabled ? () => _setLoop(_a, _position) : null,
+                  child: const Text('当前位置设 B'),
+                ),
+                TextButton(
+                  onPressed: enabled ? _editLoop : null,
+                  child: const Text('输入时间'),
+                ),
+              ],
+            ),
+            const Divider(),
+            Text('主音量 ${(_settings.master * 100).round()}%'),
+            Slider(
+              value: _settings.master,
+              onChanged: enabled
+                  ? (v) => setState(
+                      () => _settings = _settings.copyWith(master: v),
+                    )
+                  : null,
+              onChangeEnd: enabled
+                  ? (v) => _commit(_settings.copyWith(master: v))
+                  : null,
+            ),
+            for (final stem in widget.result.stems.where(
+              (s) => _settings.includes(s.id),
+            ))
+              _stemCard(stem, enabled),
+            OutlinedButton.icon(
+              onPressed: enabled ? _save : null,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('保存练习设置'),
             ),
           ],
-          const SizedBox(height: 12),
-          if (_loaded) Text('已载入 ${_loadedIds.length} 条音轨，控制会作用于同一播放进度。'),
-          FilledButton.icon(
-            key: const Key('mix_play'),
-            onPressed: enabled ? _toggle : null,
-            icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
-            label: Text(_playing ? '暂停混音' : '播放混音'),
-          ),
-          Slider(
-            key: const Key('mix_progress'),
-            value: _position.toDouble().clamp(0, _duration.toDouble()),
-            max: _duration.toDouble(),
-            onChangeStart: enabled
-                ? (_) => setState(() => _dragging = true)
-                : null,
-            onChanged: enabled
-                ? (v) => setState(() => _position = v.round())
-                : null,
-            onChangeEnd: enabled ? (v) => _seek(v.round()) : null,
-          ),
-          Text('${_time(_position)} / ${_time(_duration)}'),
-          PrecisePlaybackSpeedControl(
-            value: _settings.speed,
-            enabled: enabled,
-            presets: const [.5, 1, 1.5, 2],
-            onChanged: (speed) =>
-                setState(() => _settings = _settings.copyWith(speed: speed)),
-            onChangeEnd: (speed) => _commit(_settings.copyWith(speed: speed)),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('A-B 循环'),
-            subtitle: Text('A ${_time(_a)} · B ${_time(_b)} · 已循环 $_loops 次'),
-            value: _settings.loop != null,
-            onChanged: enabled
-                ? (v) => v
-                      ? _setLoop(_a, _b)
-                      : _commit(_settings.copyWith(clearLoop: true))
-                : null,
-          ),
-          Wrap(
-            spacing: 8,
-            children: [
-              OutlinedButton(
-                onPressed: enabled ? () => _setLoop(_position, _b) : null,
-                child: const Text('当前位置设 A'),
-              ),
-              OutlinedButton(
-                onPressed: enabled ? () => _setLoop(_a, _position) : null,
-                child: const Text('当前位置设 B'),
-              ),
-              TextButton(
-                onPressed: enabled ? _editLoop : null,
-                child: const Text('输入时间'),
-              ),
-            ],
-          ),
-          const Divider(),
-          Text('主音量 ${(_settings.master * 100).round()}%'),
-          Slider(
-            value: _settings.master,
-            onChanged: enabled
-                ? (v) =>
-                      setState(() => _settings = _settings.copyWith(master: v))
-                : null,
-            onChangeEnd: enabled
-                ? (v) => _commit(_settings.copyWith(master: v))
-                : null,
-          ),
-          for (final stem in widget.result.stems.where(
-            (s) => _settings.includes(s.id),
-          ))
-            _stemCard(stem, enabled),
-          OutlinedButton.icon(
-            onPressed: enabled ? _save : null,
-            icon: const Icon(Icons.save_outlined),
-            label: const Text('保存练习设置'),
-          ),
-        ],
+        ),
       ),
     );
   }
