@@ -225,6 +225,9 @@ void main() {
             'ALTER TABLE algorithm_tasks DROP COLUMN linked_source_id',
           );
           raw.execute('ALTER TABLE algorithm_tasks DROP COLUMN linked_plan_id');
+          raw.execute(
+            'ALTER TABLE algorithm_tasks DROP COLUMN media_binding_json',
+          );
           raw.execute('PRAGMA user_version = 11');
         },
       ),

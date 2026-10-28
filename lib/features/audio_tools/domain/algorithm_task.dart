@@ -34,6 +34,7 @@ class AlgorithmTaskRecord {
     this.operation = AlgorithmOperation.chords,
     this.linkedSourceId,
     this.linkedPlanId,
+    this.mediaBindingJson,
   });
 
   final String id;
@@ -47,6 +48,7 @@ class AlgorithmTaskRecord {
   final String? recordingId;
   final String? linkedSourceId;
   final String? linkedPlanId;
+  final String? mediaBindingJson;
   final AlgorithmTaskState state;
   final String? remoteJobId;
   final int? progress;

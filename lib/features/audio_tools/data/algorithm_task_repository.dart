@@ -36,6 +36,7 @@ class AlgorithmTaskRepository {
           recordingId: Value(value.recordingId),
           linkedSourceId: Value(value.linkedSourceId),
           linkedPlanId: Value(value.linkedPlanId),
+          mediaBindingJson: Value(value.mediaBindingJson),
           status: value.state.name,
           createdAt: value.createdAt,
           updatedAt: value.updatedAt,
@@ -93,6 +94,19 @@ class AlgorithmTaskRepository {
     )..where((r) => r.id.equals(id))).go();
   }
 
+  Future<void> updateMediaBinding(String id, String bindingJson) async {
+    final changed =
+        await (database.update(
+          database.algorithmTasks,
+        )..where((r) => r.id.equals(id))).write(
+          db.AlgorithmTasksCompanion(
+            mediaBindingJson: Value(bindingJson),
+            updatedAt: Value(DateTime.now().toUtc()),
+          ),
+        );
+    if (changed != 1) throw const FormatException('分析任务已不存在');
+  }
+
   AlgorithmTaskRecord _map(db.AlgorithmTask row) => AlgorithmTaskRecord(
     id: row.id,
     operation: AlgorithmOperation.values.byName(row.operation),
@@ -105,6 +119,7 @@ class AlgorithmTaskRepository {
     recordingId: row.recordingId,
     linkedSourceId: row.linkedSourceId,
     linkedPlanId: row.linkedPlanId,
+    mediaBindingJson: row.mediaBindingJson,
     state: AlgorithmTaskState.values.byName(row.status),
     remoteJobId: row.remoteJobId,
     progress: row.progress,

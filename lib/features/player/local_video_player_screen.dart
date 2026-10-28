@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,6 +17,8 @@ import 'presentation/fullscreen_controls_visibility.dart';
 import 'presentation/fullscreen_local_video_controls.dart';
 import 'widgets/playback_volume_control.dart';
 import 'widgets/precise_playback_speed_control.dart';
+import 'widgets/video_analysis_panel.dart';
+import '../audio_tools/domain/legacy_algorithm_models.dart';
 import '../segments/practice_segment_providers.dart';
 import '../segments/presentation/practice_segment_card.dart';
 import '../segments/presentation/practice_segment_editor_sheet.dart';
@@ -49,6 +52,8 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
   bool _isFullscreen = false;
   bool _fullscreenTransitionInProgress = false;
   bool _recordingWorkflowActive = false;
+  AlgorithmOperation? _requestedAnalysis;
+  int _analysisRevision = 0;
 
   String? get _videoPath {
     final uri = widget.source.canonicalUri;
@@ -372,7 +377,40 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
       },
       child: Scaffold(
         backgroundColor: _isFullscreen ? Colors.black : null,
-        appBar: _isFullscreen ? null : AppBar(title: Text(widget.source.title)),
+        appBar: _isFullscreen
+            ? null
+            : AppBar(
+                title: Text(widget.source.title),
+                actions: [
+                  if (kDebugMode)
+                    AnimatedBuilder(
+                      animation: _controller ?? kAlwaysCompleteAnimation,
+                      builder: (context, _) =>
+                          PopupMenuButton<AlgorithmOperation>(
+                            key: const Key('local_video_analysis_menu'),
+                            tooltip: '当前视频的和弦与分轨',
+                            enabled:
+                                !_recordingWorkflowActive &&
+                                _controller?.isReady == true,
+                            icon: const Icon(Icons.auto_awesome),
+                            onSelected: (operation) => setState(() {
+                              _requestedAnalysis = operation;
+                              _analysisRevision++;
+                            }),
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: AlgorithmOperation.chords,
+                                child: Text('扒和弦'),
+                              ),
+                              PopupMenuItem(
+                                value: AlgorithmOperation.separation,
+                                child: Text('分离音轨'),
+                              ),
+                            ],
+                          ),
+                    ),
+                ],
+              ),
         body: SafeArea(
           top: !_isFullscreen,
           bottom: !_isFullscreen,
@@ -452,8 +490,9 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                       },
                     ),
                   ),
-                  if (!_isFullscreen)
-                    Expanded(
+                  Expanded(
+                    child: Offstage(
+                      offstage: _isFullscreen,
                       child: _controller == null
                           ? const Center(child: CircularProgressIndicator())
                           : AnimatedBuilder(
@@ -461,6 +500,24 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                               builder: (context, _) => _LocalVideoControls(
                                 controller: _controller!,
                                 segments: segments,
+                                analysisPanel: kDebugMode
+                                    ? VideoAnalysisPanel(
+                                        key: ValueKey(
+                                          'video_analysis_${widget.source.id}',
+                                        ),
+                                        source: widget.source,
+                                        path: path,
+                                        controller: _controller!,
+                                        planId: widget.planId,
+                                        enabled:
+                                            !_recordingWorkflowActive &&
+                                            _controller!.isReady &&
+                                            _controller!.duration >
+                                                Duration.zero,
+                                        requestedOperation: _requestedAnalysis,
+                                        requestRevision: _analysisRevision,
+                                      )
+                                    : null,
                                 recordingPanel: PracticeRecordingPanel(
                                   key: ValueKey(
                                     'local_recording_${widget.source.id}',
@@ -483,6 +540,13 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                   playReference: _controller!.play,
                                   pauseReference: _controller!.pause,
                                   onWorkflowActiveChanged: (value) {
+                                    if (value && _controller!.stemsLoaded) {
+                                      unawaited(
+                                        _controller!.clearStems().catchError(
+                                          (Object _) {},
+                                        ),
+                                      );
+                                    }
                                     if (mounted &&
                                         _recordingWorkflowActive != value) {
                                       setState(
@@ -501,6 +565,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                               ),
                             ),
                     ),
+                  ),
                 ],
               );
             },
@@ -575,6 +640,7 @@ class _LocalVideoControls extends StatelessWidget {
     required this.controller,
     required this.segments,
     required this.recordingPanel,
+    this.analysisPanel,
     required this.onSaveSegment,
     required this.onActivateSegment,
     required this.onEditSegment,
@@ -584,6 +650,7 @@ class _LocalVideoControls extends StatelessWidget {
   final LocalVideoPlaybackController controller;
   final AsyncValue<List<PracticeSegment>> segments;
   final Widget recordingPanel;
+  final Widget? analysisPanel;
   final VoidCallback onSaveSegment;
   final ValueChanged<PracticeSegment> onActivateSegment;
   final ValueChanged<PracticeSegment> onEditSegment;
@@ -758,6 +825,10 @@ class _LocalVideoControls extends StatelessWidget {
                     : null,
               ),
               const Divider(height: 30),
+              if (analysisPanel != null) ...[
+                analysisPanel!,
+                const Divider(height: 30),
+              ],
               recordingPanel,
               const Divider(height: 30),
               Row(

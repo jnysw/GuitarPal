@@ -215,6 +215,7 @@ class AlgorithmTasks extends Table {
     onDelete: KeyAction.setNull,
   )();
   TextColumn get status => text()();
+  TextColumn get mediaBindingJson => text().nullable()();
   TextColumn get remoteJobId => text().nullable()();
   IntColumn get progress => integer().nullable()();
   TextColumn get message => text().nullable()();
@@ -245,7 +246,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'guitar_pal'));
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -294,6 +295,12 @@ class AppDatabase extends _$AppDatabase {
             algorithmTasks.linkedSourceId,
           );
           await migrator.addColumn(algorithmTasks, algorithmTasks.linkedPlanId);
+        }
+        if (from < 13) {
+          await migrator.addColumn(
+            algorithmTasks,
+            algorithmTasks.mediaBindingJson,
+          );
         }
       }
     },

@@ -1,6 +1,6 @@
 # GuitarPal
 
-AI 扒和弦与分轨开发已启动：Debug 专用“我的 → 音频工具（实验）”支持选择音频/已有录音、确认上传到 Windows 算法 API、恢复任务和缓存结果。七轨结果可逐轨下载、离线试听，并进入分轨练习，使用共享进度、音量/静音/独奏、0.01 倍速、A-B 循环和本机设置恢复。关联曲目或整曲计划后，实际播放可进入练习反馈与计划进度，支持后台检查点和退出保存。已通过 Tailscale 与 Android 模拟器真实六轨/双轨播放联调。旧和弦 v1 裁剪偏移未知，和弦原曲同步及视频播放器联动仍待开发。操作见 [客户端联调说明](docs/ai_audio/windows_client_setup.md)，范围见 [AI 音频规划](docs/ai_audio/development_plan.md)，每批实现、验证和依赖见 [阶段进度](docs/ai_audio/progress.md)。
+AI 扒和弦与分轨已接入本地视频练习：Debug Android 打开已导入的视频，在播放器内选择整段或 A-B 提取音频、确认上传并查看结果，无需重复导入或手动关联曲目。波形、人工校准后的和弦定位及六轨混音共用原视频的播放进度、音量、0.01 倍速、A-B 和唯一练习会话；分轨播放时视频原声静音。旧和弦接口裁剪偏移缺失，暂需人工校准；不宣称自动精确同步。操作和限制见 [视频练习工作区](docs/ai_audio/video_practice_workspace.md)、[客户端联调说明](docs/ai_audio/windows_client_setup.md)，完整范围与验证见 [AI 音频规划](docs/ai_audio/development_plan.md) 和 [阶段进度](docs/ai_audio/progress.md)。
 
 把值得学习的视频内容整理成可重复、可跟踪的吉他练习。
 

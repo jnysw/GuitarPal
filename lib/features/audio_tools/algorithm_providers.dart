@@ -8,10 +8,18 @@ import 'data/algorithm_task_repository.dart';
 import 'data/algorithm_stem_store.dart';
 import 'data/algorithm_mix_platform.dart';
 import 'domain/algorithm_task.dart';
+import 'domain/algorithm_configuration.dart';
 import 'data/stem_practice_target_repository.dart';
+import 'data/video_audio_extractor.dart';
 
 final algorithmAudioImportProvider = Provider<AlgorithmAudioImport>(
   (ref) => const MethodChannelAlgorithmAudioImport(),
+);
+final algorithmEndpointProvider = Provider<String>(
+  (ref) => AlgorithmConfiguration.baseUrl,
+);
+final videoAudioExtractorProvider = Provider<VideoAudioExtractor>(
+  (ref) => const VideoAudioExtractor(),
 );
 final algorithmTaskRepositoryProvider = Provider<AlgorithmTaskRepository>(
   (ref) => AlgorithmTaskRepository(ref.watch(databaseProvider)),

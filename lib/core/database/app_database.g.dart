@@ -4319,6 +4319,17 @@ class $AlgorithmTasksTable extends AlgorithmTasks
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _mediaBindingJsonMeta = const VerificationMeta(
+    'mediaBindingJson',
+  );
+  @override
+  late final GeneratedColumn<String> mediaBindingJson = GeneratedColumn<String>(
+    'media_binding_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _remoteJobIdMeta = const VerificationMeta(
     'remoteJobId',
   );
@@ -4421,6 +4432,7 @@ class $AlgorithmTasksTable extends AlgorithmTasks
     linkedSourceId,
     linkedPlanId,
     status,
+    mediaBindingJson,
     remoteJobId,
     progress,
     message,
@@ -4540,6 +4552,15 @@ class $AlgorithmTasksTable extends AlgorithmTasks
     } else if (isInserting) {
       context.missing(_statusMeta);
     }
+    if (data.containsKey('media_binding_json')) {
+      context.handle(
+        _mediaBindingJsonMeta,
+        mediaBindingJson.isAcceptableOrUnknown(
+          data['media_binding_json']!,
+          _mediaBindingJsonMeta,
+        ),
+      );
+    }
     if (data.containsKey('remote_job_id')) {
       context.handle(
         _remoteJobIdMeta,
@@ -4658,6 +4679,10 @@ class $AlgorithmTasksTable extends AlgorithmTasks
         DriftSqlType.string,
         data['${effectivePrefix}status'],
       )!,
+      mediaBindingJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}media_binding_json'],
+      ),
       remoteJobId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}remote_job_id'],
@@ -4712,6 +4737,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   final String? linkedSourceId;
   final String? linkedPlanId;
   final String status;
+  final String? mediaBindingJson;
   final String? remoteJobId;
   final int? progress;
   final String? message;
@@ -4733,6 +4759,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     this.linkedSourceId,
     this.linkedPlanId,
     required this.status,
+    this.mediaBindingJson,
     this.remoteJobId,
     this.progress,
     this.message,
@@ -4763,6 +4790,9 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
       map['linked_plan_id'] = Variable<String>(linkedPlanId);
     }
     map['status'] = Variable<String>(status);
+    if (!nullToAbsent || mediaBindingJson != null) {
+      map['media_binding_json'] = Variable<String>(mediaBindingJson);
+    }
     if (!nullToAbsent || remoteJobId != null) {
       map['remote_job_id'] = Variable<String>(remoteJobId);
     }
@@ -4804,6 +4834,9 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
           ? const Value.absent()
           : Value(linkedPlanId),
       status: Value(status),
+      mediaBindingJson: mediaBindingJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mediaBindingJson),
       remoteJobId: remoteJobId == null && nullToAbsent
           ? const Value.absent()
           : Value(remoteJobId),
@@ -4843,6 +4876,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
       linkedSourceId: serializer.fromJson<String?>(json['linkedSourceId']),
       linkedPlanId: serializer.fromJson<String?>(json['linkedPlanId']),
       status: serializer.fromJson<String>(json['status']),
+      mediaBindingJson: serializer.fromJson<String?>(json['mediaBindingJson']),
       remoteJobId: serializer.fromJson<String?>(json['remoteJobId']),
       progress: serializer.fromJson<int?>(json['progress']),
       message: serializer.fromJson<String?>(json['message']),
@@ -4871,6 +4905,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
       'linkedSourceId': serializer.toJson<String?>(linkedSourceId),
       'linkedPlanId': serializer.toJson<String?>(linkedPlanId),
       'status': serializer.toJson<String>(status),
+      'mediaBindingJson': serializer.toJson<String?>(mediaBindingJson),
       'remoteJobId': serializer.toJson<String?>(remoteJobId),
       'progress': serializer.toJson<int?>(progress),
       'message': serializer.toJson<String?>(message),
@@ -4895,6 +4930,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     Value<String?> linkedSourceId = const Value.absent(),
     Value<String?> linkedPlanId = const Value.absent(),
     String? status,
+    Value<String?> mediaBindingJson = const Value.absent(),
     Value<String?> remoteJobId = const Value.absent(),
     Value<int?> progress = const Value.absent(),
     Value<String?> message = const Value.absent(),
@@ -4918,6 +4954,9 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
         : this.linkedSourceId,
     linkedPlanId: linkedPlanId.present ? linkedPlanId.value : this.linkedPlanId,
     status: status ?? this.status,
+    mediaBindingJson: mediaBindingJson.present
+        ? mediaBindingJson.value
+        : this.mediaBindingJson,
     remoteJobId: remoteJobId.present ? remoteJobId.value : this.remoteJobId,
     progress: progress.present ? progress.value : this.progress,
     message: message.present ? message.value : this.message,
@@ -4951,6 +4990,9 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
           ? data.linkedPlanId.value
           : this.linkedPlanId,
       status: data.status.present ? data.status.value : this.status,
+      mediaBindingJson: data.mediaBindingJson.present
+          ? data.mediaBindingJson.value
+          : this.mediaBindingJson,
       remoteJobId: data.remoteJobId.present
           ? data.remoteJobId.value
           : this.remoteJobId,
@@ -4985,6 +5027,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
           ..write('linkedSourceId: $linkedSourceId, ')
           ..write('linkedPlanId: $linkedPlanId, ')
           ..write('status: $status, ')
+          ..write('mediaBindingJson: $mediaBindingJson, ')
           ..write('remoteJobId: $remoteJobId, ')
           ..write('progress: $progress, ')
           ..write('message: $message, ')
@@ -4998,7 +5041,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     operation,
     endpoint,
@@ -5011,6 +5054,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     linkedSourceId,
     linkedPlanId,
     status,
+    mediaBindingJson,
     remoteJobId,
     progress,
     message,
@@ -5019,7 +5063,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
     nextPollAt,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -5036,6 +5080,7 @@ class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
           other.linkedSourceId == this.linkedSourceId &&
           other.linkedPlanId == this.linkedPlanId &&
           other.status == this.status &&
+          other.mediaBindingJson == this.mediaBindingJson &&
           other.remoteJobId == this.remoteJobId &&
           other.progress == this.progress &&
           other.message == this.message &&
@@ -5059,6 +5104,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
   final Value<String?> linkedSourceId;
   final Value<String?> linkedPlanId;
   final Value<String> status;
+  final Value<String?> mediaBindingJson;
   final Value<String?> remoteJobId;
   final Value<int?> progress;
   final Value<String?> message;
@@ -5081,6 +5127,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     this.linkedSourceId = const Value.absent(),
     this.linkedPlanId = const Value.absent(),
     this.status = const Value.absent(),
+    this.mediaBindingJson = const Value.absent(),
     this.remoteJobId = const Value.absent(),
     this.progress = const Value.absent(),
     this.message = const Value.absent(),
@@ -5104,6 +5151,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     this.linkedSourceId = const Value.absent(),
     this.linkedPlanId = const Value.absent(),
     required String status,
+    this.mediaBindingJson = const Value.absent(),
     this.remoteJobId = const Value.absent(),
     this.progress = const Value.absent(),
     this.message = const Value.absent(),
@@ -5135,6 +5183,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     Expression<String>? linkedSourceId,
     Expression<String>? linkedPlanId,
     Expression<String>? status,
+    Expression<String>? mediaBindingJson,
     Expression<String>? remoteJobId,
     Expression<int>? progress,
     Expression<String>? message,
@@ -5158,6 +5207,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
       if (linkedSourceId != null) 'linked_source_id': linkedSourceId,
       if (linkedPlanId != null) 'linked_plan_id': linkedPlanId,
       if (status != null) 'status': status,
+      if (mediaBindingJson != null) 'media_binding_json': mediaBindingJson,
       if (remoteJobId != null) 'remote_job_id': remoteJobId,
       if (progress != null) 'progress': progress,
       if (message != null) 'message': message,
@@ -5184,6 +5234,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     Value<String?>? linkedSourceId,
     Value<String?>? linkedPlanId,
     Value<String>? status,
+    Value<String?>? mediaBindingJson,
     Value<String?>? remoteJobId,
     Value<int?>? progress,
     Value<String?>? message,
@@ -5207,6 +5258,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
       linkedSourceId: linkedSourceId ?? this.linkedSourceId,
       linkedPlanId: linkedPlanId ?? this.linkedPlanId,
       status: status ?? this.status,
+      mediaBindingJson: mediaBindingJson ?? this.mediaBindingJson,
       remoteJobId: remoteJobId ?? this.remoteJobId,
       progress: progress ?? this.progress,
       message: message ?? this.message,
@@ -5258,6 +5310,9 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
     if (status.present) {
       map['status'] = Variable<String>(status.value);
     }
+    if (mediaBindingJson.present) {
+      map['media_binding_json'] = Variable<String>(mediaBindingJson.value);
+    }
     if (remoteJobId.present) {
       map['remote_job_id'] = Variable<String>(remoteJobId.value);
     }
@@ -5303,6 +5358,7 @@ class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
           ..write('linkedSourceId: $linkedSourceId, ')
           ..write('linkedPlanId: $linkedPlanId, ')
           ..write('status: $status, ')
+          ..write('mediaBindingJson: $mediaBindingJson, ')
           ..write('remoteJobId: $remoteJobId, ')
           ..write('progress: $progress, ')
           ..write('message: $message, ')
@@ -8450,6 +8506,7 @@ typedef $$AlgorithmTasksTableCreateCompanionBuilder =
       Value<String?> linkedSourceId,
       Value<String?> linkedPlanId,
       required String status,
+      Value<String?> mediaBindingJson,
       Value<String?> remoteJobId,
       Value<int?> progress,
       Value<String?> message,
@@ -8474,6 +8531,7 @@ typedef $$AlgorithmTasksTableUpdateCompanionBuilder =
       Value<String?> linkedSourceId,
       Value<String?> linkedPlanId,
       Value<String> status,
+      Value<String?> mediaBindingJson,
       Value<String?> remoteJobId,
       Value<int?> progress,
       Value<String?> message,
@@ -8586,6 +8644,11 @@ class $$AlgorithmTasksTableFilterComposer
 
   ColumnFilters<String> get status => $composableBuilder(
     column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mediaBindingJson => $composableBuilder(
+    column: $table.mediaBindingJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8735,6 +8798,11 @@ class $$AlgorithmTasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get mediaBindingJson => $composableBuilder(
+    column: $table.mediaBindingJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get remoteJobId => $composableBuilder(
     column: $table.remoteJobId,
     builder: (column) => ColumnOrderings(column),
@@ -8867,6 +8935,11 @@ class $$AlgorithmTasksTableAnnotationComposer
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
 
+  GeneratedColumn<String> get mediaBindingJson => $composableBuilder(
+    column: $table.mediaBindingJson,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get remoteJobId => $composableBuilder(
     column: $table.remoteJobId,
     builder: (column) => column,
@@ -8988,6 +9061,7 @@ class $$AlgorithmTasksTableTableManager
                 Value<String?> linkedSourceId = const Value.absent(),
                 Value<String?> linkedPlanId = const Value.absent(),
                 Value<String> status = const Value.absent(),
+                Value<String?> mediaBindingJson = const Value.absent(),
                 Value<String?> remoteJobId = const Value.absent(),
                 Value<int?> progress = const Value.absent(),
                 Value<String?> message = const Value.absent(),
@@ -9010,6 +9084,7 @@ class $$AlgorithmTasksTableTableManager
                 linkedSourceId: linkedSourceId,
                 linkedPlanId: linkedPlanId,
                 status: status,
+                mediaBindingJson: mediaBindingJson,
                 remoteJobId: remoteJobId,
                 progress: progress,
                 message: message,
@@ -9034,6 +9109,7 @@ class $$AlgorithmTasksTableTableManager
                 Value<String?> linkedSourceId = const Value.absent(),
                 Value<String?> linkedPlanId = const Value.absent(),
                 required String status,
+                Value<String?> mediaBindingJson = const Value.absent(),
                 Value<String?> remoteJobId = const Value.absent(),
                 Value<int?> progress = const Value.absent(),
                 Value<String?> message = const Value.absent(),
@@ -9056,6 +9132,7 @@ class $$AlgorithmTasksTableTableManager
                 linkedSourceId: linkedSourceId,
                 linkedPlanId: linkedPlanId,
                 status: status,
+                mediaBindingJson: mediaBindingJson,
                 remoteJobId: remoteJobId,
                 progress: progress,
                 message: message,

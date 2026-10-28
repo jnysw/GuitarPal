@@ -77,7 +77,7 @@ class AlgorithmMixPlugin(private val activity: Activity, messenger: BinaryMessen
     fun dispose() { stop(); channel.setMethodCallHandler(null) }
 }
 
-private class StemMixEngine(private val waves: List<StemPcmWave>) {
+internal class StemMixEngine(private val waves: List<StemPcmWave>) {
     private val lock = java.lang.Object()
     private val rate = waves.first().rate
     private val channels = waves.first().channels

@@ -20,6 +20,7 @@ import 'package:guitar_pal/features/segments/practice_segment_providers.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'support/local_video_fixture.dart';
+import 'support/video_analysis_fixture.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +35,7 @@ void main() {
       );
       final videoFile = File('${fixtureDirectory.path}/first_frame.m4v');
       await videoFile.writeAsBytes(
-        base64Decode(localVideoFixtureBase64),
+        base64Decode(videoAnalysisFixtureBase64),
         flush: true,
       );
       addTearDown(() async {
@@ -108,6 +109,9 @@ void main() {
       );
       expect(snapshot['error'], anyOf(isNull, ''));
       expect((snapshot['volume'] as num).toDouble(), closeTo(0.37, 0.001));
+      // Freeze a real frame before PixelCopy. The original sub-second fixture
+      // could finish while the emulator was composing its screenshot.
+      await channel.invokeMethod<void>('pause');
 
       await channel.invokeMethod<void>('setVolume', {'volume': 0.0});
       final mutedSnapshot = await channel.invokeMapMethod<String, Object?>(
@@ -274,10 +278,14 @@ void main() {
     }, failureMessage: 'Local video did not become controllable.');
 
     await tester.tap(find.byKey(const Key('local_video_fullscreen')));
-    await tester.pump(const Duration(seconds: 2));
-
     final fullscreenProgress = find.byKey(
       FullscreenLocalVideoControls.progressKey,
+    );
+    await _waitUntil(
+      tester,
+      () => fullscreenProgress.evaluate().isNotEmpty,
+      failureMessage:
+          'Fullscreen controls did not appear after orientation change.',
     );
     expect(fullscreenProgress, findsOneWidget);
     expect(tester.widget<Slider>(fullscreenProgress).onChanged, isNotNull);
@@ -288,16 +296,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     await tester.binding.handlePopRoute();
-    await tester.pump(const Duration(seconds: 1));
+    await _waitUntil(
+      tester,
+      () =>
+          fullscreenProgress.evaluate().isEmpty &&
+          find.text('全屏进度测试').evaluate().isNotEmpty,
+      failureMessage: 'Back did not restore the normal video workspace.',
+    );
     expect(fullscreenProgress, findsNothing);
     expect(find.text('全屏进度测试'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('local_video_fullscreen')));
-    await tester.pump(const Duration(seconds: 1));
+    await _waitUntil(
+      tester,
+      () => fullscreenProgress.evaluate().isNotEmpty,
+      failureMessage: 'Repeated fullscreen entry did not preserve controls.',
+    );
     expect(fullscreenProgress, findsOneWidget);
 
     await tester.tap(find.byKey(const Key('local_video_fullscreen')));
-    await tester.pump(const Duration(seconds: 1));
+    await _waitUntil(
+      tester,
+      () => fullscreenProgress.evaluate().isEmpty,
+      failureMessage: 'Fullscreen button did not restore the workspace.',
+    );
     expect(fullscreenProgress, findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
