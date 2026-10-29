@@ -416,81 +416,93 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
           bottom: !_isFullscreen,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final normalHeight = (constraints.maxWidth * 9 / 16).clamp(
-                180.0,
-                420.0,
-              );
-              return Column(
+              final normalHeight = (constraints.maxWidth * 9 / 16)
+                  .clamp(180.0, 420.0)
+                  .clamp(0.0, constraints.maxHeight);
+              final videoHeight = _isFullscreen
+                  ? constraints.maxHeight
+                  : normalHeight;
+              return Stack(
                 children: [
-                  SizedBox(
-                    key: const ValueKey('local_video_surface_container'),
-                    width: double.infinity,
-                    height: _isFullscreen
-                        ? constraints.maxHeight
-                        : normalHeight,
-                    child: AnimatedBuilder(
-                      animation: _controller ?? kAlwaysCompleteAnimation,
-                      child: ColoredBox(
-                        color: Colors.black,
-                        child: AndroidView(
-                          key: ValueKey('local_video_${widget.source.id}'),
-                          viewType: 'com.guitarpal/local_video_player',
-                          creationParams: {'path': path},
-                          creationParamsCodec: const StandardMessageCodec(),
-                          onPlatformViewCreated: _onPlatformViewCreated,
-                        ),
-                      ),
-                      builder: (context, videoSurface) {
-                        final controller = _controller;
-                        return FullscreenControlsVisibility(
-                          enabled: _isFullscreen,
-                          isPlaying: controller?.isPlaying ?? false,
-                          controls: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              if (_isFullscreen && controller != null)
-                                Positioned(
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 12,
-                                  child: SafeArea(
-                                    minimum: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                    ),
-                                    child: _FullscreenTransport(
-                                      controller: controller,
-                                      segments:
-                                          segments.asData?.value ?? const [],
-                                      onActivateSegment: (segment) =>
-                                          unawaited(_activateSegment(segment)),
-                                    ),
-                                  ),
-                                ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: IconButton.filledTonal(
-                                  key: const Key('local_video_fullscreen'),
-                                  tooltip: _isFullscreen ? '退出全屏' : '全屏',
-                                  onPressed:
-                                      _isFullscreen || !_recordingWorkflowActive
-                                      ? _toggleFullscreen
-                                      : null,
-                                  icon: Icon(
-                                    _isFullscreen
-                                        ? Icons.fullscreen_exit_rounded
-                                        : Icons.fullscreen_rounded,
-                                  ),
-                                ),
-                              ),
-                            ],
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: videoHeight,
+                    child: SizedBox(
+                      key: const ValueKey('local_video_surface_container'),
+                      width: double.infinity,
+                      child: AnimatedBuilder(
+                        animation: _controller ?? kAlwaysCompleteAnimation,
+                        child: ColoredBox(
+                          color: Colors.black,
+                          child: AndroidView(
+                            key: ValueKey('local_video_${widget.source.id}'),
+                            viewType: 'com.guitarpal/local_video_player',
+                            creationParams: {'path': path},
+                            creationParamsCodec: const StandardMessageCodec(),
+                            onPlatformViewCreated: _onPlatformViewCreated,
                           ),
-                          child: videoSurface!,
-                        );
-                      },
+                        ),
+                        builder: (context, videoSurface) {
+                          final controller = _controller;
+                          return FullscreenControlsVisibility(
+                            enabled: _isFullscreen,
+                            isPlaying: controller?.isPlaying ?? false,
+                            controls: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                if (_isFullscreen && controller != null)
+                                  Positioned(
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 12,
+                                    child: SafeArea(
+                                      minimum: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                      ),
+                                      child: _FullscreenTransport(
+                                        controller: controller,
+                                        segments:
+                                            segments.asData?.value ?? const [],
+                                        onActivateSegment: (segment) =>
+                                            unawaited(
+                                              _activateSegment(segment),
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: IconButton.filledTonal(
+                                    key: const Key('local_video_fullscreen'),
+                                    tooltip: _isFullscreen ? '退出全屏' : '全屏',
+                                    onPressed:
+                                        _isFullscreen ||
+                                            !_recordingWorkflowActive
+                                        ? _toggleFullscreen
+                                        : null,
+                                    icon: Icon(
+                                      _isFullscreen
+                                          ? Icons.fullscreen_exit_rounded
+                                          : Icons.fullscreen_rounded,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            child: videoSurface!,
+                          );
+                        },
+                      ),
                     ),
                   ),
-                  Expanded(
+                  Positioned(
+                    top: videoHeight,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
                     child: Offstage(
                       offstage: _isFullscreen,
                       child: _controller == null
@@ -516,6 +528,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                                 Duration.zero,
                                         requestedOperation: _requestedAnalysis,
                                         requestRevision: _analysisRevision,
+                                        onSaveLoop: _saveCurrentLoop,
                                       )
                                     : null,
                                 recordingPanel: PracticeRecordingPanel(

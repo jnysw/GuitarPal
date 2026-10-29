@@ -9,11 +9,13 @@ import 'package:uuid/uuid.dart';
 
 import '../../../domain/practice_source/practice_source.dart';
 import '../../../media/playback/local_video_playback_controller.dart';
+import '../../../media/playback/loop_controller.dart';
 import '../../audio_tools/algorithm_providers.dart';
 import '../../audio_tools/data/algorithm_audio_import.dart';
 import '../../audio_tools/domain/algorithm_task.dart';
 import '../../audio_tools/domain/legacy_algorithm_models.dart';
 import '../../audio_tools/domain/video_analysis_binding.dart';
+import 'video_analysis_timeline.dart';
 
 /// In-place tools for the current video. This never starts another practice session.
 class VideoAnalysisPanel extends ConsumerStatefulWidget {
@@ -25,6 +27,7 @@ class VideoAnalysisPanel extends ConsumerStatefulWidget {
     this.enabled = true,
     this.requestedOperation,
     this.requestRevision = 0,
+    this.onSaveLoop,
     super.key,
   });
   final PracticeSource source;
@@ -34,6 +37,7 @@ class VideoAnalysisPanel extends ConsumerStatefulWidget {
   final bool enabled;
   final AlgorithmOperation? requestedOperation;
   final int requestRevision;
+  final VoidCallback? onSaveLoop;
   @override
   ConsumerState<VideoAnalysisPanel> createState() => _VideoAnalysisPanelState();
 }
@@ -122,7 +126,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       context: context,
       builder: (_) => _AnalysisValueDialog(
         title: '连接分析服务',
-        label: 'HTTPS 服务地址',
+        label: '服务地址（HTTPS／调试私网 HTTP）',
         initial: _endpoint,
         validate: (text) {
           try {
@@ -368,10 +372,73 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   Future<void> _seekVerified(VideoAnalysisBinding binding, int sourceMs) async {
     try {
       await _verify(binding);
+      if (!mounted || !widget.enabled) return;
       await widget.controller.seek(Duration(milliseconds: sourceMs));
     } on Object catch (e) {
       _message(e is FormatException ? e.message : '无法定位当前视频');
     }
+  }
+
+  Future<void> _setLoopVerified(
+    VideoAnalysisBinding binding,
+    LoopRange range,
+  ) async {
+    try {
+      await _verify(binding);
+      if (!mounted || !widget.enabled) return;
+      await widget.controller.activateLoopRange(range);
+    } on Object catch (e) {
+      _message(_errorMessage(e, '设置循环失败，请重试'));
+    }
+  }
+
+  Future<void> _saveLoopVerified(VideoAnalysisBinding binding) async {
+    try {
+      await _verify(binding);
+      if (mounted && widget.enabled) widget.onSaveLoop?.call();
+    } on Object catch (e) {
+      _message(_errorMessage(e, '无法保存练习片段'));
+    }
+  }
+
+  Widget _timeline(AlgorithmTaskRecord task, VideoAnalysisBinding binding) {
+    final zero = binding.manualChordZeroMs;
+    final chords = <VideoTimelineChord>[];
+    if (zero != null &&
+        task.operation == AlgorithmOperation.chords &&
+        task.resultJson != null) {
+      final result = LegacyChordResult.fromJson(
+        algorithmObject(jsonDecode(task.resultJson!)),
+      );
+      if (zero + result.duration.inMilliseconds > binding.endMs + 20) {
+        throw const FormatException('人工校准超出分析区间');
+      }
+      chords.addAll(
+        result.segments.map(
+          (s) => VideoTimelineChord(
+            startMs: zero + s.start.inMilliseconds,
+            endMs: zero + s.end.inMilliseconds,
+            label: s.displayLabel,
+          ),
+        ),
+      );
+    }
+    return VideoAnalysisTimeline(
+      key: ValueKey('timeline_${task.id}'),
+      startMs: binding.startMs,
+      endMs: binding.endMs,
+      waveform: binding.waveform,
+      chords: chords,
+      positionMs: widget.controller.position.inMilliseconds,
+      loop: widget.controller.loopController.range,
+      loopEnabled: widget.controller.loopController.enabled,
+      enabled: widget.enabled && !_busy,
+      onSeek: (ms) => unawaited(_seekVerified(binding, ms)),
+      onLoop: (range) => unawaited(_setLoopVerified(binding, range)),
+      onSaveLoop: widget.onSaveLoop == null
+          ? null
+          : () => unawaited(_saveLoopVerified(binding)),
+    );
   }
 
   Future<void> _calibrate(AlgorithmTaskRecord task) async {
@@ -496,11 +563,11 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
             _operation == AlgorithmOperation.chords ? '分析当前视频和弦' : '分离当前视频音轨',
           ),
         ),
-        if (_endpoint.isEmpty)
-          TextButton(
-            onPressed: _busy ? null : _configureEndpoint,
-            child: const Text('连接分析服务'),
-          ),
+        TextButton(
+          key: const Key('video_analysis_endpoint'),
+          onPressed: _busy ? null : _configureEndpoint,
+          child: Text(_endpoint.isEmpty ? '连接分析服务' : '更改分析服务地址'),
+        ),
         if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
         if (widget.controller.stemsLoaded) ...[
           const Divider(),
@@ -587,36 +654,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
               Text(
                 '${_time(binding.startMs)}–${_time(binding.endMs)} · ${task.operation == AlgorithmOperation.chords ? '和弦' : '音轨'}',
               ),
-              if (binding.waveform.isNotEmpty)
-                LayoutBuilder(
-                  builder: (context, constraints) => GestureDetector(
-                    onTapUp: !widget.enabled
-                        ? null
-                        : (details) => _seekVerified(
-                            binding,
-                            binding.startMs +
-                                (details.localPosition.dx /
-                                        constraints.maxWidth *
-                                        binding.durationMs)
-                                    .round()
-                                    .clamp(0, binding.durationMs),
-                          ),
-                    child: SizedBox(
-                      height: 44,
-                      width: double.infinity,
-                      child: CustomPaint(
-                        painter: _WaveformPainter(
-                          binding.waveform,
-                          Theme.of(context).colorScheme.primary,
-                          cursor:
-                              (widget.controller.position.inMilliseconds -
-                                  binding.startMs) /
-                              binding.durationMs,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              if (binding.waveform.isNotEmpty) _timeline(task, binding),
               Text(task.message ?? task.state.name),
               if (task.shouldPoll)
                 LinearProgressIndicator(
@@ -683,24 +721,6 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         onPressed: _busy || !widget.enabled ? null : () => _calibrate(task),
         child: Text(zero == null ? '与视频时间校准' : '调整人工校准'),
       ),
-      Wrap(
-        spacing: 8,
-        children: [
-          for (final segment in result.segments.take(80))
-            InputChip(
-              selected: identical(current, segment),
-              onPressed: zero == null || !widget.enabled
-                  ? null
-                  : () => _seekVerified(
-                      binding,
-                      zero + segment.start.inMilliseconds,
-                    ),
-              label: Text(
-                '${segment.displayLabel}  ${_time((zero ?? 0) + segment.start.inMilliseconds)}',
-              ),
-            ),
-        ],
-      ),
     ];
   }
 }
@@ -725,43 +745,6 @@ String _stemName(String id) =>
       'other': '其他',
     }[id] ??
     id;
-
-class _WaveformPainter extends CustomPainter {
-  _WaveformPainter(this.peaks, this.color, {required this.cursor});
-  final double cursor;
-  final List<double> peaks;
-  final Color color;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.4;
-    for (var i = 0; i < peaks.length; i++) {
-      final x = size.width * (i + .5) / peaks.length,
-          half = size.height * peaks[i] / 2;
-      canvas.drawLine(
-        Offset(x, size.height / 2 - half),
-        Offset(x, size.height / 2 + half),
-        paint,
-      );
-    }
-    if (cursor >= 0 && cursor <= 1) {
-      canvas.drawLine(
-        Offset(cursor * size.width, 0),
-        Offset(cursor * size.width, size.height),
-        Paint()
-          ..color = Colors.red
-          ..strokeWidth = 2,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _WaveformPainter oldDelegate) =>
-      oldDelegate.peaks != peaks ||
-      oldDelegate.color != color ||
-      oldDelegate.cursor != cursor;
-}
 
 class _AnalysisValueDialog extends StatefulWidget {
   const _AnalysisValueDialog({

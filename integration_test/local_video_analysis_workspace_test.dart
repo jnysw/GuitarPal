@@ -20,6 +20,7 @@ import 'package:guitar_pal/features/audio_tools/data/legacy_algorithm_api.dart';
 import 'package:guitar_pal/features/audio_tools/domain/legacy_algorithm_models.dart';
 import 'package:guitar_pal/features/player/local_video_player_screen.dart';
 import 'package:guitar_pal/features/player/widgets/video_analysis_panel.dart';
+import 'package:guitar_pal/features/segments/presentation/practice_segment_editor_sheet.dart';
 
 import 'support/video_analysis_fixture.dart';
 
@@ -128,13 +129,55 @@ void main() {
         await tester.enterText(find.byType(TextFormField), '0');
         await tester.tap(find.text('确认'));
         await _spin(tester, () => find.text('调整人工校准').evaluate().isNotEmpty);
-        await _tapVisible(tester, find.text('Am  0:03.250'));
+        await _tapVisible(
+          tester,
+          find.byKey(const Key('video_analysis_chord_3250')),
+        );
         final controller = tester
             .widget<VideoAnalysisPanel>(find.byType(VideoAnalysisPanel))
             .controller;
         await _spin(tester, () => controller.position.inMilliseconds >= 3000);
         expect(find.byType(LocalVideoPlayerScreen), findsOneWidget);
         expect(controller.hasVideoFrame, isTrue);
+        await _tapVisible(
+          tester,
+          find.byKey(const Key('video_analysis_selection_loop')),
+        );
+        await _spin(
+          tester,
+          () =>
+              controller.loopController.enabled &&
+              controller.loopController.range?.start.inMilliseconds == 3250,
+        );
+        expect(controller.loopController.range!.end.inMilliseconds, 8000);
+        if (const bool.fromEnvironment('CAPTURE_TIMELINE_QA')) {
+          await tester.ensureVisible(
+            find.byKey(const Key('video_analysis_waveform')),
+          );
+          await tester.pump(const Duration(milliseconds: 400));
+          debugPrint('TIMELINE_QA_READY');
+          await Future<void>.delayed(const Duration(seconds: 30));
+        }
+        await _tapVisible(
+          tester,
+          find.byKey(const Key('video_analysis_save_loop')),
+        );
+        await _spin(
+          tester,
+          () =>
+              find.byKey(PracticeSegmentEditorKeys.title).evaluate().isNotEmpty,
+        );
+        await tester.enterText(
+          find.byKey(PracticeSegmentEditorKeys.title),
+          '和弦选区练习',
+        );
+        await _tapVisible(tester, find.byKey(PracticeSegmentEditorKeys.save));
+        await _spin(tester, () => find.text('片段已保存并应用').evaluate().isNotEmpty);
+        final segments = await database.select(database.practiceSegments).get();
+        expect(segments.single.sourceId, source.id);
+        expect(segments.single.startMilliseconds, 3250);
+        expect(segments.single.endMilliseconds, 8000);
+        expect(segments.single.title, '和弦选区练习');
         await tester.tap(find.byKey(const Key('local_video_fullscreen')));
         final fullscreen = find.byKey(
           const Key('local_video_fullscreen_position_slider'),
@@ -150,13 +193,19 @@ void main() {
         );
         await tester.binding.handlePopRoute();
         await _spin(tester, () => fullscreen.evaluate().isEmpty);
+        await tester.pump(const Duration(milliseconds: 600));
         expect(find.text('调整人工校准'), findsOneWidget);
         await controller.play();
+        await _spin(tester, () => controller.isPlaying);
         await Future<void>.delayed(const Duration(milliseconds: 1300));
         await controller.pause();
         await tester.pump(const Duration(milliseconds: 200));
         await tester.pageBack();
-        await tester.pump(const Duration(milliseconds: 400));
+        await _spin(
+          tester,
+          () => find.byType(LocalVideoPlayerScreen).evaluate().isEmpty,
+        );
+        await tester.pumpAndSettle();
         final sessions = await database
             .select(database.practiceSessions)
             .watch()

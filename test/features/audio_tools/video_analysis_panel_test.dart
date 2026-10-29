@@ -21,7 +21,7 @@ import 'package:guitar_pal/media/playback/local_video_playback_controller.dart';
 
 void main() {
   testWidgets(
-    'current video submits once with automatic binding and calibrates chords in place',
+    'current video accepts private HTTP configuration, submits once and calibrates chords in place',
     (tester) async {
       final directory = Directory.systemTemp.createTempSync('gp_video_panel_');
       final video = File('${directory.path}/video.mp4')
@@ -68,7 +68,7 @@ void main() {
             algorithmTaskServiceProvider.overrideWithValue(
               AlgorithmTaskService(
                 repository,
-                allowLocalHttp: false,
+                allowLocalHttp: true,
                 apiFactory: (_) => api,
               ),
             ),
@@ -91,6 +91,14 @@ void main() {
       );
       await tester.tap(find.text('和弦与分轨'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('video_analysis_endpoint')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextFormField),
+        'http://100.80.90.10:8000',
+      );
+      await tester.tap(find.text('确认'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('video_analysis_submit')));
       await tester.pumpAndSettle();
       expect(api.uploads, 0);
@@ -106,6 +114,7 @@ void main() {
             .timeout(const Duration(seconds: 5)),
       ))!.single;
       expect(task.linkedSourceId, 'source');
+      expect(task.endpoint, 'http://100.80.90.10:8000');
       expect(jsonDecode(task.mediaBindingJson!)['path'], video.path);
       expect(find.text('关联曲目／计划'), findsNothing);
       await tester.scrollUntilVisible(
@@ -119,11 +128,11 @@ void main() {
       await tester.tap(find.text('确认'));
       await _until(tester, () => find.text('调整人工校准').evaluate().isNotEmpty);
       await tester.scrollUntilVisible(
-        find.text('Am  0:03.250'),
+        find.byKey(const Key('video_analysis_chord_3250')),
         150,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.text('Am  0:03.250'));
+      await tester.tap(find.byKey(const Key('video_analysis_chord_3250')));
       await _until(
         tester,
         () => bridge.lastSeek == const Duration(milliseconds: 3250),
