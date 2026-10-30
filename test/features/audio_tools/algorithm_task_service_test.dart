@@ -82,6 +82,67 @@ void main() {
     );
 
     test(
+      'receipt ID survives malformed acknowledgement and recovers via GET only',
+      () async {
+        api.uploadError = const AlgorithmReceiptError('contract_job_1');
+        await service.submit(_task('partial-receipt'));
+        expect(
+          (await repository.get('partial-receipt'))!.remoteJobId,
+          'contract_job_1',
+        );
+        api.state = LegacyJobState.completed;
+        await service.refresh('partial-receipt');
+        expect(
+          (await repository.get('partial-receipt'))!.state,
+          AlgorithmTaskState.completed,
+        );
+        expect(api.uploadCalls, 1);
+      },
+    );
+
+    test('unknown receipt can be explicitly attached to an existing job without a second POST', () async {
+      api.uploadError = const AlgorithmApiError(
+        'network_timeout',
+        'lost response',
+      );
+      await service.submit(_task('recover'));
+      await service.recoverWithJobId('recover', 'contract_job_1');
+      expect((await repository.get('recover'))!.remoteJobId, 'contract_job_1');
+      expect(api.uploadCalls, 1);
+      expect(api.statusCalls, 2);
+      await expectLater(
+        service.recoverWithJobId('recover', 'other'),
+        throwsFormatException,
+      );
+      expect(api.uploadCalls, 1);
+    });
+
+    test('failed recovery preserves unknown state and unsent input is retryable failure', () async {
+      api.uploadError = const AlgorithmApiError('network_timeout', 'lost');
+      await service.submit(_task('unknown'));
+      api.error = const AlgorithmApiError(
+        'job_not_found',
+        'missing',
+        httpStatus: 404,
+      );
+      await expectLater(
+        service.recoverWithJobId('unknown', 'missing'),
+        throwsA(isA<AlgorithmApiError>()),
+      );
+      expect(
+        (await repository.get('unknown'))!.state,
+        AlgorithmTaskState.submissionUnknown,
+      );
+      expect((await repository.get('unknown'))!.remoteJobId, isNull);
+      api.uploadError = const AlgorithmApiError('upload_not_sent', 'not sent');
+      await service.submit(_task('unsent'));
+      expect(
+        (await repository.get('unsent'))!.state,
+        AlgorithmTaskState.failed,
+      );
+    });
+
+    test(
       'HTTP-200 failed jobs stop and GET retries respect Retry-After',
       () async {
         await service.submit(_task('failed'));

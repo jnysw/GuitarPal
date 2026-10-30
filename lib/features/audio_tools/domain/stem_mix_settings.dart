@@ -18,23 +18,35 @@ class StemMixControl {
     this.volume = 1,
     this.muted = false,
     this.solo = false,
+    this.pan = 0,
   });
   final double volume;
   final bool muted;
   final bool solo;
-  StemMixControl copyWith({double? volume, bool? muted, bool? solo}) =>
-      StemMixControl(
-        volume: volume ?? this.volume,
-        muted: muted ?? this.muted,
-        solo: solo ?? this.solo,
-      );
+  final double pan;
+  StemMixControl copyWith({
+    double? volume,
+    bool? muted,
+    bool? solo,
+    double? pan,
+  }) => StemMixControl(
+    volume: volume ?? this.volume,
+    muted: muted ?? this.muted,
+    solo: solo ?? this.solo,
+    pan: pan ?? this.pan,
+  );
   Map<String, Object?> toJson() => {
     'volume': volume,
     'muted': muted,
     'solo': solo,
+    'pan': pan,
   };
   factory StemMixControl.fromJson(Map<String, Object?> json) {
     final volume = _gain(json['volume']);
+    final pan = json['pan'] ?? 0;
+    if (pan is! num || !pan.isFinite || pan < -1 || pan > 1) {
+      throw const FormatException('声像无效');
+    }
     if (json['muted'] is! bool || json['solo'] is! bool) {
       throw const FormatException('音轨开关无效');
     }
@@ -42,6 +54,7 @@ class StemMixControl {
       volume: volume,
       muted: json['muted'] as bool,
       solo: json['solo'] as bool,
+      pan: pan.toDouble(),
     );
   }
 }
@@ -111,6 +124,7 @@ class StemMixSettings {
 
   Map<String, Object?> platformConfiguration(Iterable<String> loadedIds) => {
     'gains': effectiveGains(loadedIds),
+    'pans': {for (final id in loadedIds) id: controls[id]!.pan},
     'master': master,
     'speed': speed,
     'loopStartMs': loop?.startMs,

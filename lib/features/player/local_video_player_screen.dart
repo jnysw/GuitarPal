@@ -18,6 +18,7 @@ import 'presentation/fullscreen_local_video_controls.dart';
 import 'widgets/playback_volume_control.dart';
 import 'widgets/precise_playback_speed_control.dart';
 import 'widgets/video_analysis_panel.dart';
+import 'widgets/video_chord_playback_strip.dart';
 import '../audio_tools/domain/legacy_algorithm_models.dart';
 import '../segments/practice_segment_providers.dart';
 import '../segments/presentation/practice_segment_card.dart';
@@ -498,8 +499,33 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                       ),
                     ),
                   ),
+                  if (kDebugMode && _isFullscreen && _controller != null)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 64,
+                      child: SafeArea(
+                        child: VideoChordPlaybackStrip(
+                          sourceId: widget.source.id,
+                          path: path,
+                          controller: _controller!,
+                          compact: true,
+                          enabled: !_recordingWorkflowActive,
+                          onCalibrate: () async {
+                            await _toggleFullscreen();
+                            if (mounted) {
+                              setState(() {
+                                _requestedAnalysis = AlgorithmOperation.chords;
+                                _analysisRevision++;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
                   Positioned(
-                    top: videoHeight,
+                    key: const ValueKey('local_video_controls_region'),
+                    top: _isFullscreen ? 0 : normalHeight,
                     left: 0,
                     right: 0,
                     bottom: 0,
@@ -509,74 +535,99 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                           ? const Center(child: CircularProgressIndicator())
                           : AnimatedBuilder(
                               animation: _controller!,
-                              builder: (context, _) => _LocalVideoControls(
-                                controller: _controller!,
-                                segments: segments,
-                                analysisPanel: kDebugMode
-                                    ? VideoAnalysisPanel(
+                              builder: (context, _) => Column(
+                                children: [
+                                  if (kDebugMode)
+                                    VideoChordPlaybackStrip(
+                                      sourceId: widget.source.id,
+                                      path: path,
+                                      controller: _controller!,
+                                      enabled: !_recordingWorkflowActive,
+                                      onCalibrate: () => setState(() {
+                                        _requestedAnalysis =
+                                            AlgorithmOperation.chords;
+                                        _analysisRevision++;
+                                      }),
+                                    ),
+                                  Expanded(
+                                    child: _LocalVideoControls(
+                                      controller: _controller!,
+                                      segments: segments,
+                                      analysisPanel: kDebugMode
+                                          ? VideoAnalysisPanel(
+                                              key: ValueKey(
+                                                'video_analysis_${widget.source.id}',
+                                              ),
+                                              source: widget.source,
+                                              path: path,
+                                              controller: _controller!,
+                                              planId: widget.planId,
+                                              enabled:
+                                                  !_recordingWorkflowActive &&
+                                                  _controller!.isReady &&
+                                                  _controller!.duration >
+                                                      Duration.zero,
+                                              requestedOperation:
+                                                  _requestedAnalysis,
+                                              requestRevision:
+                                                  _analysisRevision,
+                                              onSaveLoop: _saveCurrentLoop,
+                                              recordingActive:
+                                                  _recordingWorkflowActive,
+                                            )
+                                          : null,
+                                      recordingPanel: PracticeRecordingPanel(
                                         key: ValueKey(
-                                          'video_analysis_${widget.source.id}',
+                                          'local_recording_${widget.source.id}',
                                         ),
-                                        source: widget.source,
-                                        path: path,
-                                        controller: _controller!,
+                                        sourceId: widget.source.id,
                                         planId: widget.planId,
                                         enabled:
-                                            !_recordingWorkflowActive &&
                                             _controller!.isReady &&
                                             _controller!.duration >
                                                 Duration.zero,
-                                        requestedOperation: _requestedAnalysis,
-                                        requestRevision: _analysisRevision,
-                                        onSaveLoop: _saveCurrentLoop,
-                                        recordingActive:
-                                            _recordingWorkflowActive,
-                                      )
-                                    : null,
-                                recordingPanel: PracticeRecordingPanel(
-                                  key: ValueKey(
-                                    'local_recording_${widget.source.id}',
-                                  ),
-                                  sourceId: widget.source.id,
-                                  planId: widget.planId,
-                                  enabled:
-                                      _controller!.isReady &&
-                                      _controller!.duration > Duration.zero,
-                                  captureReference: () =>
-                                      _captureRecordingReference(
-                                        _controller!,
-                                        segments.asData?.value ?? const [],
+                                        captureReference: () =>
+                                            _captureRecordingReference(
+                                              _controller!,
+                                              segments.asData?.value ??
+                                                  const [],
+                                            ),
+                                        referencePosition: () =>
+                                            _controller!.position,
+                                        referenceIsPlaying: () =>
+                                            _controller!.isPlaying,
+                                        seekReference: _controller!.seek,
+                                        playReference: _controller!.play,
+                                        pauseReference: _controller!.pause,
+                                        onWorkflowActiveChanged: (value) {
+                                          if (value &&
+                                              _controller!.stemsLoaded) {
+                                            unawaited(
+                                              _controller!
+                                                  .clearStems()
+                                                  .catchError((Object _) {}),
+                                            );
+                                          }
+                                          if (mounted &&
+                                              _recordingWorkflowActive !=
+                                                  value) {
+                                            setState(
+                                              () => _recordingWorkflowActive =
+                                                  value,
+                                            );
+                                          }
+                                        },
                                       ),
-                                  referencePosition: () =>
-                                      _controller!.position,
-                                  referenceIsPlaying: () =>
-                                      _controller!.isPlaying,
-                                  seekReference: _controller!.seek,
-                                  playReference: _controller!.play,
-                                  pauseReference: _controller!.pause,
-                                  onWorkflowActiveChanged: (value) {
-                                    if (value && _controller!.stemsLoaded) {
-                                      unawaited(
-                                        _controller!.clearStems().catchError(
-                                          (Object _) {},
-                                        ),
-                                      );
-                                    }
-                                    if (mounted &&
-                                        _recordingWorkflowActive != value) {
-                                      setState(
-                                        () => _recordingWorkflowActive = value,
-                                      );
-                                    }
-                                  },
-                                ),
-                                onSaveSegment: _saveCurrentLoop,
-                                onActivateSegment: (segment) =>
-                                    unawaited(_activateSegment(segment)),
-                                onEditSegment: (segment) =>
-                                    unawaited(_editSegment(segment)),
-                                onDeleteSegment: (segment) =>
-                                    unawaited(_deleteSegment(segment)),
+                                      onSaveSegment: _saveCurrentLoop,
+                                      onActivateSegment: (segment) =>
+                                          unawaited(_activateSegment(segment)),
+                                      onEditSegment: (segment) =>
+                                          unawaited(_editSegment(segment)),
+                                      onDeleteSegment: (segment) =>
+                                          unawaited(_deleteSegment(segment)),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                     ),

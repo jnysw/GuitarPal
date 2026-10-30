@@ -28,6 +28,47 @@ import '../../support/algorithm_fixtures.dart';
 
 void main() {
   testWidgets(
+    'fresh in-place load tolerates native loaded event arriving before load acknowledgement',
+    (tester) async {
+      final f = (await tester.runAsync(_Fixture.create))!;
+      final receipt = Completer<void>();
+      try {
+        await tester.runAsync(
+          () => File('${f.root.path}/video_workspace/source.json').delete(),
+        );
+        f.bridge.loadReceipt = receipt;
+        await f.show(tester);
+        await tester.tap(find.text('和弦与分轨'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('分轨').first);
+        await tester.pumpAndSettle();
+        await _until(
+          tester,
+          () => find.text('在当前视频中使用分轨').evaluate().isNotEmpty,
+        );
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, '在当前视频中使用分轨'))
+            .onPressed!();
+        await _until(tester, () => f.controller.stemsLoaded);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        expect(find.byKey(const Key('video_open_mixer')), findsNothing);
+        receipt.complete();
+        await _until(
+          tester,
+          () => find.byKey(const Key('video_open_mixer')).evaluate().isNotEmpty,
+        );
+        expect(
+          find.byKey(const Key('video_stem_volume_guitar')),
+          findsOneWidget,
+        );
+      } finally {
+        if (!receipt.isCompleted) receipt.complete();
+        await f.close(tester);
+      }
+    },
+  );
+  testWidgets(
     'offline reopen restores gains without transport changes; original-mode choice survives another reopen',
     (tester) async {
       final f = (await tester.runAsync(_Fixture.create))!;
@@ -56,10 +97,6 @@ void main() {
         );
         slider.onChanged!(.42);
         await tester.pump();
-        slider = tester.widget<Slider>(
-          find.byKey(const Key('video_stem_volume_guitar')),
-        );
-        slider.onChangeEnd!(.42);
         await _until(tester, () => f.bridge.gains['guitar'] == .42);
         final saved = (await _settle(tester, f.preferences.load('source')))!;
         expect(saved.controls['guitar']!.volume, .42);
@@ -393,6 +430,7 @@ class _FlakyPreferences extends VideoMixPreferences {
 }
 
 class _Bridge implements LocalVideoPlayerBridge, LocalVideoStemBridge {
+  Completer<void>? loadReceipt;
   LocalVideoStateListener? listener;
   bool loaded = false, playing = false, preserved = false, onlyPaused = false;
   int position = 4500, loadCount = 0;
@@ -428,6 +466,7 @@ class _Bridge implements LocalVideoPlayerBridge, LocalVideoStemBridge {
     loaded = true;
     if (!preservePosition) position = startMs;
     emit();
+    if (loadReceipt != null) await loadReceipt!.future;
   }
 
   @override

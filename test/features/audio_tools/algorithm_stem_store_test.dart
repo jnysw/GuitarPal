@@ -133,21 +133,23 @@ void main() {
     },
   );
 
-  test(
-    'separation parser rejects missing tracks and inconsistent duration',
-    () {
-      final missing = separationFixture();
-      (missing['stems'] as List).removeLast();
-      expect(
-        () => LegacySeparationResult.fromJson(missing, endpoint),
-        throwsFormatException,
-      );
-      final wrong = separationFixture();
-      ((wrong['stems'] as List).first as Map)['duration_seconds'] = 4;
-      expect(
-        () => LegacySeparationResult.fromJson(wrong, endpoint),
-        throwsFormatException,
-      );
-    },
-  );
+  test('separation parser accepts actual track count but rejects empty and inconsistent results', () {
+    final missing = separationFixture();
+    (missing['stems'] as List).removeLast();
+    expect(
+      LegacySeparationResult.fromJson(missing, endpoint).stems,
+      hasLength(6),
+    );
+    missing['stems'] = [];
+    expect(
+      () => LegacySeparationResult.fromJson(missing, endpoint),
+      throwsFormatException,
+    );
+    final wrong = separationFixture();
+    ((wrong['stems'] as List).first as Map)['duration_seconds'] = 4;
+    expect(
+      () => LegacySeparationResult.fromJson(wrong, endpoint),
+      throwsFormatException,
+    );
+  });
 }

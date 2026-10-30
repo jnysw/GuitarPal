@@ -7,6 +7,51 @@ import 'package:guitar_pal/features/audio_tools/domain/stem_mix_settings.dart';
 import 'package:guitar_pal/features/audio_tools/domain/video_mix_selection.dart';
 
 void main() {
+  test('dynamic model tracks preserve pan, remove missing solos, and migrate version one', () {
+    final selection = VideoMixSelection(
+      taskId: 'dynamic',
+      inputSha256: 'f' * 64,
+      useStems: true,
+      controls: {
+        'lead_guitar': const StemMixControl(volume: .63, pan: -.8),
+        'rhythm_guitar': const StemMixControl(solo: true),
+      },
+    );
+    final restored = VideoMixSelection.fromJson(selection.toJson());
+    expect(restored.pans, {'lead_guitar': -.8, 'rhythm_guitar': 0});
+    expect(restored.gains['lead_guitar'], 0);
+    expect(restored.forTracks(['lead_guitar']).gains['lead_guitar'], .63);
+    final old = VideoMixSelection(
+      taskId: 'old',
+      inputSha256: 'a' * 64,
+      useStems: true,
+    ).toJson()..['version'] = 1;
+    for (final c in (old['controls'] as Map).values) {
+      (c as Map).remove('pan');
+    }
+    expect(
+      VideoMixSelection.fromJson(old).pans.values.every((p) => p == 0),
+      isTrue,
+    );
+    expect(
+      () => VideoMixSelection(
+        taskId: 'bad',
+        inputSha256: 'a' * 64,
+        useStems: true,
+        controls: {'../escape': const StemMixControl()},
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => VideoMixSelection(
+        taskId: 'bad',
+        inputSha256: 'a' * 64,
+        useStems: true,
+        controls: {'track': const StemMixControl(pan: double.nan)},
+      ),
+      throwsFormatException,
+    );
+  });
   VideoMixSelection selection({bool stems = true, double guitar = .4}) =>
       VideoMixSelection(
         taskId: 'task',
@@ -24,7 +69,7 @@ void main() {
     );
     expect(value.gains['guitar'], .4);
     expect(value.gains['drums'], 0);
-    expect(value.gains['vocals'], 0);
+    expect(value.gains.containsKey('vocals'), isFalse);
     expect(value.withMode(false).controls['guitar']!.solo, isTrue);
     expect(value.toJson().keys, isNot(contains('speed')));
     expect(value.toJson().keys, isNot(contains('loop')));

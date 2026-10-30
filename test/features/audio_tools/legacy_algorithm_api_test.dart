@@ -15,6 +15,130 @@ Map<String, Object?> legacyFixture() => jsonDecode(
 ) as Map<String, Object?>;
 
 void main() {
+  test('unsent connection failure differs from a lost response after the body was read', () async {
+    final root = await Directory.systemTemp.createTemp('gp_receipt_loss_');
+    final file = File('${root.path}/audio.wav');
+    await file.writeAsBytes(syntheticAlgorithmWav());
+    final endpoint = AlgorithmEndpoint(
+      'https://algorithm.example',
+      allowLocalHttp: false,
+    );
+    final unsent = LegacyAlgorithmApi(endpoint, client: _UnsentClient());
+    var posts = 0;
+    final lost = LegacyAlgorithmApi(
+      endpoint,
+      uploadTimeout: const Duration(milliseconds: 20),
+      client: MockClient((r) async {
+        posts++;
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        return http.Response('{}', 202);
+      }),
+    );
+    try {
+      await expectLater(
+        unsent.upload(file.path, 'audio.wav'),
+        throwsA(
+          isA<AlgorithmApiError>().having(
+            (e) => e.code,
+            'not sent',
+            'upload_not_sent',
+          ),
+        ),
+      );
+      await expectLater(
+        lost.upload(file.path, 'audio.wav'),
+        throwsA(
+          isA<AlgorithmApiError>().having(
+            (e) => e.code,
+            'ambiguous',
+            'network_timeout',
+          ),
+        ),
+      );
+      expect(posts, 1);
+    } finally {
+      unsent.close();
+      lost.close();
+      await root.delete(recursive: true);
+    }
+  });
+  test('upload has its own budget, accepts progressed receipts, and preserves IDs on metadata drift', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'gp_upload_budget_',
+    );
+    final file = File('${directory.path}/input.wav');
+    await file.writeAsBytes(syntheticAlgorithmWav());
+    final endpoint = AlgorithmEndpoint(
+      'https://algorithm.example',
+      allowLocalHttp: false,
+    );
+    var badReceipt = false, calls = 0;
+    final api = LegacyAlgorithmApi(
+      endpoint,
+      requestTimeout: const Duration(milliseconds: 20),
+      uploadTimeout: const Duration(seconds: 1),
+      client: MockClient((r) async {
+        calls++;
+        await Future<void>.delayed(const Duration(milliseconds: 70));
+        return http.Response(
+          jsonEncode({
+            'job_id': 'existing',
+            'status': 'processing',
+            'poll_url': badReceipt
+                ? 'https://evil.example/private'
+                : '/api/v1/jobs/existing/status',
+            'result_url': '/api/v1/jobs/existing/result',
+          }),
+          202,
+        );
+      }),
+    );
+    try {
+      expect((await api.upload(file.path, 'input.wav')).jobId, 'existing');
+      badReceipt = true;
+      await expectLater(
+        api.upload(file.path, 'input.wav'),
+        throwsA(
+          isA<AlgorithmReceiptError>().having((e) => e.jobId, 'ID', 'existing'),
+        ),
+      );
+      expect(
+        calls,
+        2,
+      ); // Never replay a POST to repair acknowledgement metadata.
+    } finally {
+      api.close();
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('separation follows actual safe IDs/count and excludes derived sums from default mix', () {
+    final json = separationFixture();
+    final stems = (json['stems'] as List)
+        .take(3)
+        .map((s) => Map<String, Object?>.from(s as Map))
+        .toList();
+    stems[0]['id'] = 'lead_guitar';
+    stems[0]['origin'] = 'model';
+    stems[0]['download_url'] =
+        '/api/v1/separation/jobs/${json['job_id']}/files/lead_guitar';
+    stems[1]['origin'] = 'model';
+    stems[2]['origin'] = 'derived';
+    json['stems'] = stems;
+    final endpoint = AlgorithmEndpoint(
+      'https://algorithm.example',
+      allowLocalHttp: false,
+    );
+    final parsed = LegacySeparationResult.fromJson(json, endpoint);
+    expect(parsed.stems, hasLength(3));
+    expect(parsed.mixStems, hasLength(2));
+    expect(parsed.stems.first.displayName, 'lead_guitar');
+    stems[0]['id'] = '../private';
+    expect(
+      () => LegacySeparationResult.fromJson(json, endpoint),
+      throwsFormatException,
+    );
+  });
   test('legacy small tail disagreement preserves raw intervals and declared duration but rejects genuine invalid timing', () {
     final json = legacyFixture()..['duration_seconds'] = 7.85;
     json['segments'] = [
@@ -344,4 +468,10 @@ void main() {
       throwsFormatException,
     );
   });
+}
+
+class _UnsentClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async =>
+      throw http.ClientException('no connection established');
 }

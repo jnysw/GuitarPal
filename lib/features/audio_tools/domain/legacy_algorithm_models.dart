@@ -76,13 +76,23 @@ class AlgorithmApiError implements Exception {
   String toString() => message;
 }
 
+/// A usable ID survives a malformed acknowledgement. Recovery uses only our
+/// own status route on the configured origin, never a URL from the response.
+class AlgorithmReceiptError extends AlgorithmApiError {
+  const AlgorithmReceiptError(this.jobId)
+    : super('invalid_receipt', '任务回执不完整，正在按任务编号查询');
+  final String jobId;
+}
+
 class LegacyUploadReceipt {
   LegacyUploadReceipt.fromJson(
     Map<String, Object?> json,
     AlgorithmEndpoint endpoint,
     AlgorithmOperation operation,
   ) : jobId = algorithmId(json['job_id']) {
-    if (json['status'] != 'queued') throw const FormatException('任务接收状态无效');
+    if (!{'queued', 'processing', 'completed'}.contains(json['status'])) {
+      throw const FormatException('任务接收状态无效');
+    }
     final root = algorithmJobRoot(operation, jobId);
     endpoint.checkedRelativeUrl(
       algorithmText(json['poll_url']),
@@ -186,23 +196,14 @@ class LegacyStemFile {
     Map<String, Object?> json,
     AlgorithmEndpoint endpoint,
     String jobId,
-  ) : id = algorithmText(json['id']),
+  ) : id = algorithmId(json['id']),
       origin = algorithmText(json['origin']),
       sizeBytes = algorithmInteger(json['size_bytes']),
       duration = algorithmSeconds(json['duration_seconds']),
       sampleRate = algorithmInteger(json['sample_rate']),
       channels = algorithmInteger(json['channels']),
       contentType = algorithmText(json['content_type']) {
-    if (!{
-          'bass',
-          'drums',
-          'other',
-          'vocals',
-          'guitar',
-          'piano',
-          'instrumental',
-        }.contains(id) ||
-        origin != (id == 'instrumental' ? 'derived' : 'model') ||
+    if (!{'model', 'derived'}.contains(origin) ||
         sizeBytes <= 0 ||
         sizeBytes > 256 * 1024 * 1024 ||
         duration <= Duration.zero ||
@@ -225,15 +226,17 @@ class LegacyStemFile {
   final int channels;
   final String contentType;
   String get extension => contentType == 'audio/flac' ? 'flac' : 'wav';
-  String get displayName => const {
-    'vocals': '人声',
-    'drums': '鼓',
-    'bass': '贝斯',
-    'guitar': '吉他',
-    'piano': '钢琴',
-    'other': '其他',
-    'instrumental': '伴奏',
-  }[id]!;
+  String get displayName =>
+      const {
+        'vocals': '人声',
+        'drums': '鼓',
+        'bass': '贝斯',
+        'guitar': '吉他',
+        'piano': '钢琴',
+        'other': '其他',
+        'instrumental': '伴奏',
+      }[id] ??
+      id;
   late final Uri downloadUri;
 }
 
@@ -254,16 +257,23 @@ class LegacySeparationResult {
         (s) => LegacyStemFile.fromJson(algorithmObject(s), endpoint, jobId),
       ),
     );
-    if (stems.length != 7 ||
-        stems.map((s) => s.id).toSet().length != 7 ||
+    if (stems.isEmpty ||
+        stems.length > 16 ||
+        stems.map((s) => s.id).toSet().length != stems.length ||
         stems.any((s) => (s.duration - duration).inMilliseconds.abs() > 100)) {
-      throw const FormatException('分轨结果必须包含七条完整且时长一致的音轨');
+      throw const FormatException('分轨清单必须非空、无重复且时长一致（最多 16 轨）');
     }
   }
   final String jobId;
   final DateTime expiresAt;
   final Duration duration;
   late final List<LegacyStemFile> stems;
+
+  /// Derived sums must never be added on top of the model tracks they contain.
+  List<LegacyStemFile> get mixStems {
+    final model = stems.where((s) => s.origin == 'model').toList();
+    return model.isNotEmpty ? model : [stems.first];
+  }
 }
 
 String algorithmJobRoot(AlgorithmOperation operation, String jobId) =>

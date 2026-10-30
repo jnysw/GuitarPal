@@ -20,6 +20,9 @@ class AlgorithmTaskService {
   final AlgorithmApiFactory _factory;
   final DateTime Function() _clock;
   final Set<String> _refreshing = {};
+  Future<void>? _initialization;
+  Future<void> initialize() =>
+      _initialization ??= repository.recoverInterruptedSubmissions();
 
   /// A read-only check before expensive extraction or creation of a task.
   Future<void> checkConnection(String origin) async {
@@ -42,6 +45,7 @@ class AlgorithmTaskService {
     AlgorithmTaskRecord task, {
     void Function(int, int)? onProgress,
   }) async {
+    await initialize();
     final endpoint = AlgorithmEndpoint(
       task.endpoint,
       allowLocalHttp: allowLocalHttp,
@@ -61,12 +65,20 @@ class AlgorithmTaskService {
         jobId: receipt.jobId,
         message: '服务器已接收，等待分析',
       );
+    } on AlgorithmReceiptError catch (error) {
+      await repository.update(
+        task.id,
+        AlgorithmTaskState.queued,
+        jobId: error.jobId,
+        message: error.message,
+      );
     } on AlgorithmApiError catch (error) {
       final definitelyRejected =
           {
             'input_unavailable',
             'invalid_file_size',
             'unsupported_format',
+            'upload_not_sent',
           }.contains(error.code) ||
           (error.httpStatus != null &&
               error.httpStatus! >= 400 &&
@@ -90,7 +102,36 @@ class AlgorithmTaskService {
     }
   }
 
+  /// Explicit recovery for a lost response. No upload or guessed job ID.
+  Future<void> recoverWithJobId(String id, String jobId) async {
+    await initialize();
+    algorithmId(jobId);
+    final task = await repository.get(id);
+    if (task == null ||
+        task.state != AlgorithmTaskState.submissionUnknown ||
+        task.remoteJobId != null) {
+      throw const FormatException('任务状态已变化，请刷新');
+    }
+    final api = _factory(
+      AlgorithmEndpoint(task.endpoint, allowLocalHttp: allowLocalHttp),
+    );
+    try {
+      final status = await api.status(jobId, task.operation);
+      if (status.jobId != jobId) throw const FormatException('任务编号不匹配');
+      await repository.update(
+        id,
+        AlgorithmTaskState.queued,
+        jobId: jobId,
+        message: '已找回任务，正在查询结果',
+      );
+    } finally {
+      api.close();
+    }
+    await refresh(id, force: true);
+  }
+
   Future<void> refresh(String id, {bool force = false}) async {
+    await initialize();
     if (!_refreshing.add(id)) return;
     try {
       final task = await repository.get(id);

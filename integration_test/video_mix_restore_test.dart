@@ -214,6 +214,32 @@ void main() {
               .value,
           .25,
         );
+        tester
+            .widget<Slider>(find.byKey(const Key('video_stem_pan_guitar')))
+            .onChanged!(-.4);
+        await _until(
+          tester,
+          () =>
+              tester
+                  .widget<Slider>(
+                    find.byKey(const Key('video_stem_pan_guitar')),
+                  )
+                  .value ==
+              -.4,
+        );
+        expect(
+          (await preferences.load(sourceId))!.controls['guitar']!.pan,
+          -.4,
+        );
+        if (const bool.fromEnvironment('CAPTURE_MIXER_QA')) {
+          await _tap(tester, find.byKey(const Key('video_open_mixer')));
+          await tester.pump(const Duration(milliseconds: 500));
+          expect(find.text('播放混音台'), findsWidgets);
+          debugPrint('MIXER_QA_READY');
+          await Future<void>.delayed(const Duration(seconds: 20));
+          Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+          await tester.pump(const Duration(milliseconds: 500));
+        }
         await _tap(tester, find.byKey(const Key('video_stem_mute_guitar')));
         await _until(
           tester,
@@ -244,6 +270,12 @@ void main() {
               )
               .selected,
           isTrue,
+        );
+        expect(
+          tester
+              .widget<Slider>(find.byKey(const Key('video_stem_pan_guitar')))
+              .value,
+          -.4,
         );
         await _tap(tester, find.byKey(const Key('video_mix_original')));
         await _until(tester, () => !controller.stemsLoaded);

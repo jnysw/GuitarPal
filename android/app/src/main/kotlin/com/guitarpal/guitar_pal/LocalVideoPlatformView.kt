@@ -54,6 +54,7 @@ class LocalVideoPlatformView(
     private var playerError: String? = null
     private var stems: StemMixEngine? = null
     private var stemGains = mapOf<String, Double>()
+    private var stemPans = mapOf<String, Double>()
     private var stemStart = 0L
     private var stemDuration = 0L
     private var stemsActive = false
@@ -193,6 +194,7 @@ class LocalVideoPlatformView(
                                     val ids = tracks.map { it["id"] as String }.toSet()
                                     require(gains == null || gains.keys == ids) { "音轨音量与文件不一致" }
                                     stemGains = gains?.mapValues { it.value.toDouble() } ?: ids.associateWith { 1.0 }
+                                    stemPans = ids.associateWith { 0.0 }
                                     configureStems()
                                     val position = safePosition().toLong()
                                     val target = if (preservePosition) position else position.takeIf { it in start until start + duration } ?: start
@@ -212,6 +214,15 @@ class LocalVideoPlatformView(
                     stemGains = raw.mapValues { it.value.toDouble() }; configureStems()
                     result.success(null)
                 } catch (e: Throwable) { stemGains = previous; result.error("invalid_gains", e.message, null) }
+            }
+            "setStemPans" -> {
+                val raw = call.argument<Map<String, Number>>("pans")
+                val previous = stemPans
+                try {
+                    require(raw != null && raw.keys == stemGains.keys)
+                    stemPans = raw.mapValues { it.value.toDouble() }; configureStems()
+                    result.success(null)
+                } catch (e: Throwable) { stemPans = previous; result.error("invalid_pans", e.message, null) }
             }
             "clearStems" -> {
                 val position = effectivePosition(); pauseAll(); clearStemEngine(); seekPicture(position)
@@ -530,7 +541,7 @@ class LocalVideoPlatformView(
     }
 
     private fun configureStems() {
-        stems?.configure(mapOf("gains" to stemGains, "master" to volume.toDouble(), "speed" to speed.toDouble(), "loopStartMs" to null, "loopEndMs" to null))
+        stems?.configure(mapOf("gains" to stemGains, "pans" to stemPans, "master" to volume.toDouble(), "speed" to speed.toDouble(), "loopStartMs" to null, "loopEndMs" to null))
     }
     private fun pauseAll() {
         stems?.pause(); pendingPlay = false
@@ -539,7 +550,7 @@ class LocalVideoPlatformView(
     private fun clearStemEngine() {
         stemGeneration++
         pendingStemLoad?.error("stem_load_interrupted", "视频分轨载入已停止", null); pendingStemLoad = null
-        stems?.close(); stems = null; stemsActive = false; stemGains = emptyMap()
+        stems?.close(); stems = null; stemsActive = false; stemGains = emptyMap(); stemPans = emptyMap()
         if (isPrepared) applyVolume(mediaPlayer!!, volume)
     }
     private fun routeStems(position: Long, resume: Boolean) {
@@ -599,6 +610,7 @@ class LocalVideoPlatformView(
             "error" to playerError,
             "videoAudioVolume" to appliedVideoVolume.toDouble(), "videoPositionMilliseconds" to safePosition(),
             "stemsLoaded" to (stems != null), "stemsActive" to stemsActive, "ended" to ended,
+            "stemGains" to stemGains.toMap(), "stemPans" to stemPans.toMap(),
         )
     }
 

@@ -16,9 +16,11 @@ import '../../audio_tools/domain/algorithm_task.dart';
 import '../../audio_tools/domain/legacy_algorithm_models.dart';
 import '../../audio_tools/domain/video_analysis_binding.dart';
 import '../../audio_tools/domain/video_mix_selection.dart';
+import '../../audio_tools/domain/video_chord_playback.dart';
 import '../../audio_tools/domain/stem_mix_settings.dart';
 import '../../audio_tools/data/video_mix_preferences.dart';
 import 'video_analysis_timeline.dart';
+import 'video_stem_mixer.dart';
 
 /// In-place tools for the current video. This never starts another practice session.
 class VideoAnalysisPanel extends ConsumerStatefulWidget {
@@ -63,7 +65,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   double? _progress;
   Timer? _timer;
   List<AlgorithmTaskRecord> _tasks = [];
-  Map<String, double> _volumes = {};
+  Map<String, double> _volumes = {}, _pans = {};
   final Set<String> _muted = {}, _solo = {};
   late final VideoMixPreferences _preferences;
   VideoMixSelection? _saved;
@@ -80,6 +82,12 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     }
     _preferences = ref.read(videoMixPreferencesProvider);
     WidgetsBinding.instance.addObserver(this);
+    unawaited(
+      ref
+          .read(algorithmTaskServiceProvider)
+          .initialize()
+          .catchError((Object _) {}),
+    );
     unawaited(_restoreSelection());
   }
 
@@ -217,11 +225,12 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     inputSha256: _binding(_rememberedTask!).inputSha256,
     useStems: true,
     controls: {
-      for (final id in videoStemIds)
+      for (final id in _volumes.keys)
         id: StemMixControl(
           volume: _volumes[id] ?? 1,
           muted: _muted.contains(id),
           solo: _solo.contains(id),
+          pan: _pans[id] ?? 0,
         ),
     },
   );
@@ -371,6 +380,19 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     }
     await controller.pause();
     if (!mounted) return;
+    final previousUnknown = _tasks.any((t) {
+      if (t.operation != _operation ||
+          t.state != AlgorithmTaskState.submissionUnknown ||
+          t.mediaBindingJson == null) {
+        return false;
+      }
+      try {
+        final b = _binding(t);
+        return b.startMs == start && b.endMs == end;
+      } on FormatException {
+        return false;
+      }
+    });
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -378,7 +400,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           _operation == AlgorithmOperation.chords ? '分析当前视频的和弦？' : '分离当前视频的音轨？',
         ),
         content: Text(
-          '「${widget.source.title}」\n${_time(start)}–${_time(end)}\n仅提取并上传此区间的音频用于分析，视频保留在本机。',
+          '「${widget.source.title}」\n${_time(start)}–${_time(end)}\n仅提取并上传此区间的音频用于分析，视频保留在本机。${previousUnknown ? '\n上次相同区间尚未确认接收状态，继续可能产生重复任务。' : ''}',
         ),
         actions: [
           TextButton(
@@ -456,7 +478,12 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           mediaBindingJson: jsonEncode(binding.toJson()),
         ),
         onProgress: (sent, total) {
-          if (mounted) setState(() => _progress = sent / total);
+          if (mounted) {
+            setState(() {
+              _progress = sent / total;
+              _stage = sent == total ? '音频已发送，等待服务器回执…' : '正在上传音频…';
+            });
+          }
         },
       );
       handedOff = true;
@@ -530,7 +557,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         throw const FormatException('分轨时间轴与本视频区间不一致');
       }
       final paths = <String, String>{};
-      for (final stem in result.stems.where((s) => s.id != 'instrumental')) {
+      for (final stem in result.mixStems) {
         if (!_canLoad(token)) return;
         final file = restoring
             ? await store.localFile(task.id, stem)
@@ -557,11 +584,14 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       final selection =
           _saved?.taskId == task.id &&
               _saved?.inputSha256 == binding.inputSha256
-          ? _saved!.withMode(true)
+          ? _saved!.withMode(true).forTracks(paths.keys)
           : VideoMixSelection(
               taskId: task.id,
               inputSha256: binding.inputSha256,
               useStems: true,
+              controls: {
+                for (final id in paths.keys) id: const StemMixControl(),
+              },
             );
       await controller.loadStems(
         paths,
@@ -572,7 +602,12 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         initialGains: selection.gains,
       );
       if (!_canLoad(token)) return;
+      if (controller.supportsStemPan) {
+        await controller.setStemPans(selection.pans);
+      }
+      if (!_canLoad(token)) return;
       setState(() {
+        _pans = selection.pans;
         _rememberedTask = task;
         _loadedTaskId = task.id;
         _volumes = {
@@ -623,10 +658,124 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     final saving = _persist(selection);
     try {
       await widget.controller.setStemGains(selection.gains);
+      if (widget.controller.supportsStemPan) {
+        await widget.controller.setStemPans(selection.pans);
+      }
     } on Object {
       _message('音轨控制失败，请重新载入分轨');
     }
     await saving;
+  }
+
+  Widget _mixer([StateSetter? refreshSheet]) => VideoStemMixer(
+    controls: _currentSelection().controls,
+    master: widget.controller.volume,
+    supportsPan: widget.controller.supportsStemPan,
+    enabled:
+        widget.enabled &&
+        !_busy &&
+        !widget.recordingActive &&
+        widget.controller.stemsLoaded,
+    onMaster: (v) {
+      unawaited(widget.controller.setVolume(v));
+      refreshSheet?.call(() {});
+    },
+    onChange: (id, c) {
+      setState(() {
+        _volumes[id] = c.volume;
+        _pans[id] = c.pan;
+        c.muted ? _muted.add(id) : _muted.remove(id);
+        c.solo ? _solo.add(id) : _solo.remove(id);
+      });
+      refreshSheet?.call(() {});
+      unawaited(_applyGains());
+    },
+    onReset: () {
+      setState(() {
+        _volumes.updateAll((_, _) => 1);
+        _pans.updateAll((_, _) => 0);
+        _muted.clear();
+        _solo.clear();
+      });
+      refreshSheet?.call(() {});
+      unawaited(_applyGains());
+    },
+  );
+
+  Future<void> _openMixer() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (context) => StatefulBuilder(
+      builder: (context, refresh) => AnimatedBuilder(
+        animation: widget.controller,
+        builder: (context, _) => FractionallySizedBox(
+          heightFactor: .85,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: _mixer(refresh),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Future<void> _recoverReceipt(AlgorithmTaskRecord task) async {
+    if (_busy || !widget.enabled) return;
+    final id = await showDialog<String>(
+      context: context,
+      builder: (_) => _AnalysisValueDialog(
+        title: '找回已上传任务',
+        label: '服务器任务编号（job_id）',
+        initial: '',
+        description: '从服务器任务记录取得编号后查询，不会再次上传音频。当前接口不支持按文件自动查找任务。',
+        validate: (s) {
+          try {
+            algorithmId(s);
+            return null;
+          } on FormatException {
+            return '请输入有效任务编号';
+          }
+        },
+      ),
+    );
+    if (id == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(algorithmTaskServiceProvider)
+          .recoverWithJobId(task.id, id.trim());
+    } on Object catch (e) {
+      _message(_errorMessage(e, '找回失败，请检查任务编号'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirmNewSubmission(AlgorithmTaskRecord task) async {
+    if (_busy || !widget.enabled) return;
+    final retry = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重新提交分析？'),
+        content: const Text(
+          '上次上传没有收到任务编号，服务器仍可能正在处理。重新提交可能产生重复任务。也可以先用服务器任务编号找回。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('仍然重新提交'),
+          ),
+        ],
+      ),
+    );
+    if (retry != true || !mounted) return;
+    setState(() => _operation = task.operation);
+    await _submit();
   }
 
   Future<void> _seekVerified(VideoAnalysisBinding binding, int sourceMs) async {
@@ -662,16 +811,17 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   }
 
   Widget _timeline(AlgorithmTaskRecord task, VideoAnalysisBinding binding) {
-    final zero = binding.manualChordZeroMs;
+    final zero = binding.manualChordZeroMs ?? binding.startMs;
     final chords = <VideoTimelineChord>[];
-    if (zero != null &&
-        task.operation == AlgorithmOperation.chords &&
+    if (task.operation == AlgorithmOperation.chords &&
         task.resultJson != null) {
       final result = LegacyChordResult.fromJson(
         algorithmObject(jsonDecode(task.resultJson!)),
       );
       if (zero + result.duration.inMilliseconds > binding.endMs + 20) {
-        throw const FormatException('人工校准超出分析区间');
+        if (binding.manualChordZeroMs != null) {
+          throw const FormatException('人工校准超出分析区间');
+        }
       }
       chords.addAll(
         result.segments.map(
@@ -751,6 +901,35 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     }
   }
 
+  Future<void> _alignFirstChordHere(AlgorithmTaskRecord task) async {
+    try {
+      await widget.controller.pause();
+      await widget.controller.requestSnapshot();
+      final binding = _binding(task);
+      final result = LegacyChordResult.fromJson(
+        algorithmObject(jsonDecode(task.resultJson!)),
+      );
+      if (result.segments.isEmpty) throw const FormatException('没有可对齐的和弦');
+      final zero =
+          widget.controller.position.inMilliseconds -
+          result.segments.first.start.inMilliseconds;
+      if (zero < binding.startMs ||
+          zero + result.duration.inMilliseconds > binding.endMs + 20) {
+        throw const FormatException('当前位置无法容纳完整和弦结果，请使用时间校准');
+      }
+      await _verify(binding);
+      await ref
+          .read(algorithmTaskRepositoryProvider)
+          .updateMediaBinding(
+            task.id,
+            jsonEncode(binding.withChordZero(zero).toJson()),
+          );
+      _message('已将首个和弦起点对齐到当前播放位置');
+    } on Object catch (e) {
+      _message(_errorMessage(e, '对齐失败，请重试'));
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
@@ -774,6 +953,13 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       return ExpansionTile(
         controller: _expansion,
         title: const Text('和弦与分轨'),
+        trailing: widget.controller.stemsLoaded && _rememberedTask != null
+            ? IconButton(
+                tooltip: '打开混音台',
+                onPressed: _busy || !widget.enabled ? null : _openMixer,
+                icon: const Icon(Icons.tune),
+              )
+            : null,
         subtitle: Text(
           _saveFailed
               ? '设置保存失败，展开可重试'
@@ -861,7 +1047,9 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
             child: const Text('重试保存设置'),
           ),
         ],
-        if (widget.controller.stemsLoaded) ...[
+        if (widget.controller.stemsLoaded &&
+            _rememberedTask != null &&
+            _volumes.isNotEmpty) ...[
           const Divider(),
           Text(widget.controller.stemsActive ? '当前播放：分轨（原视频已静音）' : '当前区间外播放原声'),
           TextButton(
@@ -869,59 +1057,16 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
             onPressed: _busy || !widget.enabled ? null : _useOriginal,
             child: const Text('切回视频原声'),
           ),
+          FilledButton.tonalIcon(
+            key: const Key('video_open_mixer'),
+            onPressed: _busy || !widget.enabled ? null : _openMixer,
+            icon: const Icon(Icons.tune),
+            label: const Text('打开混音台'),
+          ),
           ExpansionTile(
             title: const Text('音轨音量、静音与独奏'),
             initiallyExpanded: true,
-            children: [
-              for (final id in _volumes.keys)
-                Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: Text(_stemName(id))),
-                        FilterChip(
-                          key: Key('video_stem_mute_$id'),
-                          label: const Text('静音'),
-                          selected: _muted.contains(id),
-                          onSelected: _busy || !widget.enabled
-                              ? null
-                              : (v) {
-                                  setState(() {
-                                    v ? _muted.add(id) : _muted.remove(id);
-                                  });
-                                  unawaited(_applyGains());
-                                },
-                        ),
-                        const SizedBox(width: 8),
-                        FilterChip(
-                          key: Key('video_stem_solo_$id'),
-                          label: const Text('独奏'),
-                          selected: _solo.contains(id),
-                          onSelected: _busy || !widget.enabled
-                              ? null
-                              : (v) {
-                                  setState(() {
-                                    v ? _solo.add(id) : _solo.remove(id);
-                                    if (v) _muted.remove(id);
-                                  });
-                                  unawaited(_applyGains());
-                                },
-                        ),
-                      ],
-                    ),
-                    Slider(
-                      key: Key('video_stem_volume_$id'),
-                      divisions: 100,
-                      label: '${(_volumes[id]! * 100).round()}%',
-                      value: _volumes[id]!,
-                      onChanged: _busy || !widget.enabled
-                          ? null
-                          : (v) => setState(() => _volumes[id] = v),
-                      onChangeEnd: (_) => unawaited(_applyGains()),
-                    ),
-                  ],
-                ),
-            ],
+            children: [_mixer()],
           ),
         ],
         tasks.when(
@@ -962,6 +1107,25 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
                 const Text('当前使用的分轨'),
               if (binding.waveform.isNotEmpty) _timeline(task, binding),
               Text(task.message ?? task.state.name),
+              if (task.state == AlgorithmTaskState.submissionUnknown &&
+                  task.remoteJobId == null)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: _busy || !widget.enabled
+                          ? null
+                          : () => _recoverReceipt(task),
+                      child: const Text('用任务编号找回'),
+                    ),
+                    TextButton(
+                      onPressed: _busy || !widget.enabled
+                          ? null
+                          : () => _confirmNewSubmission(task),
+                      child: const Text('重新提交…'),
+                    ),
+                  ],
+                ),
               if (task.shouldPoll)
                 LinearProgressIndicator(
                   value: task.progress == null ? null : task.progress! / 100,
@@ -969,6 +1133,11 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
               if (task.resultJson != null &&
                   task.operation == AlgorithmOperation.chords)
                 ..._chords(task),
+              if (task.resultJson != null &&
+                  task.operation == AlgorithmOperation.separation)
+                Text(
+                  '已分离：${LegacySeparationResult.fromJson(algorithmObject(jsonDecode(task.resultJson!)), AlgorithmEndpoint(task.endpoint, allowLocalHttp: true)).stems.map((s) => s.displayName).join('、')}。载入后可调节音量、静音、独奏及左右声像；合成伴奏不与原分轨重复叠加。',
+                ),
               if (task.resultJson != null &&
                   task.operation == AlgorithmOperation.separation)
                 TextButton(
@@ -1000,35 +1169,28 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       algorithmObject(jsonDecode(task.resultJson!)),
     );
     final binding = _binding(task);
-    final zero = binding.manualChordZeroMs;
-    final position = widget.controller.position.inMilliseconds - (zero ?? 0);
-    final current = zero == null
-        ? null
-        : result.segments
-              .where(
-                (s) =>
-                    s.start.inMilliseconds <= position &&
-                    position < s.end.inMilliseconds,
-              )
-              .firstOrNull;
-    final next = zero == null
-        ? null
-        : result.segments
-              .where((s) => s.start.inMilliseconds > position)
-              .firstOrNull;
+    final playback = VideoChordPlayback(result, binding);
+    final position = widget.controller.position.inMilliseconds;
+    final current = playback.current(position);
+    final next = playback.next(position);
     return [
       if (result.keyEstimate.isNotEmpty) Text('调性参考：${result.keyEstimate}'),
       if (result.hasTailTimingDifference)
         const Text('结尾时长有轻微差异，保留原始和弦时间；定位仍需人工校准。'),
       Text(
-        zero == null
-            ? '当前为分析相对时间。校准后可随视频显示和定位。'
-            : '当前：${current?.displayLabel ?? '—'}   下一个：${next?.displayLabel ?? '—'} · 人工校准',
+        '当前：${current?.displayLabel ?? '—'}   下一个：${next?.displayLabel ?? '—'} · ${binding.manualChordZeroMs == null ? '按区间起点显示，待校准' : '人工校准'}',
       ),
       TextButton(
         onPressed: _busy || !widget.enabled ? null : () => _calibrate(task),
-        child: Text(zero == null ? '与视频时间校准' : '调整人工校准'),
+        child: Text(binding.manualChordZeroMs == null ? '与视频时间校准' : '调整人工校准'),
       ),
+      if (result.segments.isNotEmpty)
+        TextButton(
+          onPressed: _busy || !widget.enabled
+              ? null
+              : () => _alignFirstChordHere(task),
+          child: const Text('将首个和弦起点对齐到当前位置'),
+        ),
     ];
   }
 }
@@ -1043,17 +1205,6 @@ String _errorMessage(Object error, String fallback) {
   }
   return fallback;
 }
-
-String _stemName(String id) =>
-    const {
-      'vocals': '人声',
-      'drums': '鼓',
-      'bass': '贝斯',
-      'guitar': '吉他',
-      'piano': '钢琴',
-      'other': '其他',
-    }[id] ??
-    id;
 
 class _AnalysisValueDialog extends StatefulWidget {
   const _AnalysisValueDialog({

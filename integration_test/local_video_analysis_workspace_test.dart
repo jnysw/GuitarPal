@@ -124,6 +124,8 @@ void main() {
         expect(task.linkedSourceId, source.id);
         expect(jsonDecode(task.mediaBindingJson!)['startMs'], 0);
         expect(find.text('关联曲目／计划'), findsNothing);
+        expect(find.text('当前和弦 C'), findsOneWidget);
+        expect(find.textContaining('静音偏移待校准'), findsOneWidget);
         await _tapVisible(tester, find.text('与视频时间校准'));
         await tester.pump(const Duration(milliseconds: 350));
         await tester.enterText(find.byType(TextFormField), '0');
@@ -137,6 +139,7 @@ void main() {
             .widget<VideoAnalysisPanel>(find.byType(VideoAnalysisPanel))
             .controller;
         await _spin(tester, () => controller.position.inMilliseconds >= 3000);
+        await _spin(tester, () => find.text('当前和弦 Am').evaluate().isNotEmpty);
         expect(find.byType(LocalVideoPlayerScreen), findsOneWidget);
         expect(controller.hasVideoFrame, isTrue);
         await _tapVisible(
@@ -183,6 +186,7 @@ void main() {
           const Key('local_video_fullscreen_position_slider'),
         );
         await _spin(tester, () => fullscreen.evaluate().isNotEmpty);
+        expect(find.text('当前和弦 Am'), findsOneWidget);
         expect(
           tester
               .widget<VideoAnalysisPanel>(

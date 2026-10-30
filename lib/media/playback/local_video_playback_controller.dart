@@ -40,8 +40,15 @@ abstract interface class LocalVideoStemBridge {
   Future<void> clearStems();
 }
 
+abstract interface class LocalVideoStemPanBridge {
+  Future<void> setStemPans(Map<String, double> pans);
+}
+
 class MethodChannelLocalVideoPlayerBridge
-    implements LocalVideoPlayerBridge, LocalVideoStemBridge {
+    implements
+        LocalVideoPlayerBridge,
+        LocalVideoStemBridge,
+        LocalVideoStemPanBridge {
   MethodChannelLocalVideoPlayerBridge(int viewId)
     : _channel = MethodChannel('com.guitarpal/local_video_player/$viewId') {
     _channel.setMethodCallHandler(_onMethodCall);
@@ -87,6 +94,9 @@ class MethodChannelLocalVideoPlayerBridge
   @override
   Future<void> setStemGains(Map<String, double> gains) =>
       _channel.invokeMethod<void>('setStemGains', {'gains': gains});
+  @override
+  Future<void> setStemPans(Map<String, double> pans) =>
+      _channel.invokeMethod<void>('setStemPans', {'pans': pans});
   @override
   Future<void> clearStems() => _channel.invokeMethod<void>('clearStems');
 
@@ -225,6 +235,13 @@ class LocalVideoPlaybackController extends ChangeNotifier {
       await (bridge as LocalVideoStemBridge).clearStems();
       await requestSnapshot();
     }
+  }
+
+  bool get supportsStemPan => _bridge is LocalVideoStemPanBridge;
+  Future<void> setStemPans(Map<String, double> pans) async {
+    final bridge = _bridge;
+    if (bridge is! LocalVideoStemPanBridge) throw UnsupportedError('声像控制不可用');
+    await (bridge as LocalVideoStemPanBridge).setStemPans(pans);
   }
 
   void previewPosition(Duration value) {

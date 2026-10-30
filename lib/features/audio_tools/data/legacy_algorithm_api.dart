@@ -31,12 +31,14 @@ class LegacyAlgorithmApi implements AlgorithmApi {
     http.Client? client,
     this.requestTimeout = const Duration(seconds: 90),
     this.healthTimeout = const Duration(seconds: 8),
+    this.uploadTimeout = const Duration(minutes: 10),
   }) : _client = client ?? http.Client();
 
   final AlgorithmEndpoint endpoint;
   final http.Client _client;
   final Duration requestTimeout;
   final Duration healthTimeout;
+  final Duration uploadTimeout;
   static const maximumInputBytes = 50 * 1024 * 1024;
   bool get _usesTailnet =>
       endpoint.origin.host.toLowerCase().endsWith('.ts.net');
@@ -108,8 +110,22 @@ class LegacyAlgorithmApi implements AlgorithmApi {
         filename: safeName,
       ),
     );
-    final data = await _send(request, abort, 202);
-    return LegacyUploadReceipt.fromJson(data, endpoint, operation);
+    late final Map<String, Object?> data;
+    try {
+      data = await _send(request, abort, 202, timeout: uploadTimeout);
+    } on AlgorithmApiError catch (e) {
+      if (sent == 0 && {'network_error', 'network_timeout'}.contains(e.code)) {
+        throw const AlgorithmApiError('upload_not_sent', '音频尚未发送，请检查连接后重试');
+      }
+      rethrow;
+    }
+    try {
+      return LegacyUploadReceipt.fromJson(data, endpoint, operation);
+    } on FormatException {
+      // Preserve a valid ID even when optional receipt metadata has drifted.
+      final id = algorithmId(data['job_id']);
+      throw AlgorithmReceiptError(id);
+    }
   }
 
   @override

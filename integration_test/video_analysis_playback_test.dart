@@ -86,6 +86,19 @@ void main() {
           lessThan(400),
         );
         await controller.setStemGains({'guitar': .3});
+        await controller.setStemPans({'guitar': -1});
+        state = await channel.invokeMapMethod('snapshot');
+        expect(state!['stemPans'], {'guitar': -1.0});
+        await expectLater(
+          channel.invokeMethod('setStemPans', {
+            'pans': {'guitar': 1.1},
+          }),
+          throwsA(isA<PlatformException>()),
+        );
+        state = await channel.invokeMapMethod('snapshot');
+        expect(state!['stemPans'], {
+          'guitar': -1.0,
+        }); // Bad control cannot replace valid state.
         await controller.setVolume(.65);
         state = await channel.invokeMapMethod('snapshot');
         expect(state!['videoAudioVolume'], 0.0);
@@ -95,6 +108,7 @@ void main() {
         expect(state!['stemsActive'], isFalse);
         expect(state['videoAudioVolume'] as num, closeTo(.65, .001));
         await controller.setSpeed(1);
+        await controller.setStemPans({'guitar': 1});
         await controller.activateLoopRange(
           LoopRange(
             start: const Duration(milliseconds: 1500),
@@ -153,6 +167,13 @@ void main() {
         state = await channel.invokeMapMethod('snapshot');
         expect(state!['playing'], isTrue);
         expect(state['stemsLoaded'], isFalse);
+        await controller.pause();
+        await controller.loadStems({'lead_guitar': stem.path}, 1000, 2000);
+        await controller.setStemGains({'lead_guitar': .63});
+        await controller.setStemPans({'lead_guitar': .8});
+        state = await channel.invokeMapMethod('snapshot');
+        expect(state!['stemGains'], {'lead_guitar': .63});
+        expect(state['stemPans'], {'lead_guitar': .8});
       } finally {
         await controller?.pause();
         controller?.dispose();
