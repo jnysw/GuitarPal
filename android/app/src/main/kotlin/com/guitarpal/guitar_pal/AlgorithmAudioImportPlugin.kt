@@ -21,11 +21,13 @@ class AlgorithmAudioImportPlugin(private val activity: Activity, messenger: Bina
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "serviceConfiguration" -> result.success(mapOf("baseUrl" to BuildConfig.ALGORITHM_API_BASE_URL))
             "extractVideoAudio" -> Thread {
                 try {
                     val info = VideoAudioExtraction.extract(requireNotNull(call.argument<String>("path")),
                         requireNotNull(call.argument<Number>("startMs")).toLong(), requireNotNull(call.argument<Number>("endMs")).toLong(),
-                        File(activity.filesDir, "guitarpal_videos"), root)
+                        File(activity.filesDir, "guitarpal_videos"), root,
+                        call.argument<Number>("sourceDurationMs")?.toLong())
                     activity.runOnUiThread { result.success(info) }
                 } catch (e: Throwable) { activity.runOnUiThread { result.error("extraction_failed", e.message ?: "无法提取视频音频", null) } }
             }.start()

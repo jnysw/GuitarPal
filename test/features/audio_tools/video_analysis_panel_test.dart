@@ -18,10 +18,11 @@ import 'package:guitar_pal/features/audio_tools/data/video_audio_extractor.dart'
 import 'package:guitar_pal/features/audio_tools/domain/legacy_algorithm_models.dart';
 import 'package:guitar_pal/features/player/widgets/video_analysis_panel.dart';
 import 'package:guitar_pal/media/playback/local_video_playback_controller.dart';
+import 'package:guitar_pal/media/playback/loop_controller.dart';
 
 void main() {
   testWidgets(
-    'current video accepts private HTTP configuration, submits once and calibrates chords in place',
+    'current video uses the configured origin without address input and calibrates chords in place',
     (tester) async {
       final directory = Directory.systemTemp.createTempSync('gp_video_panel_');
       final video = File('${directory.path}/video.mp4')
@@ -62,7 +63,7 @@ void main() {
           overrides: [
             databaseProvider.overrideWithValue(database),
             algorithmEndpointProvider.overrideWithValue(
-              'https://algorithm.example',
+              'http://100.80.90.10:8000',
             ),
             videoAudioExtractorProvider.overrideWithValue(extractor),
             algorithmTaskServiceProvider.overrideWithValue(
@@ -91,18 +92,50 @@ void main() {
       );
       await tester.tap(find.text('和弦与分轨'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('video_analysis_endpoint')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byType(TextFormField),
-        'http://100.80.90.10:8000',
+      expect(find.byKey(const Key('video_analysis_endpoint')), findsNothing);
+      expect(find.byType(TextFormField), findsNothing);
+      await controller.activateLoopRange(
+        LoopRange(start: Duration.zero, end: const Duration(seconds: 4)),
       );
-      await tester.tap(find.text('确认'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+      controller.clearLoop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('video_analysis_submit')));
+      await tester.pumpAndSettle();
+      expect(find.text('请先设置 A-B 区间，再开始分析'), findsOneWidget);
+      expect(find.byKey(const Key('video_analysis_confirm')), findsNothing);
+      expect(extractor.calls, 0);
+      await tester.tap(
+        find.byType(SwitchListTile),
+      ); // A cleared A-B must still allow returning to whole-video mode.
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('video_analysis_submit')));
       await tester.pumpAndSettle();
       expect(api.uploads, 0);
       expect(find.textContaining('仅提取并上传此区间的音频'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('video_analysis_confirm')));
+      await _until(tester, () {
+        final retry = find.byKey(const Key('video_analysis_retry_connection'));
+        return retry.evaluate().isNotEmpty &&
+            tester.widget<TextButton>(retry).onPressed != null;
+      });
+      expect(extractor.calls, 0);
+      expect(api.uploads, 0);
+      expect(
+        (await tester.runAsync(
+          () => database.select(database.algorithmTasks).get(),
+        ))!,
+        isEmpty,
+      );
+      api.failPing = false;
+      await tester.tap(
+        find.byKey(const Key('video_analysis_retry_connection')),
+      );
+      await _until(tester, () => find.text('分析服务已连接').evaluate().isNotEmpty);
+      await tester.tap(find.byKey(const Key('video_analysis_submit')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('video_analysis_confirm')));
       await _until(tester, () => find.text('与视频时间校准').evaluate().isNotEmpty);
       expect(extractor.calls, 1);
@@ -156,8 +189,10 @@ class _Extractor extends VideoAudioExtractor {
   Future<ExtractedVideoAudio> extract(
     String path,
     int startMs,
-    int endMs,
-  ) async {
+    int endMs, {
+    int? sourceDurationMs,
+  }) async {
+    expect(sourceDurationMs, 8000);
     calls++;
     return ExtractedVideoAudio(
       const AlgorithmAudioInput(
@@ -174,8 +209,14 @@ class _Extractor extends VideoAudioExtractor {
 
 class _Api implements AlgorithmApi {
   int uploads = 0;
+  bool failPing = true;
   @override
-  Future<void> ping() async {}
+  Future<void> ping() async {
+    if (failPing) {
+      throw const AlgorithmApiError('network_error', '暂时无法连接分析服务，请稍后重试');
+    }
+  }
+
   @override
   void close() {}
   @override

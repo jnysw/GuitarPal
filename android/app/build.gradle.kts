@@ -1,13 +1,27 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Developer/deployment configuration is compiled into Android builds, including
+// ordinary IDE / `flutter run` launches without Dart defines. Keep the local JSON untracked.
+val algorithmConfig = rootProject.file("../config/algorithm.local.json")
+val localAlgorithmOrigin = if (algorithmConfig.isFile) {
+    val values = JsonSlurper().parse(algorithmConfig) as Map<*, *>
+    (values["API_BASE_URL"] ?: values["ALGORITHM_BASE_URL"] ?: "").toString().trim()
+} else ""
+val algorithmOrigin = providers.environmentVariable("API_BASE_URL").orNull?.trim()
+    ?.takeIf { it.isNotEmpty() } ?: localAlgorithmOrigin
+
 android {
     namespace = "com.guitarpal.guitar_pal"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+    buildFeatures { buildConfig = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -16,6 +30,7 @@ android {
 
     defaultConfig {
         applicationId = "com.guitarpal.guitar_pal"
+        buildConfigField("String", "ALGORITHM_API_BASE_URL", JsonOutput.toJson(algorithmOrigin))
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

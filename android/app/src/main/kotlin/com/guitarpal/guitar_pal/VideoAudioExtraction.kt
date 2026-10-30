@@ -5,6 +5,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
+import android.media.MediaPlayer
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
@@ -17,13 +18,24 @@ import kotlin.math.min
 
 /** PCM16 input in video media coordinates: retain silence and fill timestamp gaps. */
 internal object VideoAudioExtraction {
-    fun extract(path: String, startMs: Long, endMs: Long, sourceRoot: File, outputRoot: File): Map<String, Any> {
+    fun extract(path: String, startMs: Long, endMs: Long, sourceRoot: File, outputRoot: File, sourceDurationMs: Long? = null): Map<String, Any> {
         val source = File(path).canonicalFile
         require(source.parentFile == sourceRoot.canonicalFile && source.isFile) { "请选择已导入练习库的本地视频" }
         require(startMs >= 0 && endMs - startMs in 2000L..600000L) { "请选择 2 秒至 10 分钟的分析区间" }
         val beforeSize = source.length(); val beforeModified = source.lastModified()
         val retriever = MediaMetadataRetriever()
-        val duration = try { retriever.setDataSource(path); retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0 } finally { retriever.release() }
+        val metadataDuration = try { retriever.setDataSource(path); retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0 } finally { retriever.release() }
+        // The practice timeline uses MediaPlayer milliseconds. Container metadata
+        // can round the final frame differently; never clamp away selected audio.
+        fun playbackDuration(): Long {
+            val probe = MediaPlayer()
+            return try { probe.setDataSource(path); probe.prepare(); probe.duration.toLong() } finally { probe.release() }
+        }
+        val duration = sourceDurationMs ?: metadataDuration.takeIf { it > 0 } ?: playbackDuration()
+        require(duration > 0) { "无法读取视频时长，请重新打开视频后重试" }
+        if (sourceDurationMs != null && abs(sourceDurationMs - metadataDuration) > 2) {
+            require(abs(playbackDuration() - sourceDurationMs) <= 2) { "视频时长信息已变化，请重新打开视频后分析" }
+        }
         require(endMs <= duration) { "分析区间超出视频时长" }
         val extractor = MediaExtractor(); var codec: MediaCodec? = null
         outputRoot.mkdirs()

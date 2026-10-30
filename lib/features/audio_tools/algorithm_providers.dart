@@ -12,6 +12,7 @@ import 'domain/algorithm_configuration.dart';
 import 'data/stem_practice_target_repository.dart';
 import 'data/video_audio_extractor.dart';
 import 'data/video_mix_preferences.dart';
+import 'data/algorithm_service_configuration.dart';
 
 final algorithmAudioImportProvider = Provider<AlgorithmAudioImport>(
   (ref) => const MethodChannelAlgorithmAudioImport(),
@@ -19,6 +20,10 @@ final algorithmAudioImportProvider = Provider<AlgorithmAudioImport>(
 final algorithmEndpointProvider = Provider<String>(
   (ref) => AlgorithmConfiguration.baseUrl,
 );
+final algorithmServiceConfigurationProvider =
+    Provider<AlgorithmServiceConfiguration>(
+      (ref) => const AlgorithmServiceConfiguration(),
+    );
 final videoAudioExtractorProvider = Provider<VideoAudioExtractor>(
   (ref) => const VideoAudioExtractor(),
 );

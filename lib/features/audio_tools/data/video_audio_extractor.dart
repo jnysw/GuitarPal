@@ -16,11 +16,17 @@ class VideoAudioExtractor {
   Future<ExtractedVideoAudio> extract(
     String path,
     int startMs,
-    int endMs,
-  ) async {
+    int endMs, {
+    int? sourceDurationMs,
+  }) async {
     final json = (await _channel.invokeMapMethod<String, Object?>(
       'extractVideoAudio',
-      {'path': path, 'startMs': startMs, 'endMs': endMs},
+      {
+        'path': path,
+        'startMs': startMs,
+        'endMs': endMs,
+        'sourceDurationMs': sourceDurationMs,
+      },
     ))!;
     return ExtractedVideoAudio(
       AlgorithmAudioInput(

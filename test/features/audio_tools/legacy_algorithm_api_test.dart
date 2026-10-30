@@ -15,6 +15,84 @@ Map<String, Object?> legacyFixture() => jsonDecode(
 ) as Map<String, Object?>;
 
 void main() {
+  test('legacy small tail disagreement preserves raw intervals and declared duration but rejects genuine invalid timing', () {
+    final json = legacyFixture()..['duration_seconds'] = 7.85;
+    json['segments'] = [
+      {'chord': 'C', 'roman': 'I', 'start': 0.0, 'end': 7.895},
+    ];
+    final parsed = LegacyChordResult.fromJson(json);
+    expect(parsed.declaredDuration.inMilliseconds, 7850);
+    expect(parsed.duration.inMilliseconds, 7850);
+    expect(parsed.coverageEnd.inMilliseconds, 7895);
+    expect(parsed.segments.single.end.inMilliseconds, 7895);
+    expect(parsed.hasTailTimingDifference, isTrue);
+    expect(json['duration_seconds'], 7.85); // Raw machine output is unchanged.
+    json['segments'] = [
+      {'chord': 'C', 'roman': 'I', 'start': 0.0, 'end': 7.901},
+    ];
+    expect(() => LegacyChordResult.fromJson(json), throwsFormatException);
+    json['segments'] = [
+      {'chord': 'C', 'roman': 'I', 'start': 0.0, 'end': 4.0},
+      {'chord': 'Am', 'roman': 'vi', 'start': 3.99, 'end': 7.85},
+    ];
+    expect(() => LegacyChordResult.fromJson(json), throwsFormatException);
+  });
+  test('tailnet connection errors tell private-test users to connect Tailscale without asking for an address', () async {
+    final api = LegacyAlgorithmApi(
+      AlgorithmEndpoint(
+        'https://example.tailnet.ts.net',
+        allowLocalHttp: false,
+      ),
+      client: MockClient(
+        (request) async => throw http.ClientException('test offline'),
+      ),
+    );
+    try {
+      await expectLater(
+        api.ping(),
+        throwsA(
+          isA<AlgorithmApiError>()
+              .having(
+                (e) => e.message,
+                'actionable message',
+                contains('Tailscale'),
+              )
+              .having(
+                (e) => e.message,
+                'no address form',
+                isNot(contains('检查地址')),
+              ),
+        ),
+      );
+    } finally {
+      api.close();
+    }
+  });
+  test('health preflight has a short independent timeout and does not report a lost POST receipt', () async {
+    final api = LegacyAlgorithmApi(
+      AlgorithmEndpoint('https://algorithm.example', allowLocalHttp: false),
+      requestTimeout: const Duration(seconds: 2),
+      healthTimeout: const Duration(milliseconds: 20),
+      client: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/health/ping');
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        return http.Response('{"ping":"pong"}', 200);
+      }),
+    );
+    try {
+      await expectLater(
+        api.ping(),
+        throwsA(
+          isA<AlgorithmApiError>()
+              .having((e) => e.code, 'code', 'network_timeout')
+              .having((e) => e.message, 'message', isNot(contains('服务器可能已接收'))),
+        ),
+      );
+    } finally {
+      api.close();
+    }
+  });
   test('separation POST uses its route/query and accepts unknown processing progress and structured failure', () async {
     final directory = await Directory.systemTemp.createTemp(
       'gp_separation_post_',

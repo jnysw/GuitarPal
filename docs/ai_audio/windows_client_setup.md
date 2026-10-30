@@ -1,18 +1,22 @@
 # Windows 算法客户端联调
 
-更新：2026-10-28。已通过 Tailscale Serve HTTPS 跑通实际和弦、分轨任务，以及 Android 模拟器上的 Flutter 下载和本机试听。该服务仅供同一 tailnet 的开发测试，普通互联网用户不能访问。
+更新：2026-10-30。当前开发入口为 Tailscale Serve HTTPS／443，和弦与分轨共用一个源地址，按路径分流。Windows 的 `127.0.0.1:8000` 是内部监听，不是手机连接地址。该服务仅供同一 tailnet 开发测试。
 
 ## 配置和入口
 
-真实源地址写入本机 `config/algorithm.local.json`（已忽略，不进入 GitHub），格式见 `config/algorithm.example.json`。与既有账号配置一起启动：
+开发者将已部署的 HTTPS 源地址写入本机 `config/algorithm.local.json`（已忽略，不进入 GitHub），格式见 `config/algorithm.example.json`。Android Gradle 会自动编译到原生配置中，因此普通 IDE 启动／`flutter run`／APK 构建也能读取，普通用户不填写地址。与既有账号配置一起启动：
 
 ```bash
-flutter run --dart-define-from-file=config/supabase.local.json --dart-define-from-file=config/algorithm.local.json
+flutter run --dart-define-from-file=config/supabase.local.json
 ```
 
-也可只追加 `--dart-define=API_BASE_URL=https://YOUR_TAILNET_HOST`。`API_BASE_URL` 是统一配置键；兼容旧构建的 `ALGORITHM_BASE_URL`，前者优先。地址只包含 HTTPS 源，不加 `/api/v1`，不内嵌密码。没有构建配置时仍可在页面填写；已有任务保存自己的源地址，不随新配置迁移到另一服务。
+开发者仍可用 `--dart-define=API_BASE_URL=https://YOUR_TAILNET_HOST` 覆盖；兼容旧 `ALGORITHM_BASE_URL`。没有 Dart 配置时读取 Android 构建配置，Gradle 的 `API_BASE_URL` 环境变量优先于本机 JSON。修改部署配置后需要重新构建 APK，热重载不会修改原生构建值。地址只包含 HTTPS 源，不加 `/api/v1` 或内嵌密码。构建缺失配置时提示服务暂不可用；页面没有地址表单。已有任务保留创建时的源地址，不迁移 job ID 到其他服务。
 
 Debug Android 构建：从新建／练习库／计划打开本地视频，在播放器右上角选择「扒和弦」或「分离音轨」。Mac 的 Tailscale 需保持连接，Windows 需开机并运行算法服务。模拟器通过 Mac 网络访问，独立 Android 真机也需要可访问该 tailnet。TLS 使用正常校验，不绕过证书。
+
+实体安卓手机需先从 [Tailscale 官方 Android 下载页](https://tailscale.com/download/android) 安装，登录与 Mac／Windows 相同的 tailnet 并开启连接。2026-10-30 用户确认实体手机尚未安装，这是手机不可达的已知原因。APK 内置地址不等于自动获得私网权限；尚未部署面向普通用户的公网 API。
+
+提交前先以 8 秒上限做只读健康检查，成功后再提取／上传。连接失败时不提取、不创建任务，提供「重试连接」；私网连接错误提示检查 Tailscale。健康检查只证明服务可达，模型是否成功仍以具体任务结果为准。POST 回执丢失仍保留接收未知，不自动重传。
 
 Release 仍隐藏无内置账号鉴权的实验服务入口。旧联调页的「检查连接」只调用 `/api/v1/health/ping`，不能证明模型已就绪。
 
@@ -20,9 +24,9 @@ Release 仍隐藏无内置账号鉴权的实验服务入口。旧联调页的「
 
 Debug 接受局域网／回环／Tailscale `100.64.0.0/10` 范围的数值 IP，例如 `http://100.64.0.10:8000`（示例，请换成实际 IP／端口）。Windows 必须开机、Tailscale 在线，算法服务监听可访问的网卡地址，并放行该端口；只监听 `127.0.0.1` 的服务无法直接通过 Tailscale IP 访问，仍可使用既有 Serve HTTPS 入口。不要把 HTTPS 域名直接改成 `http://` 并假定 80 端口已配置。
 
-在播放器展开「和弦与分轨」，点击「更改分析服务地址」即可切换新任务的地址；有默认配置时也可修改。BASE_URL 不加 `/api/v1`；浏览器健康检查使用 `/api/v1/health/ping`，文档使用 `/api/docs`。既有任务继续使用创建时的地址，防止把同一个 job ID 请求到另一服务；页面地址修改不覆写构建文件，重新启动优先使用本机配置。
+明文 HTTP 仅保留开发者构建／契约测试能力，不在练习页提供地址切换。当前 Windows 服务仅监听回环 8000，客户端采用已验证的 HTTPS／443；直接使用 Tailscale IP 加 8000 在本轮实测超时。BASE_URL 不加 `/api/v1`；健康检查使用 `/api/v1/health/ping`，文档使用 `/api/docs`。
 
-2026-10-29 检查时用户确认 Windows 未开机，HTTP／HTTPS 均不可达；8000 端口尚未进行真实在线验证。用户私网地址仅留本机配置，不提交到公开仓库。Flutter Debug 已允许明文网络，Release 的 HTTPS 限制保持。
+2026-10-29 用户未开机时所有连接均不可达。2026-10-30 已确认 Windows 在线，HTTPS 200，模拟器真实 GET／上传／结果验证成功；Mac 带本机代理的 curl 曾超时，指定 `--noproxy '*'` 后直连成功。仅诊断命令绕过代理，不修改系统代理设置。用户私网地址仅留本机配置，不提交到公开仓库。
 
 ## 操作流程
 

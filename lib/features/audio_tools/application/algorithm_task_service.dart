@@ -21,6 +21,23 @@ class AlgorithmTaskService {
   final DateTime Function() _clock;
   final Set<String> _refreshing = {};
 
+  /// A read-only check before expensive extraction or creation of a task.
+  Future<void> checkConnection(String origin) async {
+    final api = _factory(
+      AlgorithmEndpoint(origin, allowLocalHttp: allowLocalHttp),
+    );
+    try {
+      await api.ping();
+    } on FormatException {
+      throw const AlgorithmApiError(
+        'invalid_health_response',
+        '分析服务暂不可用，请稍后重试',
+      );
+    } finally {
+      api.close();
+    }
+  }
+
   Future<void> submit(
     AlgorithmTaskRecord task, {
     void Function(int, int)? onProgress,

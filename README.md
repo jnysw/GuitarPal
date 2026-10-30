@@ -1,6 +1,6 @@
 # GuitarPal
 
-AI 扒和弦与分轨已接入本地视频练习：Debug Android 打开已导入的视频，在播放器内选择整段或 A-B 提取音频、确认上传并查看结果，无需重复导入或手动关联曲目。波形、人工校准后的和弦定位及六轨混音共用原视频的播放进度、音量、0.01 倍速、A-B 和唯一练习会话；分轨播放时视频原声静音。时间轴支持缩放、横向浏览、播放跟随、和弦选区设为 A-B、拖动 A/B 及保存练习片段。服务地址可随时修改，Debug 支持私网 HTTP。旧和弦接口裁剪偏移缺失，暂需人工校准；不宣称自动精确同步。操作和限制见 [视频练习工作区](docs/ai_audio/video_practice_workspace.md)、[客户端联调说明](docs/ai_audio/windows_client_setup.md)，完整范围与验证见 [AI 音频规划](docs/ai_audio/development_plan.md) 和 [阶段进度](docs/ai_audio/progress.md)。
+AI 扒和弦与分轨已接入本地视频练习：Debug Android 打开已导入的视频，在播放器内选择整段或 A-B 提取音频、确认上传并查看结果，无需重复导入或手动关联曲目。波形、人工校准后的和弦定位及六轨混音共用原视频的播放进度、音量、0.01 倍速、A-B 和唯一练习会话；分轨播放时视频原声静音。时间轴支持缩放、横向浏览、播放跟随、和弦选区设为 A-B、拖动 A/B 及保存练习片段。算法地址由开发构建统一配置，用户无需填写；连接失败先提示重试，实体手机访问当前测试服务需连接同一 Tailscale 网络。旧和弦接口裁剪偏移缺失，暂需人工校准；不宣称自动精确同步。操作和限制见 [视频练习工作区](docs/ai_audio/video_practice_workspace.md)、[客户端联调说明](docs/ai_audio/windows_client_setup.md)，完整范围与验证见 [AI 音频规划](docs/ai_audio/development_plan.md) 和 [阶段进度](docs/ai_audio/progress.md)。
 
 已下载分轨的选择与各轨音量／静音／独奏会自动保存，重开视频可离线恢复并保持暂停，保留计划或片段的倍速与 A-B。显式切回原声后下次仍为原声；缺失缓存不会自动下载，设置保存失败可重试。
 

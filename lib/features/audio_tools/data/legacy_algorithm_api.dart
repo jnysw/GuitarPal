@@ -30,16 +30,25 @@ class LegacyAlgorithmApi implements AlgorithmApi {
     this.endpoint, {
     http.Client? client,
     this.requestTimeout = const Duration(seconds: 90),
+    this.healthTimeout = const Duration(seconds: 8),
   }) : _client = client ?? http.Client();
 
   final AlgorithmEndpoint endpoint;
   final http.Client _client;
   final Duration requestTimeout;
+  final Duration healthTimeout;
   static const maximumInputBytes = 50 * 1024 * 1024;
+  bool get _usesTailnet =>
+      endpoint.origin.host.toLowerCase().endsWith('.ts.net');
+  String get _connectionMessage =>
+      _usesTailnet ? '无法连接测试服务，请确认手机已连接 Tailscale 后重试' : '暂时无法连接分析服务，请稍后重试';
 
   @override
   Future<void> ping() async {
-    final data = await _get('/api/v1/health/ping');
+    final data = await _get(
+      '/api/v1/health/ping',
+      timeout: healthTimeout < requestTimeout ? healthTimeout : requestTimeout,
+    );
     if (data['ping'] != 'pong') throw const FormatException('存活检查响应无效');
   }
 
@@ -133,21 +142,22 @@ class LegacyAlgorithmApi implements AlgorithmApi {
     return data;
   }
 
-  Future<Map<String, Object?>> _get(String path) {
+  Future<Map<String, Object?>> _get(String path, {Duration? timeout}) {
     final abort = Completer<void>();
     final request = http.AbortableRequest(
       'GET',
       endpoint.route(path),
       abortTrigger: abort.future,
     )..followRedirects = false;
-    return _send(request, abort, 200);
+    return _send(request, abort, 200, timeout: timeout);
   }
 
   Future<Map<String, Object?>> _send(
     http.BaseRequest request,
     Completer<void> abort,
-    int expected,
-  ) async {
+    int expected, {
+    Duration? timeout,
+  }) async {
     Future<Map<String, Object?>> read() async {
       final response = await _client.send(request);
       final bytes = <int>[];
@@ -189,19 +199,23 @@ class LegacyAlgorithmApi implements AlgorithmApi {
 
     try {
       return await read().timeout(
-        requestTimeout,
+        timeout ?? requestTimeout,
         onTimeout: () {
           if (!abort.isCompleted) abort.complete();
-          throw const AlgorithmApiError(
+          throw AlgorithmApiError(
             'network_timeout',
-            '请求超时；若正在提交，服务器可能已接收，请勿自动重复上传',
+            request.method == 'POST'
+                ? '请求超时；服务器可能已接收，请勿自动重复上传'
+                : _usesTailnet
+                ? '分析服务响应超时，请确认 Tailscale 连接后重试'
+                : '分析服务响应超时，请稍后重试',
           );
         },
       );
     } on http.ClientException {
-      throw const AlgorithmApiError('network_error', '无法连接算法服务，请检查地址和网络');
+      throw AlgorithmApiError('network_error', _connectionMessage);
     } on SocketException {
-      throw const AlgorithmApiError('network_error', '无法连接算法服务，请检查地址和网络');
+      throw AlgorithmApiError('network_error', _connectionMessage);
     }
   }
 

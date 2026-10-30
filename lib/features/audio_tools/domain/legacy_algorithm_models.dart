@@ -146,27 +146,35 @@ class LegacyChordSegment {
 class LegacyChordResult {
   LegacyChordResult.fromJson(Map<String, Object?> json)
     : jobId = algorithmId(json['job_id']),
-      duration = algorithmSeconds(json['duration_seconds']),
+      declaredDuration = algorithmSeconds(json['duration_seconds']),
       keyEstimate = algorithmText(json['key'], allowEmpty: true),
       progression = algorithmText(json['progression'], allowEmpty: true),
       segments = List.unmodifiable(
         algorithmList(json['segments'])
             .map((s) => LegacyChordSegment.fromJson(algorithmObject(s))),
       ) {
-    if (json['status'] != 'completed' || duration <= Duration.zero) {
+    if (json['status'] != 'completed' || declaredDuration <= Duration.zero) {
       throw const FormatException('和弦结果尚未完成或时长无效');
     }
     var end = Duration.zero;
     for (final segment in segments) {
+      // Measured v1 output may end one/two analysis frames past its duration
+      // header (7.850s vs 7.895s). Preserve both the header and raw intervals;
+      // allow only a bounded tail difference, never overlaps or reordered data.
       if (segment.start < end ||
-          segment.end > duration + const Duration(milliseconds: 20)) {
+          segment.start >= declaredDuration ||
+          segment.end > declaredDuration + const Duration(milliseconds: 50)) {
         throw const FormatException('和弦结果区间乱序、重叠或越界');
       }
       end = segment.end;
     }
   }
   final String jobId;
-  final Duration duration;
+  final Duration declaredDuration;
+  Duration get duration => declaredDuration;
+  Duration get coverageEnd =>
+      segments.isEmpty ? Duration.zero : segments.last.end;
+  bool get hasTailTimingDifference => coverageEnd > declaredDuration;
   final String keyEstimate;
   final String progression;
   final List<LegacyChordSegment> segments;

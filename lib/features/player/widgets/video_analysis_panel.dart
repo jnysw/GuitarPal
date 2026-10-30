@@ -58,6 +58,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   final _expansion = ExpansibleController();
   AlgorithmOperation _operation = AlgorithmOperation.chords;
   String _endpoint = '', _stage = '';
+  Future<void>? _configurationFuture;
+  String? _serviceNotice;
   double? _progress;
   Timer? _timer;
   List<AlgorithmTaskRecord> _tasks = [];
@@ -72,7 +74,10 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   @override
   void initState() {
     super.initState();
-    _endpoint = ref.read(algorithmEndpointProvider);
+    _endpoint = ref.read(algorithmEndpointProvider).trim();
+    if (_endpoint.trim().isEmpty) {
+      _configurationFuture = _resolveConfiguration();
+    }
     _preferences = ref.read(videoMixPreferencesProvider);
     WidgetsBinding.instance.addObserver(this);
     unawaited(_restoreSelection());
@@ -267,30 +272,55 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     }
   }
 
-  Future<void> _configureEndpoint() async {
-    final value = await showDialog<String>(
-      context: context,
-      builder: (_) => _AnalysisValueDialog(
-        title: '连接分析服务',
-        label: '服务地址（HTTPS／调试私网 HTTP）',
-        initial: _endpoint,
-        validate: (text) {
-          try {
-            AlgorithmEndpoint(text, allowLocalHttp: true);
-            return null;
-          } on FormatException catch (e) {
-            return e.message;
-          }
-        },
-      ),
-    );
-    if (value != null && mounted) {
-      setState(
-        () => _endpoint = AlgorithmEndpoint(
-          value,
-          allowLocalHttp: true,
-        ).origin.toString(),
-      );
+  Future<void> _resolveConfiguration() async {
+    final configuration = ref.read(algorithmServiceConfigurationProvider);
+    try {
+      final value = await configuration.load();
+      if (!mounted) return;
+      final origin = AlgorithmEndpoint(
+        value,
+        allowLocalHttp: true,
+      ).origin.toString();
+      setState(() {
+        _endpoint = origin;
+        _serviceNotice = null;
+      });
+    } on Object {
+      if (mounted) setState(() => _serviceNotice = '分析服务暂不可用，请稍后重试');
+    }
+  }
+
+  Future<void> _retryConnection() async {
+    if (_busy || _confirming || !widget.enabled) return;
+    final service = ref.read(algorithmTaskServiceProvider);
+    setState(() {
+      _busy = true;
+      _stage = '正在连接分析服务…';
+      _progress = null;
+    });
+    try {
+      if (_endpoint.trim().isEmpty) {
+        await (_configurationFuture = _resolveConfiguration());
+      }
+      if (!mounted || _endpoint.trim().isEmpty) return;
+      await service.checkConnection(_endpoint);
+      if (mounted) {
+        setState(() => _serviceNotice = null);
+        _message('分析服务已连接');
+      }
+    } on FormatException {
+      if (mounted) setState(() => _serviceNotice = '分析服务暂不可用，请稍后重试');
+    } on Object catch (e) {
+      if (mounted) {
+        setState(() => _serviceNotice = _errorMessage(e, '分析服务暂不可用，请稍后重试'));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _stage = '';
+        });
+      }
     }
   }
 
@@ -306,13 +336,28 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
 
   Future<void> _prepareAndSubmit() async {
     if (_endpoint.isEmpty) {
-      await _configureEndpoint();
+      await (_configurationFuture ??= _resolveConfiguration());
       if (!mounted || _endpoint.isEmpty) return;
     }
     final controller = widget.controller;
+    await controller.requestSnapshot();
+    if (!mounted) return;
+    final sourceDurationMs = controller.duration.inMilliseconds;
+    if (!controller.isReady || sourceDurationMs <= 0) {
+      _message('视频尚未就绪，请稍后再试');
+      return;
+    }
     final range = _useRange ? controller.loopController.range : null;
+    if (_useRange && range == null) {
+      _message('请先设置 A-B 区间，再开始分析');
+      return;
+    }
     final start = range?.start.inMilliseconds ?? 0;
-    final end = range?.end.inMilliseconds ?? controller.duration.inMilliseconds;
+    final end = range?.end.inMilliseconds ?? sourceDurationMs;
+    if (end > sourceDurationMs) {
+      _message('当前 A-B 超出视频时长，请调整区间后重试');
+      return;
+    }
     if (end - start < 2000 || end - start > 600000) {
       _message('请选择 2 秒至 10 分钟的视频或 A-B 区间');
       return;
@@ -320,8 +365,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     late AlgorithmEndpoint endpoint;
     try {
       endpoint = AlgorithmEndpoint(_endpoint, allowLocalHttp: true);
-    } on FormatException catch (e) {
-      _message(e.message);
+    } on FormatException {
+      setState(() => _serviceNotice = '分析服务暂不可用，请稍后重试');
       return;
     }
     await controller.pause();
@@ -333,7 +378,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           _operation == AlgorithmOperation.chords ? '分析当前视频的和弦？' : '分离当前视频的音轨？',
         ),
         content: Text(
-          '「${widget.source.title}」\n${_time(start)}–${_time(end)}\n仅提取并上传此区间的音频，视频保留在本机。\n接收服务：${endpoint.origin}',
+          '「${widget.source.title}」\n${_time(start)}–${_time(end)}\n仅提取并上传此区间的音频用于分析，视频保留在本机。',
         ),
         actions: [
           TextButton(
@@ -358,12 +403,21 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     bool handedOff = false;
     setState(() {
       _busy = true;
-      _stage = '正在提取当前视频音频…';
+      _stage = '正在连接分析服务…';
+      _serviceNotice = null;
       _progress = null;
     });
     try {
+      await service.checkConnection(endpoint.origin.toString());
+      if (!mounted) return;
+      setState(() => _stage = '正在提取当前视频音频…');
       final before = await File(widget.path).stat();
-      final extracted = await extractor.extract(widget.path, start, end);
+      final extracted = await extractor.extract(
+        widget.path,
+        start,
+        end,
+        sourceDurationMs: sourceDurationMs,
+      );
       input = extracted.input;
       if (!mounted) return;
       final after = await File(widget.path).stat();
@@ -375,7 +429,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         path: widget.path,
         sourceBytes: before.size,
         modifiedMs: before.modified.millisecondsSinceEpoch,
-        sourceDurationMs: controller.duration.inMilliseconds,
+        sourceDurationMs: sourceDurationMs,
         startMs: start,
         durationMs: end - start,
         inputSha256: extracted.sha256,
@@ -413,7 +467,11 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       } on Object {
         handedOff = true;
       }
-      _message(_errorMessage(e, '分析准备失败，请检查连接后重试'));
+      final message = _errorMessage(e, '分析准备失败，请稍后重试');
+      if (mounted && e is AlgorithmApiError) {
+        setState(() => _serviceNotice = message);
+      }
+      _message(message);
     } finally {
       if (input != null && !handedOff) {
         await importer.deleteInput(input.path).catchError((Object _) {});
@@ -734,9 +792,6 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
               t.mediaBindingJson != null,
         )
         .toList();
-    if (_endpoint.isEmpty && _tasks.isNotEmpty) {
-      _endpoint = _tasks.first.endpoint;
-    }
     return ExpansionTile(
       controller: _expansion,
       initiallyExpanded: true,
@@ -766,7 +821,9 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           contentPadding: EdgeInsets.zero,
           title: const Text('仅分析当前 A-B 区间'),
           value: _useRange,
-          onChanged: _busy || widget.controller.loopController.range == null
+          onChanged:
+              _busy ||
+                  (widget.controller.loopController.range == null && !_useRange)
               ? null
               : (v) => setState(() => _useRange = v),
         ),
@@ -778,11 +835,14 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
             _operation == AlgorithmOperation.chords ? '分析当前视频和弦' : '分离当前视频音轨',
           ),
         ),
-        TextButton(
-          key: const Key('video_analysis_endpoint'),
-          onPressed: _busy ? null : _configureEndpoint,
-          child: Text(_endpoint.isEmpty ? '连接分析服务' : '更改分析服务地址'),
-        ),
+        if (_serviceNotice != null) ...[
+          Text(_serviceNotice!),
+          TextButton(
+            key: const Key('video_analysis_retry_connection'),
+            onPressed: _busy ? null : _retryConnection,
+            child: const Text('重试连接'),
+          ),
+        ],
         if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
         if (_restoreNotice != null) Text(_restoreNotice!),
         if (_rememberedTask != null && !widget.controller.stemsLoaded)
@@ -958,6 +1018,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
               .firstOrNull;
     return [
       if (result.keyEstimate.isNotEmpty) Text('调性参考：${result.keyEstimate}'),
+      if (result.hasTailTimingDifference)
+        const Text('结尾时长有轻微差异，保留原始和弦时间；定位仍需人工校准。'),
       Text(
         zero == null
             ? '当前为分析相对时间。校准后可随视频显示和定位。'
@@ -974,6 +1036,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
 String _time(int ms) =>
     '${ms ~/ 60000}:${((ms ~/ 1000) % 60).toString().padLeft(2, '0')}.${(ms % 1000).toString().padLeft(3, '0')}';
 String _errorMessage(Object error, String fallback) {
+  if (error is AlgorithmApiError) return error.message;
   if (error is FormatException) return error.message;
   if (error is PlatformException && error.message != null) {
     return error.message!;
