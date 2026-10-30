@@ -11,6 +11,7 @@ import 'domain/algorithm_task.dart';
 import 'domain/algorithm_configuration.dart';
 import 'data/stem_practice_target_repository.dart';
 import 'data/video_audio_extractor.dart';
+import 'data/video_mix_preferences.dart';
 
 final algorithmAudioImportProvider = Provider<AlgorithmAudioImport>(
   (ref) => const MethodChannelAlgorithmAudioImport(),
@@ -46,6 +47,10 @@ final algorithmMixPlatformProvider = Provider<AlgorithmMixPlatform>(
 final stemMixPreferencesProvider = Provider<StemMixPreferences>(
   (ref) =>
       StemMixPreferences(ref.watch(algorithmStemPlatformProvider).directory),
+);
+final videoMixPreferencesProvider = Provider<VideoMixPreferences>(
+  (ref) =>
+      VideoMixPreferences(ref.watch(algorithmStemPlatformProvider).directory),
 );
 final stemPracticeTargetRepositoryProvider =
     Provider<StemPracticeTargetRepository>(

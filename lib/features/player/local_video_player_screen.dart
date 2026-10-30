@@ -529,6 +529,8 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                         requestedOperation: _requestedAnalysis,
                                         requestRevision: _analysisRevision,
                                         onSaveLoop: _saveCurrentLoop,
+                                        recordingActive:
+                                            _recordingWorkflowActive,
                                       )
                                     : null,
                                 recordingPanel: PracticeRecordingPanel(

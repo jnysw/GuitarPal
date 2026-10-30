@@ -113,6 +113,46 @@ void main() {
         expect(state!['stemsLoaded'], isFalse);
         expect(state['videoAudioVolume'] as num, closeTo(.65, .001));
         expect(state['hasVideoFrame'], isTrue);
+        controller.clearLoop();
+        await controller.seek(const Duration(milliseconds: 3500));
+        await controller.loadStems(
+          {'guitar': stem.path},
+          1000,
+          2000,
+          preservePosition: true,
+          onlyIfPaused: true,
+          initialGains: {'guitar': .21},
+        );
+        state = await channel.invokeMapMethod('snapshot');
+        expect(state!['positionMilliseconds'], closeTo(3500, 150));
+        expect(
+          state['stemsActive'],
+          isFalse,
+        ); // A restored range must not move a plan's position.
+        expect(state['playing'], isFalse);
+        await controller.clearStems();
+        await controller.seek(const Duration(milliseconds: 4000));
+        await controller.play();
+        await _wait(channel, (s) => s['playing'] == true);
+        await expectLater(
+          controller.loadStems(
+            {'guitar': stem.path},
+            1000,
+            2000,
+            preservePosition: true,
+            onlyIfPaused: true,
+          ),
+          throwsA(
+            isA<PlatformException>().having(
+              (e) => e.code,
+              'code',
+              'restore_skipped',
+            ),
+          ),
+        );
+        state = await channel.invokeMapMethod('snapshot');
+        expect(state!['playing'], isTrue);
+        expect(state['stemsLoaded'], isFalse);
       } finally {
         await controller?.pause();
         controller?.dispose();

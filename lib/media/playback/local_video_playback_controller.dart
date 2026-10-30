@@ -31,8 +31,11 @@ abstract interface class LocalVideoStemBridge {
   Future<void> loadStems(
     Map<String, String> paths,
     int startMs,
-    int durationMs,
-  );
+    int durationMs, {
+    bool preservePosition = false,
+    bool onlyIfPaused = false,
+    Map<String, double>? initialGains,
+  });
   Future<void> setStemGains(Map<String, double> gains);
   Future<void> clearStems();
 }
@@ -69,11 +72,17 @@ class MethodChannelLocalVideoPlayerBridge
   Future<void> loadStems(
     Map<String, String> paths,
     int startMs,
-    int durationMs,
-  ) => _channel.invokeMethod<void>('loadStems', {
+    int durationMs, {
+    bool preservePosition = false,
+    bool onlyIfPaused = false,
+    Map<String, double>? initialGains,
+  }) => _channel.invokeMethod<void>('loadStems', {
     'tracks': paths.entries.map((e) => {'id': e.key, 'path': e.value}).toList(),
     'startMs': startMs,
     'durationMs': durationMs,
+    'preservePosition': preservePosition,
+    'onlyIfPaused': onlyIfPaused,
+    'gains': initialGains,
   });
   @override
   Future<void> setStemGains(Map<String, double> gains) =>
@@ -184,15 +193,21 @@ class LocalVideoPlaybackController extends ChangeNotifier {
   Future<void> loadStems(
     Map<String, String> paths,
     int startMs,
-    int durationMs,
-  ) async {
+    int durationMs, {
+    bool preservePosition = false,
+    bool onlyIfPaused = false,
+    Map<String, double>? initialGains,
+  }) async {
     final bridge = _bridge;
     if (bridge is! LocalVideoStemBridge) throw UnsupportedError('视频音轨切换不可用');
-    await pause();
+    if (!onlyIfPaused) await pause();
     await (bridge as LocalVideoStemBridge).loadStems(
       paths,
       startMs,
       durationMs,
+      preservePosition: preservePosition,
+      onlyIfPaused: onlyIfPaused,
+      initialGains: initialGains,
     );
     await requestSnapshot();
   }

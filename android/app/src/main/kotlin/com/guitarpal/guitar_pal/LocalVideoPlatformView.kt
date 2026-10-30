@@ -164,8 +164,14 @@ class LocalVideoPlatformView(
                 val tracks = call.argument<List<Map<String, Any?>>>("tracks")
                 val start = call.argument<Number>("startMs")?.toLong()
                 val duration = call.argument<Number>("durationMs")?.toLong()
+                val preservePosition = call.argument<Boolean>("preservePosition") == true
+                val onlyIfPaused = call.argument<Boolean>("onlyIfPaused") == true
+                val gains = call.argument<Map<String, Number>>("gains")
                 if (tracks == null || start == null || duration == null || start < 0 || duration < 2000 || start + duration > safeDuration()) {
                     result.error("invalid_stems", "分轨区间超出当前视频", null); return
+                }
+                if (onlyIfPaused && (safeIsPlaying() || pendingPlay)) {
+                    result.error("restore_skipped", "视频已开始播放，保留当前音轨", null); return
                 }
                 pauseAll(); clearStemEngine()
                 val token = stemGeneration
@@ -176,12 +182,20 @@ class LocalVideoPlatformView(
                         handler.post {
                             if (isDisposed || token != stemGeneration) engine.close()
                             else {
+                                if (onlyIfPaused && (safeIsPlaying() || pendingPlay)) {
+                                    engine.close(); pendingStemLoad = null
+                                    result.error("restore_skipped", "视频已开始播放，保留当前音轨", null)
+                                    return@post
+                                }
                                 try {
                                     require(kotlin.math.abs((engine.snapshot()["durationMs"] as Long) - duration) <= 100) { "分轨时长与视频分析区间不一致" }
                                     stems = engine; stemStart = start; stemDuration = duration
-                                    stemGains = tracks.associate { it["id"] as String to 1.0 }
+                                    val ids = tracks.map { it["id"] as String }.toSet()
+                                    require(gains == null || gains.keys == ids) { "音轨音量与文件不一致" }
+                                    stemGains = gains?.mapValues { it.value.toDouble() } ?: ids.associateWith { 1.0 }
                                     configureStems()
-                                    val target = safePosition().toLong().takeIf { it in start until start + duration } ?: start
+                                    val position = safePosition().toLong()
+                                    val target = if (preservePosition) position else position.takeIf { it in start until start + duration } ?: start
                                     routeStems(target, false); seekPicture(target.toInt())
                                     pendingStemLoad = null; result.success(null); emitState(positionOverride = target.toInt())
                                 } catch (e: Throwable) { pendingStemLoad = null; engine.close(); clearStemEngine(); result.error("stem_load_failed", e.message, null) }

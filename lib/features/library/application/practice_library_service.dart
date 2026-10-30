@@ -8,12 +8,14 @@ class PracticeLibraryService {
     this._repository, {
     this.localVideoGateway,
     this.metadataLoader,
+    this.deleteVideoMixPreferences,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
   final PracticeSourceRepository _repository;
   final LocalVideoGateway? localVideoGateway;
   final SourceMetadataLoader? metadataLoader;
+  final Future<void> Function(String sourceId)? deleteVideoMixPreferences;
   final DateTime Function() _clock;
 
   Future<void> rename(PracticeSource source, String requestedTitle) async {
@@ -113,6 +115,11 @@ class PracticeLibraryService {
 
   Future<void> delete(PracticeSource source) async {
     await _repository.delete(source.id);
+    try {
+      await deleteVideoMixPreferences?.call(source.id);
+    } on Object {
+      // A settings cleanup failure must not undo a successful library deletion.
+    }
 
     final uri = source.canonicalUri;
     if (source.platform != SourcePlatform.local ||

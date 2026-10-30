@@ -15,6 +15,9 @@ import '../../audio_tools/data/algorithm_audio_import.dart';
 import '../../audio_tools/domain/algorithm_task.dart';
 import '../../audio_tools/domain/legacy_algorithm_models.dart';
 import '../../audio_tools/domain/video_analysis_binding.dart';
+import '../../audio_tools/domain/video_mix_selection.dart';
+import '../../audio_tools/domain/stem_mix_settings.dart';
+import '../../audio_tools/data/video_mix_preferences.dart';
 import 'video_analysis_timeline.dart';
 
 /// In-place tools for the current video. This never starts another practice session.
@@ -28,6 +31,7 @@ class VideoAnalysisPanel extends ConsumerStatefulWidget {
     this.requestedOperation,
     this.requestRevision = 0,
     this.onSaveLoop,
+    this.recordingActive = false,
     super.key,
   });
   final PracticeSource source;
@@ -38,6 +42,7 @@ class VideoAnalysisPanel extends ConsumerStatefulWidget {
   final AlgorithmOperation? requestedOperation;
   final int requestRevision;
   final VoidCallback? onSaveLoop;
+  final bool recordingActive;
   @override
   ConsumerState<VideoAnalysisPanel> createState() => _VideoAnalysisPanelState();
 }
@@ -58,11 +63,19 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   List<AlgorithmTaskRecord> _tasks = [];
   Map<String, double> _volumes = {};
   final Set<String> _muted = {}, _solo = {};
+  late final VideoMixPreferences _preferences;
+  VideoMixSelection? _saved;
+  AlgorithmTaskRecord? _pendingRestore, _rememberedTask;
+  String? _loadedTaskId, _restoreNotice;
+  bool _loadingStems = false, _saveFailed = false, _userNavigated = false;
+  int _generation = 0;
   @override
   void initState() {
     super.initState();
     _endpoint = ref.read(algorithmEndpointProvider);
+    _preferences = ref.read(videoMixPreferencesProvider);
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_restoreSelection());
   }
 
   void _message(String value) {
@@ -75,10 +88,26 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   @override
   void didUpdateWidget(covariant VideoAnalysisPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      _generation++;
+      _loadedTaskId = null;
+      _pendingRestore = null;
+      _busy = _loadingStems = false;
+      unawaited(_restoreSelection());
+    }
+    if (widget.recordingActive && !oldWidget.recordingActive) {
+      _cancelStemLoad(_saved == null ? '录音期间使用视频原声' : '录音期间使用视频原声，分轨设置已保留');
+    }
+    if (widget.enabled && _pendingRestore != null && !widget.recordingActive) {
+      final task = _pendingRestore!;
+      _pendingRestore = null;
+      unawaited(_loadStems(task, restoring: true));
+    }
     if (widget.requestRevision != oldWidget.requestRevision &&
         widget.requestedOperation != null &&
         !_busy) {
       _operation = widget.requestedOperation!;
+      _userNavigated = true;
       _open(true);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -89,6 +118,123 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           );
         }
       });
+    }
+  }
+
+  Future<void> _restoreSelection() async {
+    final token = _generation;
+    final repository = ref.read(algorithmTaskRepositoryProvider);
+    try {
+      final saved = await _preferences.load(widget.source.id);
+      if (!mounted || token != _generation || saved == null) return;
+      final task = await repository.get(saved.taskId);
+      if (!mounted || token != _generation) return;
+      if (task == null ||
+          task.state != AlgorithmTaskState.completed ||
+          task.linkedSourceId != widget.source.id ||
+          task.operation != AlgorithmOperation.separation ||
+          task.resultJson == null ||
+          task.mediaBindingJson == null) {
+        throw const FormatException('上次分轨记录已不存在，请重新选择分析结果');
+      }
+      final binding = _binding(task);
+      await _verify(binding);
+      if (saved.inputSha256 != binding.inputSha256) {
+        throw const FormatException('上次分轨的输入已变化，请重新选择');
+      }
+      if (!mounted || token != _generation) return;
+      setState(() {
+        _saved = saved;
+        _rememberedTask = task;
+        if (!_userNavigated) _operation = AlgorithmOperation.separation;
+        _restoreNotice = saved.useStems ? null : '上次选择：视频原声，分轨音量设置已保留';
+      });
+      if (saved.useStems && !widget.recordingActive) {
+        if (widget.enabled) {
+          await _loadStems(task, restoring: true);
+        } else {
+          _pendingRestore = task;
+        }
+      }
+    } on MissingPluginException {
+      // Non-Android/widget-only hosts have no private media directory.
+    } on Object catch (e) {
+      if (mounted && token == _generation) {
+        setState(() => _restoreNotice = _errorMessage(e, '无法读取上次分轨设置，可手动载入'));
+      }
+    }
+  }
+
+  void _cancelStemLoad(String notice) {
+    _generation++;
+    _pendingRestore = null;
+    final shouldClear = _loadingStems || widget.controller.stemsLoaded;
+    if (_loadingStems) _busy = false;
+    _loadingStems = false;
+    _loadedTaskId = null;
+    _restoreNotice = notice;
+    if (shouldClear) {
+      final token = _generation;
+      final controller = widget.controller;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            token == _generation &&
+            identical(widget.controller, controller)) {
+          unawaited(controller.clearStems().catchError((Object _) {}));
+        }
+      });
+    }
+  }
+
+  bool _canLoad(int token) =>
+      mounted &&
+      token == _generation &&
+      widget.enabled &&
+      !widget.recordingActive &&
+      _foreground;
+
+  Future<void> _persist(VideoMixSelection selection) async {
+    _saved = selection;
+    try {
+      await _preferences.save(widget.source.id, selection);
+      if (mounted && identical(_saved, selection)) {
+        setState(() => _saveFailed = false);
+      }
+    } on Object {
+      if (mounted && identical(_saved, selection)) {
+        setState(() => _saveFailed = true);
+      }
+    }
+  }
+
+  VideoMixSelection _currentSelection() => VideoMixSelection(
+    taskId: _rememberedTask!.id,
+    inputSha256: _binding(_rememberedTask!).inputSha256,
+    useStems: true,
+    controls: {
+      for (final id in videoStemIds)
+        id: StemMixControl(
+          volume: _volumes[id] ?? 1,
+          muted: _muted.contains(id),
+          solo: _solo.contains(id),
+        ),
+    },
+  );
+
+  Future<void> _useOriginal() async {
+    if (_busy || !widget.enabled) return;
+    final token = ++_generation;
+    _pendingRestore = null;
+    try {
+      await widget.controller.clearStems();
+      if (!mounted || token != _generation) return;
+      setState(() {
+        _loadedTaskId = null;
+        _restoreNotice = '已切回视频原声，分轨设置已保留';
+      });
+      if (_saved != null) await _persist(_saved!.withMode(false));
+    } on Object {
+      _message('切回原声失败，请重试');
     }
   }
 
@@ -296,17 +442,28 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     }
   }
 
-  Future<void> _loadStems(AlgorithmTaskRecord task) async {
-    if (_busy) return;
+  Future<void> _loadStems(
+    AlgorithmTaskRecord task, {
+    bool restoring = false,
+  }) async {
+    if (_busy || !widget.enabled || widget.recordingActive) return;
+    if (restoring && widget.controller.isPlaying) {
+      setState(() => _restoreNotice = '视频已开始播放，保留原声；可手动恢复上次分轨');
+      return;
+    }
+    final token = ++_generation;
+    _pendingRestore = null;
+    final controller = widget.controller;
     final store = ref.read(algorithmStemStoreProvider);
     setState(() {
-      _busy = true;
-      _stage = '正在准备当前视频的音轨…';
+      _busy = _loadingStems = true;
+      _stage = restoring ? '正在恢复本机分轨…' : '正在准备当前视频的音轨…';
     });
     try {
-      await widget.controller.pause();
+      if (!restoring) await controller.pause();
       final binding = _binding(task);
       await _verify(binding);
+      if (!_canLoad(token)) return;
       final result = LegacySeparationResult.fromJson(
         algorithmObject(jsonDecode(task.resultJson!)),
         AlgorithmEndpoint(task.endpoint, allowLocalHttp: true),
@@ -316,38 +473,83 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       }
       final paths = <String, String>{};
       for (final stem in result.stems.where((s) => s.id != 'instrumental')) {
-        final file = await store.download(
-          task.id,
-          stem,
-          onProgress: (received, total) {
-            if (mounted) {
-              setState(() {
-                _stage = '下载${stem.displayName}…';
-                _progress = received / total;
-              });
-            }
-          },
-        );
+        if (!_canLoad(token)) return;
+        final file = restoring
+            ? await store.localFile(task.id, stem)
+            : await store.download(
+                task.id,
+                stem,
+                onProgress: (received, total) {
+                  if (_canLoad(token)) {
+                    setState(() {
+                      _stage = '下载${stem.displayName}…';
+                      _progress = received / total;
+                    });
+                  }
+                },
+              );
+        if (file == null) {
+          throw const FormatException('上次分轨的本机文件不完整，保留原声；可手动恢复并下载');
+        }
         paths[stem.id] = file.path;
       }
-      if (!mounted) return;
+      if (!_canLoad(token)) return;
       await _verify(binding);
-      await widget.controller.loadStems(
+      if (!_canLoad(token)) return;
+      final selection =
+          _saved?.taskId == task.id &&
+              _saved?.inputSha256 == binding.inputSha256
+          ? _saved!.withMode(true)
+          : VideoMixSelection(
+              taskId: task.id,
+              inputSha256: binding.inputSha256,
+              useStems: true,
+            );
+      await controller.loadStems(
         paths,
         binding.startMs,
         binding.durationMs,
+        preservePosition: restoring,
+        onlyIfPaused: restoring,
+        initialGains: selection.gains,
       );
+      if (!_canLoad(token)) return;
       setState(() {
-        _volumes = {for (final id in paths.keys) id: 1};
-        _muted.clear();
-        _solo.clear();
+        _rememberedTask = task;
+        _loadedTaskId = task.id;
+        _volumes = {
+          for (final id in paths.keys) id: selection.controls[id]!.volume,
+        };
+        _muted
+          ..clear()
+          ..addAll(
+            selection.controls.entries
+                .where((e) => e.value.muted)
+                .map((e) => e.key),
+          );
+        _solo
+          ..clear()
+          ..addAll(
+            selection.controls.entries
+                .where((e) => e.value.solo)
+                .map((e) => e.key),
+          );
+        _restoreNotice = restoring ? '已恢复上次分轨设置，点击播放即可练习' : null;
       });
+      await _persist(selection);
     } on Object catch (e) {
-      _message(_errorMessage(e, '无法使用分轨，请检查连接或重新下载'));
+      if (mounted && token == _generation) {
+        final message = _errorMessage(e, '无法使用分轨，请检查连接或重新下载');
+        if (restoring) {
+          setState(() => _restoreNotice = message);
+        } else {
+          _message(message);
+        }
+      }
     } finally {
-      if (mounted) {
+      if (mounted && token == _generation) {
         setState(() {
-          _busy = false;
+          _busy = _loadingStems = false;
           _stage = '';
           _progress = null;
         });
@@ -356,17 +558,17 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   }
 
   Future<void> _applyGains() async {
-    final anySolo = _solo.isNotEmpty;
+    if (_loadedTaskId == null || !widget.enabled || widget.recordingActive) {
+      return;
+    }
+    final selection = _currentSelection();
+    final saving = _persist(selection);
     try {
-      await widget.controller.setStemGains({
-        for (final id in _volumes.keys)
-          id: _muted.contains(id) || (anySolo && !_solo.contains(id))
-              ? 0
-              : _volumes[id]!,
-      });
+      await widget.controller.setStemGains(selection.gains);
     } on Object {
       _message('音轨控制失败，请重新载入分轨');
     }
+    await saving;
   }
 
   Future<void> _seekVerified(VideoAnalysisBinding binding, int sourceMs) async {
@@ -494,10 +696,14 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground && _loadingStems) {
+      setState(() => _cancelStemLoad('恢复已暂停，可重新选择分轨；已下载文件保留'));
+    }
   }
 
   @override
   void dispose() {
+    _generation++;
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _expansion.dispose();
@@ -510,7 +716,13 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       return ExpansionTile(
         controller: _expansion,
         title: const Text('和弦与分轨'),
-        subtitle: const Text('直接分析当前视频，在这里练习'),
+        subtitle: Text(
+          _saveFailed
+              ? '设置保存失败，展开可重试'
+              : widget.controller.stemsLoaded
+              ? '已载入分轨，展开调整音量'
+              : _restoreNotice ?? '直接分析当前视频，在这里练习',
+        ),
         onExpansionChanged: _open,
       );
     }
@@ -545,7 +757,10 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           selected: {_operation},
           onSelectionChanged: _busy
               ? null
-              : (values) => setState(() => _operation = values.single),
+              : (values) => setState(() {
+                  _operation = values.single;
+                  _userNavigated = true;
+                }),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -569,11 +784,29 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           child: Text(_endpoint.isEmpty ? '连接分析服务' : '更改分析服务地址'),
         ),
         if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
+        if (_restoreNotice != null) Text(_restoreNotice!),
+        if (_rememberedTask != null && !widget.controller.stemsLoaded)
+          TextButton(
+            key: const Key('video_mix_restore'),
+            onPressed: _busy || !widget.enabled
+                ? null
+                : () => _loadStems(_rememberedTask!),
+            child: const Text('恢复上次分轨'),
+          ),
+        if (_saveFailed) ...[
+          const Text('声音设置保存失败，重新打开时可能无法恢复'),
+          TextButton(
+            key: const Key('video_mix_retry_save'),
+            onPressed: _saved == null ? null : () => _persist(_saved!),
+            child: const Text('重试保存设置'),
+          ),
+        ],
         if (widget.controller.stemsLoaded) ...[
           const Divider(),
           Text(widget.controller.stemsActive ? '当前播放：分轨（原视频已静音）' : '当前区间外播放原声'),
           TextButton(
-            onPressed: _busy ? null : widget.controller.clearStems,
+            key: const Key('video_mix_original'),
+            onPressed: _busy || !widget.enabled ? null : _useOriginal,
             child: const Text('切回视频原声'),
           ),
           ExpansionTile(
@@ -587,32 +820,43 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
                       children: [
                         Expanded(child: Text(_stemName(id))),
                         FilterChip(
+                          key: Key('video_stem_mute_$id'),
                           label: const Text('静音'),
                           selected: _muted.contains(id),
-                          onSelected: (v) {
-                            setState(() {
-                              v ? _muted.add(id) : _muted.remove(id);
-                            });
-                            unawaited(_applyGains());
-                          },
+                          onSelected: _busy || !widget.enabled
+                              ? null
+                              : (v) {
+                                  setState(() {
+                                    v ? _muted.add(id) : _muted.remove(id);
+                                  });
+                                  unawaited(_applyGains());
+                                },
                         ),
                         const SizedBox(width: 8),
                         FilterChip(
+                          key: Key('video_stem_solo_$id'),
                           label: const Text('独奏'),
                           selected: _solo.contains(id),
-                          onSelected: (v) {
-                            setState(() {
-                              v ? _solo.add(id) : _solo.remove(id);
-                              if (v) _muted.remove(id);
-                            });
-                            unawaited(_applyGains());
-                          },
+                          onSelected: _busy || !widget.enabled
+                              ? null
+                              : (v) {
+                                  setState(() {
+                                    v ? _solo.add(id) : _solo.remove(id);
+                                    if (v) _muted.remove(id);
+                                  });
+                                  unawaited(_applyGains());
+                                },
                         ),
                       ],
                     ),
                     Slider(
+                      key: Key('video_stem_volume_$id'),
+                      divisions: 100,
+                      label: '${(_volumes[id]! * 100).round()}%',
                       value: _volumes[id]!,
-                      onChanged: (v) => setState(() => _volumes[id] = v),
+                      onChanged: _busy || !widget.enabled
+                          ? null
+                          : (v) => setState(() => _volumes[id] = v),
                       onChangeEnd: (_) => unawaited(_applyGains()),
                     ),
                   ],
@@ -654,6 +898,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
               Text(
                 '${_time(binding.startMs)}–${_time(binding.endMs)} · ${task.operation == AlgorithmOperation.chords ? '和弦' : '音轨'}',
               ),
+              if (_loadedTaskId == task.id && widget.controller.stemsLoaded)
+                const Text('当前使用的分轨'),
               if (binding.waveform.isNotEmpty) _timeline(task, binding),
               Text(task.message ?? task.state.name),
               if (task.shouldPoll)

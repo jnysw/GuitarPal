@@ -37,6 +37,20 @@ void main() {
     );
   });
 
+  test('deleting a source cleans its local mix preference without making cleanup failure undo deletion', () async {
+    final cleaned = <String>[];
+    final service = PracticeLibraryService(
+      repository,
+      deleteVideoMixPreferences: (id) async {
+        cleaned.add(id);
+        throw StateError('private settings unavailable');
+      },
+    );
+    await service.delete(source);
+    expect(cleaned, [source.id]);
+    expect(await repository.getById(source.id), isNull);
+  });
+
   test('rename rejects a blank title', () async {
     expect(
       () => service.rename(source, '   '),
