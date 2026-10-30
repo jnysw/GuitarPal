@@ -16,8 +16,9 @@ internal class StemPcmWave private constructor(
 
     companion object {
         fun open(id: String, path: String, root: File): StemPcmWave {
-            val source = File(path).canonicalFile
-            require(source.parentFile == root.canonicalFile && source.isFile && source.extension == "wav") { "请选择已下载的 WAV 音轨" }
+            val original = File(path).canonicalFile
+            require(original.parentFile == root.canonicalFile && original.isFile && original.extension in setOf("wav", "flac")) { "请选择已下载的 WAV / FLAC 音轨" }
+            val source = if (original.extension == "flac") StemFlacDecoder.decode(original) else original
             require(source.length() in 44L..(256L * 1024 * 1024)) { "音轨大小无效" }
             val file = RandomAccessFile(source, "r")
             try {

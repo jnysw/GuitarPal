@@ -87,7 +87,7 @@ class LegacyAlgorithmApi implements AlgorithmApi {
     final abort = Completer<void>();
     final query = operation == AlgorithmOperation.chords
         ? {'smooth_method': 'hmm', 'include_raw_chords': 'false'}
-        : {'output_format': 'wav_s16'};
+        : {'output_format': 'flac16'};
     // Device stays under the server's control; no arbitrary checkpoint/URL.
     final route = operation == AlgorithmOperation.chords
         ? '/api/v1/jobs'

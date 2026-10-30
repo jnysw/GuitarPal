@@ -28,6 +28,89 @@ import '../../support/algorithm_fixtures.dart';
 
 void main() {
   testWidgets(
+    'same range reuses completed analysis without contacting server',
+    (tester) async {
+      final f = (await tester.runAsync(_Fixture.create))!;
+      try {
+        await tester.runAsync(
+          () => File('${f.root.path}/video_workspace/source.json').delete(),
+        );
+        await f.show(tester);
+        await tester.tap(find.text('和弦与分轨'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('分轨').first);
+        await tester.pumpAndSettle();
+        await _until(
+          tester,
+          () => find.text('在当前视频中使用分轨').evaluate().isNotEmpty,
+        );
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('video_analysis_submit')),
+            )
+            .onPressed!();
+        await _until(
+          tester,
+          () => find.text('这个区间已经分过轨').evaluate().isNotEmpty,
+        );
+        await tester.tap(find.text('使用已有结果'));
+        await _until(tester, () => f.controller.stemsLoaded);
+        expect(f.networkRequests, 0);
+        expect(f.bridge.loadCount, 1);
+      } finally {
+        await f.close(tester);
+      }
+    },
+  );
+
+  testWidgets('pause download keeps result available for manual retry', (
+    tester,
+  ) async {
+    final f = (await tester.runAsync(_Fixture.create))!;
+    f.store = _PausedStore(f.root);
+    try {
+      await tester.runAsync(
+        () => File('${f.root.path}/video_workspace/source.json').delete(),
+      );
+      await f.show(tester);
+      await tester.tap(find.text('和弦与分轨'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('分轨').first);
+      await tester.pumpAndSettle();
+      await _until(tester, () => find.text('在当前视频中使用分轨').evaluate().isNotEmpty);
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '在当前视频中使用分轨'))
+          .onPressed!();
+      await _until(
+        tester,
+        () => find
+            .byKey(const Key('video_pause_stem_download'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      tester
+          .widget<TextButton>(
+            find.byKey(const Key('video_pause_stem_download')),
+          )
+          .onPressed!();
+      await _until(
+        tester,
+        () => find.textContaining('下载已暂停').evaluate().isNotEmpty,
+      );
+      expect(f.controller.stemsLoaded, isFalse);
+      final retry = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, '在当前视频中使用分轨'),
+      );
+      expect(retry.onPressed, isNotNull);
+      retry.onPressed!();
+      await _until(tester, () => f.controller.stemsLoaded);
+      expect(f.networkRequests, 0);
+    } finally {
+      await f.close(tester);
+    }
+  });
+
+  testWidgets(
     'fresh in-place load tolerates native loaded event arriving before load acknowledgement',
     (tester) async {
       final f = (await tester.runAsync(_Fixture.create))!;
@@ -151,7 +234,7 @@ void main() {
             () => find
                 .textContaining(
                   scenario == 'missing-cache'
-                      ? '本机文件不完整'
+                      ? '本机分轨尚未完整'
                       : scenario == 'changed-video'
                       ? '视频文件已变化'
                       : '视频已开始播放',
@@ -381,6 +464,9 @@ class _Fixture {
         ProviderScope(
           overrides: [
             databaseProvider.overrideWithValue(database),
+            algorithmEndpointProvider.overrideWithValue(
+              'https://algorithm.example',
+            ),
             videoMixPreferencesProvider.overrideWithValue(preferences),
             algorithmStemStoreProvider.overrideWithValue(store),
           ],
@@ -416,6 +502,31 @@ class _GatedStore extends AlgorithmStemStore {
     entered();
     await gate;
     return super.localFile(taskId, stem);
+  }
+}
+
+class _PausedStore extends AlgorithmStemStore {
+  _PausedStore(Directory root) : super(() async => root);
+  bool first = true;
+  @override
+  Future<Map<String, String>> downloadBatch(
+    String taskId,
+    List<LegacyStemFile> stems, {
+    StemDownloadCancellation? cancellation,
+    void Function(StemDownloadProgress)? onProgress,
+  }) async {
+    if (!first) {
+      return super.downloadBatch(
+        taskId,
+        stems,
+        cancellation: cancellation,
+        onProgress: onProgress,
+      );
+    }
+    first = false;
+    onProgress?.call(const StemDownloadProgress(100, 1000, 0, 6, 10));
+    await cancellation!.whenCancelled;
+    throw const StemDownloadPaused();
   }
 }
 
@@ -517,7 +628,7 @@ class _Bridge implements LocalVideoPlayerBridge, LocalVideoStemBridge {
 }
 
 Future<void> _until(WidgetTester tester, bool Function() ready) async {
-  for (var i = 0; i < 150; i++) {
+  for (var i = 0; i < 500; i++) {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 5)),

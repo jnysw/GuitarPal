@@ -33,13 +33,10 @@ void main() {
           await api.result(job, AlgorithmOperation.separation),
           api.endpoint,
         );
-        final paths = <String, String>{};
-        for (final stem in result.stems) {
-          paths[stem.id] = (await store.download(
-            'integration-mix-real',
-            stem,
-          )).path;
-        }
+        final paths = await store.downloadBatch(
+          'integration-mix-real',
+          result.stems,
+        );
         final six = Map<String, String>.from(paths)..remove('instrumental');
         await player.load(six);
         final settings = StemMixSettings(
@@ -68,12 +65,13 @@ void main() {
           ),
           ['vocals', 'instrumental'],
         );
-        await player.seek(2000);
+        final seekMs = (result.duration.inMilliseconds ~/ 2).clamp(0, 2000);
+        await player.seek(seekMs);
         await player.play();
         await Future<void>.delayed(const Duration(milliseconds: 400));
         expect(
           (await player.snapshot())['positionMs'],
-          greaterThanOrEqualTo(2000),
+          greaterThanOrEqualTo(seekMs),
         );
       } finally {
         api.close();

@@ -12,6 +12,7 @@ import '../../../media/playback/local_video_playback_controller.dart';
 import '../../../media/playback/loop_controller.dart';
 import '../../audio_tools/algorithm_providers.dart';
 import '../../audio_tools/data/algorithm_audio_import.dart';
+import '../../audio_tools/data/algorithm_stem_store.dart';
 import '../../audio_tools/domain/algorithm_task.dart';
 import '../../audio_tools/domain/legacy_algorithm_models.dart';
 import '../../audio_tools/domain/video_analysis_binding.dart';
@@ -73,6 +74,9 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   String? _loadedTaskId, _restoreNotice;
   bool _loadingStems = false, _saveFailed = false, _userNavigated = false;
   int _generation = 0;
+  StemDownloadCancellation? _downloadCancellation;
+  bool _networkDownload = false;
+  String? _downloadNotice;
   @override
   void initState() {
     super.initState();
@@ -102,6 +106,9 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   void didUpdateWidget(covariant VideoAnalysisPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
+      _downloadCancellation?.cancel();
+      _downloadCancellation = null;
+      _networkDownload = false;
       _generation++;
       _loadedTaskId = null;
       _pendingRestore = null;
@@ -179,11 +186,13 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   }
 
   void _cancelStemLoad(String notice) {
+    _downloadCancellation?.cancel();
     _generation++;
     _pendingRestore = null;
     final shouldClear = _loadingStems || widget.controller.stemsLoaded;
     if (_loadingStems) _busy = false;
     _loadingStems = false;
+    _networkDownload = false;
     _loadedTaskId = null;
     _restoreNotice = notice;
     if (shouldClear) {
@@ -380,6 +389,58 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     }
     await controller.pause();
     if (!mounted) return;
+    if (_operation == AlgorithmOperation.separation) {
+      final stat = await File(widget.path).stat();
+      AlgorithmTaskRecord? existing;
+      for (final task in _tasks) {
+        if (task.operation != _operation ||
+            task.resultJson == null ||
+            task.mediaBindingJson == null) {
+          continue;
+        }
+        try {
+          final b = _binding(task);
+          if (b.startMs == start &&
+              b.endMs == end &&
+              b.matches(widget.source.id, widget.path, stat)) {
+            LegacySeparationResult.fromJson(
+              algorithmObject(jsonDecode(task.resultJson!)),
+              AlgorithmEndpoint(task.endpoint, allowLocalHttp: true),
+            );
+            existing = task;
+            break;
+          }
+        } on FormatException {
+          /* skip invalid old results */
+        }
+      }
+      if (existing != null) {
+        if (!mounted) return;
+        final reuse = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('这个区间已经分过轨'),
+            content: const Text('可直接使用已有结果，继续未完成的下载，不用再次等待算法计算。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('重新分析'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('使用已有结果'),
+              ),
+            ],
+          ),
+        );
+        if (reuse == null || !mounted) return;
+        if (reuse) {
+          await _loadStems(existing);
+          return;
+        }
+      }
+    }
+    if (!mounted) return;
     final previousUnknown = _tasks.any((t) {
       if (t.operation != _operation ||
           t.state != AlgorithmTaskState.submissionUnknown ||
@@ -400,7 +461,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           _operation == AlgorithmOperation.chords ? '分析当前视频的和弦？' : '分离当前视频的音轨？',
         ),
         content: Text(
-          '「${widget.source.title}」\n${_time(start)}–${_time(end)}\n仅提取并上传此区间的音频用于分析，视频保留在本机。${previousUnknown ? '\n上次相同区间尚未确认接收状态，继续可能产生重复任务。' : ''}',
+          '「${widget.source.title}」\n${_time(start)}–${_time(end)}\n仅提取并上传此区间的音频用于分析，视频保留在本机。${_operation == AlgorithmOperation.separation && end - start > 60000 ? '\n长音频的计算与下载分别耗时。可取消并先设置较短 A-B，只分离需要练习的片段。' : ''}${previousUnknown ? '\n上次相同区间尚未确认接收状态，继续可能产生重复任务。' : ''}',
         ),
         actions: [
           TextButton(
@@ -540,8 +601,12 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     _pendingRestore = null;
     final controller = widget.controller;
     final store = ref.read(algorithmStemStoreProvider);
+    final cancellation = StemDownloadCancellation();
+    _downloadCancellation = cancellation;
     setState(() {
       _busy = _loadingStems = true;
+      _networkDownload = !restoring;
+      _downloadNotice = null;
       _stage = restoring ? '正在恢复本机分轨…' : '正在准备当前视频的音轨…';
     });
     try {
@@ -557,28 +622,44 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         throw const FormatException('分轨时间轴与本视频区间不一致');
       }
       final paths = <String, String>{};
-      for (final stem in result.mixStems) {
-        if (!_canLoad(token)) return;
-        final file = restoring
-            ? await store.localFile(task.id, stem)
-            : await store.download(
-                task.id,
-                stem,
-                onProgress: (received, total) {
-                  if (_canLoad(token)) {
-                    setState(() {
-                      _stage = '下载${stem.displayName}…';
-                      _progress = received / total;
-                    });
-                  }
-                },
-              );
-        if (file == null) {
-          throw const FormatException('上次分轨的本机文件不完整，保留原声；可手动恢复并下载');
+      if (restoring) {
+        for (final stem in result.mixStems) {
+          if (!_canLoad(token)) return;
+          final file = await store.localFile(task.id, stem);
+          if (file == null) {
+            throw const FormatException('本机分轨尚未完整，保留原声；点击继续下载，只补齐缺失部分');
+          }
+          paths[stem.id] = file.path;
         }
-        paths[stem.id] = file.path;
+      } else {
+        paths.addAll(
+          await store.downloadBatch(
+            task.id,
+            result.mixStems,
+            cancellation: cancellation,
+            onProgress: (p) {
+              if (!_canLoad(token)) return;
+              setState(() {
+                final speed = p.bytesPerSecond > 0
+                    ? ' · ${_bytes(p.bytesPerSecond.round())}/s'
+                    : '';
+                final eta = p.remaining == null
+                    ? ''
+                    : ' · 约剩 ${p.remaining!.inSeconds} 秒';
+                _stage =
+                    '下载音轨 ${p.completedFiles}/${p.totalFiles} · ${_bytes(p.receivedBytes)}/${_bytes(p.totalBytes)}$speed$eta';
+                _progress = p.fraction;
+              });
+            },
+          ),
+        );
       }
       if (!_canLoad(token)) return;
+      setState(() {
+        _networkDownload = false;
+        _stage = '下载完成，正在本机解码并载入混音…';
+        _progress = null;
+      });
       await _verify(binding);
       if (!_canLoad(token)) return;
       final selection =
@@ -632,17 +713,22 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       await _persist(selection);
     } on Object catch (e) {
       if (mounted && token == _generation) {
-        final message = _errorMessage(e, '无法使用分轨，请检查连接或重新下载');
+        final message = e is StemDownloadPaused
+            ? e.toString()
+            : _errorMessage(e, '分轨载入失败；已下载文件保留，可直接重试载入，无需重新分析');
         if (restoring) {
           setState(() => _restoreNotice = message);
         } else {
+          setState(() => _downloadNotice = message);
           _message(message);
         }
       }
     } finally {
       if (mounted && token == _generation) {
+        _downloadCancellation = null;
         setState(() {
           _busy = _loadingStems = false;
+          _networkDownload = false;
           _stage = '';
           _progress = null;
         });
@@ -940,6 +1026,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
 
   @override
   void dispose() {
+    _downloadCancellation?.cancel();
     _generation++;
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
@@ -1030,6 +1117,14 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           ),
         ],
         if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
+        if (_networkDownload && _downloadCancellation != null)
+          TextButton.icon(
+            key: const Key('video_pause_stem_download'),
+            onPressed: () => _downloadCancellation?.cancel(),
+            icon: const Icon(Icons.pause),
+            label: const Text('暂停下载，保留进度'),
+          ),
+        if (_downloadNotice != null) Text(_downloadNotice!),
         if (_restoreNotice != null) Text(_restoreNotice!),
         if (_rememberedTask != null && !widget.controller.stemsLoaded)
           TextButton(
@@ -1107,6 +1202,13 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
                 const Text('当前使用的分轨'),
               if (binding.waveform.isNotEmpty) _timeline(task, binding),
               Text(task.message ?? task.state.name),
+              if (task.operation == AlgorithmOperation.separation &&
+                  task.shouldPoll)
+                Text(
+                  task.state == AlgorithmTaskState.queued
+                      ? '等待服务器开始分轨；现在还没有下载音轨。'
+                      : '服务器正在处理分轨 · 任务用时 ${DateTime.now().toUtc().difference(task.createdAt).inSeconds.clamp(0, 86400)} 秒。音频越长通常越耗时；结果就绪后才开始下载。',
+                ),
               if (task.state == AlgorithmTaskState.submissionUnknown &&
                   task.remoteJobId == null)
                 Wrap(
@@ -1197,6 +1299,9 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
 
 String _time(int ms) =>
     '${ms ~/ 60000}:${((ms ~/ 1000) % 60).toString().padLeft(2, '0')}.${(ms % 1000).toString().padLeft(3, '0')}';
+String _bytes(int bytes) => bytes >= 1024 * 1024
+    ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
+    : '${(bytes / 1024).toStringAsFixed(0)} KB';
 String _errorMessage(Object error, String fallback) {
   if (error is AlgorithmApiError) return error.message;
   if (error is FormatException) return error.message;

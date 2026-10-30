@@ -14,6 +14,7 @@ import 'package:guitar_pal/media/playback/local_video_playback_controller.dart';
 import 'package:guitar_pal/media/playback/loop_controller.dart';
 
 import 'support/video_analysis_fixture.dart';
+import '../test/support/stem_flac_fixture.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +44,8 @@ void main() {
       expect(extracted.sha256, matches(RegExp(r'^[a-f0-9]{64}$')));
       final stem = File('${stemRoot.path}/integration-video_guitar.wav');
       await input.copy(stem.path);
+      final flac = File('${stemRoot.path}/integration-video_guitar.flac');
+      await flac.writeAsBytes(base64Decode(stemFlacFixtureBase64));
       final created = Completer<int>();
       LocalVideoPlaybackController? controller;
       try {
@@ -70,7 +73,7 @@ void main() {
         );
         await _wait(channel, (s) => s['ready'] == true);
         await controller.requestSnapshot();
-        await controller.loadStems({'guitar': stem.path}, 1000, 2000);
+        await controller.loadStems({'guitar': flac.path}, 1000, 2000);
         var state = await channel.invokeMapMethod<String, Object?>('snapshot');
         expect(state!['stemsActive'], isTrue);
         expect(state['videoAudioVolume'], 0.0);
@@ -179,7 +182,8 @@ void main() {
         controller?.dispose();
         await tester.pumpWidget(const SizedBox.shrink());
         await const MethodChannelAlgorithmAudioImport().deleteInput(input.path);
-        await stem.delete();
+        await AlgorithmStemStore(storage.directory)
+            .deleteTask('integration-video');
         await video.delete();
       }
     },

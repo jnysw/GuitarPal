@@ -232,7 +232,7 @@ void main() {
       client: MockClient((request) async {
         if (request.method == 'POST') {
           expect(request.url.path, '/api/v1/separation/jobs');
-          expect(request.url.queryParameters, {'output_format': 'wav_s16'});
+          expect(request.url.queryParameters, {'output_format': 'flac16'});
           expect(
             utf8.decode(request.bodyBytes, allowMalformed: true),
             contains('name="audio"'),
