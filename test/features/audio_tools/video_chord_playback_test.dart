@@ -57,31 +57,4 @@ void main() {
     expect(p.current(6000)?.displayLabel, 'Em');
     expect(p.sourceStart(result.segments[1]), 6000);
   });
-  test(
-    'common diagrams contain chord tones only and never invent an inversion',
-    () {
-      const openNotes = [4, 9, 2, 7, 11, 4];
-      const tones = {
-        'C': {0, 4, 7},
-        'D': {2, 6, 9},
-        'Em': {4, 7, 11},
-        'Am': {9, 0, 4},
-        'G': {7, 11, 2},
-      };
-      for (final entry in tones.entries) {
-        final frets = openChordFrets[entry.key]!;
-        for (var i = 0; i < 6; i++) {
-          if (frets[i] >= 0) {
-            expect(
-              entry.value.contains((openNotes[i] + frets[i]) % 12),
-              isTrue,
-              reason: entry.key,
-            );
-          }
-        }
-      }
-      expect(openChordFrets['C/E'], isNull);
-      expect(openChordFrets['未知'], isNull);
-    },
-  );
 }

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../media/playback/local_video_playback_controller.dart';
+import '../../chords/chord_providers.dart';
+import 'chord_practice_sheet.dart';
 import '../../audio_tools/algorithm_providers.dart';
 import '../../audio_tools/domain/algorithm_task.dart';
 import '../../audio_tools/domain/legacy_algorithm_models.dart';
@@ -100,6 +102,8 @@ class _VideoChordPlaybackStripState
     final playback = _playback;
     final selected = _selected;
     if (playback == null) return const SizedBox.shrink();
+    final showDiagrams =
+        ref.watch(chordPreferencesProvider).asData?.value.showDiagrams ?? false;
     final data = playback;
     if (_taskId != selected!.id) {
       _taskId = selected.id;
@@ -130,7 +134,6 @@ class _VideoChordPlaybackStripState
         }
         final current = data.current(position);
         final label = current?.displayLabel ?? '—';
-        final frets = openChordFrets[label];
         final colors = Theme.of(context).colorScheme;
         return Material(
           color: colors.surfaceContainer,
@@ -167,17 +170,37 @@ class _VideoChordPlaybackStripState
                         ],
                       ),
                     ),
-                    if (frets != null && !widget.compact)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Semantics(
-                          label: '$label 常用指型，从六弦到一弦：${frets.join(',')}',
-                          child: CustomPaint(
-                            size: const Size(56, 68),
-                            painter: _ChordDiagram(frets, colors.onSurface),
-                          ),
-                        ),
+                    if (showDiagrams)
+                      ChordVoicingCard(
+                        rawLabel: current?.rawLabel,
+                        displayLabel: label,
+                        thumbnail: true,
+                        compact: widget.compact,
                       ),
+                    if (showDiagrams &&
+                        !widget.compact &&
+                        MediaQuery.sizeOf(context).width >= 600)
+                      ChordVoicingCard(
+                        rawLabel: data.next(position)?.rawLabel,
+                        displayLabel: data.next(position)?.displayLabel ?? '—',
+                        thumbnail: true,
+                      ),
+                    IconButton(
+                      key: const Key('video_chord_settings'),
+                      tooltip: '指法设置',
+                      onPressed: widget.enabled
+                          ? () => showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              useSafeArea: true,
+                              builder: (_) => ChordPracticeSheet(
+                                playback: data,
+                                controller: widget.controller,
+                              ),
+                            )
+                          : null,
+                      icon: const Icon(Icons.back_hand_outlined),
+                    ),
                     TextButton(
                       onPressed: widget.enabled ? widget.onCalibrate : null,
                       child: const Text('校准'),
@@ -282,46 +305,4 @@ class _VideoChordPlaybackStripState
       },
     );
   }
-}
-
-class _ChordDiagram extends CustomPainter {
-  const _ChordDiagram(this.frets, this.color);
-  final List<int> frets;
-  final Color color;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = color
-      ..strokeWidth = 1;
-    const left = 5.0, top = 16.0, gap = 9.0, fretHeight = 12.0;
-    for (var i = 0; i < 6; i++) {
-      final x = left + i * gap;
-      canvas.drawLine(Offset(x, top), Offset(x, top + 4 * fretHeight), p);
-      final fret = frets[i];
-      if (fret > 0) {
-        canvas.drawCircle(
-          Offset(x, top + (fret - .5) * fretHeight),
-          3.5,
-          p..style = PaintingStyle.fill,
-        );
-      } else if (fret == 0) {
-        canvas.drawCircle(Offset(x, 7), 3, p..style = PaintingStyle.stroke);
-        p.style = PaintingStyle.fill;
-      } else {
-        canvas.drawLine(Offset(x - 2, 4), Offset(x + 2, 10), p);
-        canvas.drawLine(Offset(x - 2, 10), Offset(x + 2, 4), p);
-      }
-    }
-    for (var i = 0; i <= 4; i++) {
-      canvas.drawLine(
-        Offset(left, top + i * fretHeight),
-        Offset(left + 5 * gap, top + i * fretHeight),
-        p..strokeWidth = i == 0 ? 3 : 1,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ChordDiagram oldDelegate) =>
-      oldDelegate.frets != frets || oldDelegate.color != color;
 }

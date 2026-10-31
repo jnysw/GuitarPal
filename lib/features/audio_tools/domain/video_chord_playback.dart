@@ -39,26 +39,3 @@ class VideoChordPlayback {
   int sourceStart(LegacyChordSegment segment) =>
       zeroMs + segment.start.inMilliseconds;
 }
-
-/// Standard open-position voicings, low E to high E. -1 = muted, 0 = open.
-/// Unsupported qualities/inversions deliberately have no invented diagram.
-const openChordFrets = <String, List<int>>{
-  'C': [-1, 3, 2, 0, 1, 0],
-  'D': [-1, -1, 0, 2, 3, 2],
-  'E': [0, 2, 2, 1, 0, 0],
-  'G': [3, 2, 0, 0, 0, 3],
-  'A': [-1, 0, 2, 2, 2, 0],
-  'Am': [-1, 0, 2, 2, 1, 0],
-  'Dm': [-1, -1, 0, 2, 3, 1],
-  'Em': [0, 2, 2, 0, 0, 0],
-  'A7': [-1, 0, 2, 0, 2, 0],
-  'D7': [-1, -1, 0, 2, 1, 2],
-  'E7': [0, 2, 0, 1, 0, 0],
-  'G7': [3, 2, 0, 0, 0, 1],
-  'Cmaj7': [-1, 3, 2, 0, 0, 0],
-  'Am7': [-1, 0, 2, 0, 1, 0],
-  'Em7': [0, 2, 0, 0, 0, 0],
-  'Dsus2': [-1, -1, 0, 2, 3, 0],
-  'Dsus4': [-1, -1, 0, 2, 3, 3],
-  'Asus2': [-1, 0, 2, 2, 0, 0],
-};

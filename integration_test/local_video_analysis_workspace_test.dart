@@ -22,6 +22,10 @@ import 'package:guitar_pal/features/player/local_video_player_screen.dart';
 import 'package:guitar_pal/features/player/widgets/video_analysis_panel.dart';
 import 'package:guitar_pal/features/segments/presentation/practice_segment_editor_sheet.dart';
 
+import 'package:guitar_pal/features/chords/chord_providers.dart';
+import 'package:guitar_pal/features/chords/data/chord_preferences.dart';
+import 'package:guitar_pal/features/player/widgets/guitar_chord_diagram.dart';
+
 import 'support/video_analysis_fixture.dart';
 
 void main() {
@@ -31,6 +35,13 @@ void main() {
     (tester) async {
       final database = AppDatabase(NativeDatabase.memory());
       final root = (await const AlgorithmStemPlatform().directory()).parent;
+      final chordPrefsRoot = Directory(
+        '${root.path}/workspace-test-chord-prefs',
+      );
+      if (await chordPrefsRoot.exists()) {
+        await chordPrefsRoot.delete(recursive: true);
+      }
+      final chordPrefs = ChordPreferencesStore(() async => chordPrefsRoot);
       final folder = Directory('${root.path}/guitarpal_videos');
       await folder.create(recursive: true);
       final video = File('${folder.path}/workspace-test.mp4');
@@ -64,6 +75,7 @@ void main() {
           ProviderScope(
             overrides: [
               databaseProvider.overrideWithValue(database),
+              chordPreferencesStoreProvider.overrideWithValue(chordPrefs),
               algorithmEndpointProvider.overrideWithValue(
                 'https://algorithm.example',
               ),
@@ -140,6 +152,53 @@ void main() {
             .controller;
         await _spin(tester, () => controller.position.inMilliseconds >= 3000);
         await _spin(tester, () => find.text('当前和弦 Am').evaluate().isNotEmpty);
+        await _tapVisible(
+          tester,
+          find.byKey(const Key('video_chord_settings')).hitTestable(),
+        );
+        await _spin(
+          tester,
+          () =>
+              find
+                  .byKey(const Key('chord_show_diagrams'))
+                  .evaluate()
+                  .isNotEmpty &&
+              tester
+                      .widget<SwitchListTile>(
+                        find.byKey(const Key('chord_show_diagrams')),
+                      )
+                      .onChanged !=
+                  null,
+        );
+        await _tapVisible(tester, find.byKey(const Key('chord_show_diagrams')));
+        await _tapVisible(tester, find.byKey(const Key('chord_left_handed')));
+        await _spin(
+          tester,
+          () =>
+              find.byKey(const Key('chord_next_voicing')).evaluate().isNotEmpty,
+        );
+        await _tapVisible(
+          tester,
+          find.byKey(const Key('chord_next_voicing')).last,
+        );
+        await _spin(
+          tester,
+          () => tester
+              .widget<Text>(find.byKey(const Key('chord_voicing_index')).last)
+              .data!
+              .startsWith('2 /'),
+        );
+        final choice = (await chordPrefs.load()).preferred['9:min'];
+        expect(choice, isNotNull);
+        expect((await chordPrefs.load()).leftHanded, isTrue);
+        if (const bool.fromEnvironment('CAPTURE_CHORD_QA')) {
+          await tester.pump(const Duration(milliseconds: 400));
+          debugPrint('CHORD_QA_READY');
+          await Future<void>.delayed(const Duration(seconds: 20));
+        }
+        await tester.tap(find.byTooltip('关闭指法设置'));
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byType(GuitarChordDiagram), findsOneWidget);
         expect(find.byType(LocalVideoPlayerScreen), findsOneWidget);
         expect(controller.hasVideoFrame, isTrue);
         await _tapVisible(
@@ -187,6 +246,13 @@ void main() {
         );
         await _spin(tester, () => fullscreen.evaluate().isNotEmpty);
         expect(find.text('当前和弦 Am'), findsOneWidget);
+        expect(find.byType(GuitarChordDiagram), findsOneWidget);
+        expect(
+          tester
+              .widget<GuitarChordDiagram>(find.byType(GuitarChordDiagram))
+              .leftHanded,
+          isTrue,
+        );
         expect(
           tester
               .widget<VideoAnalysisPanel>(
@@ -230,6 +296,9 @@ void main() {
         }
         await database.close();
         await video.delete();
+        if (await chordPrefsRoot.exists()) {
+          await chordPrefsRoot.delete(recursive: true);
+        }
       }
     },
   );
