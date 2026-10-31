@@ -23,12 +23,13 @@ class VideoChordPlaybackStrip extends ConsumerStatefulWidget {
     required this.controller,
     required this.onCalibrate,
     this.compact = false,
+    this.showTimeline = true,
     this.enabled = true,
   });
   final String sourceId, path;
   final LocalVideoPlaybackController controller;
   final VoidCallback onCalibrate;
-  final bool compact, enabled;
+  final bool compact, enabled, showTimeline;
   @override
   ConsumerState<VideoChordPlaybackStrip> createState() =>
       _VideoChordPlaybackStripState();
@@ -151,6 +152,8 @@ class _VideoChordPlaybackStripState
                           Text(
                             '当前和弦 $label',
                             key: const Key('video_current_chord'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: widget.compact ? 18 : 22,
                               fontWeight: FontWeight.bold,
@@ -207,7 +210,7 @@ class _VideoChordPlaybackStripState
                     ),
                   ],
                 ),
-                if (!widget.compact)
+                if (!widget.compact && widget.showTimeline)
                   Row(
                     children: [
                       Expanded(

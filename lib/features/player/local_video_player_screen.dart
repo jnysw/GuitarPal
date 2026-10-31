@@ -15,15 +15,12 @@ import '../plans/practice_plan_providers.dart';
 import '../recordings/presentation/practice_recording_panel.dart';
 import 'presentation/fullscreen_controls_visibility.dart';
 import 'presentation/fullscreen_local_video_controls.dart';
-import 'widgets/playback_volume_control.dart';
-import 'widgets/precise_playback_speed_control.dart';
 import 'widgets/video_analysis_panel.dart';
+import 'widgets/practice_workspace.dart';
 import 'widgets/video_chord_playback_strip.dart';
 import '../audio_tools/domain/legacy_algorithm_models.dart';
 import '../segments/practice_segment_providers.dart';
-import '../segments/presentation/practice_segment_card.dart';
 import '../segments/presentation/practice_segment_editor_sheet.dart';
-import '../segments/presentation/practice_segment_progress_slider.dart';
 import '../segments/presentation/practice_segment_timecode.dart';
 
 class LocalVideoPlayerScreen extends ConsumerStatefulWidget {
@@ -55,6 +52,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
   bool _recordingWorkflowActive = false;
   AlgorithmOperation? _requestedAnalysis;
   int _analysisRevision = 0;
+  int _workspaceIndex = 0;
 
   String? get _videoPath {
     final uri = widget.source.canonicalUri;
@@ -371,6 +369,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
     }
 
     final segments = ref.watch(practiceSegmentsProvider(widget.source.id));
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     return PopScope(
       canPop: !_isFullscreen,
       onPopInvokedWithResult: (didPop, _) {
@@ -381,7 +380,11 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
         appBar: _isFullscreen
             ? null
             : AppBar(
-                title: Text(widget.source.title),
+                title: Text(
+                  widget.source.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 actions: [
                   if (kDebugMode)
                     AnimatedBuilder(
@@ -395,6 +398,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                 _controller?.isReady == true,
                             icon: const Icon(Icons.auto_awesome),
                             onSelected: (operation) => setState(() {
+                              _workspaceIndex = 1;
                               _requestedAnalysis = operation;
                               _analysisRevision++;
                             }),
@@ -418,8 +422,12 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
           child: LayoutBuilder(
             builder: (context, constraints) {
               final normalHeight = (constraints.maxWidth * 9 / 16)
-                  .clamp(180.0, 420.0)
-                  .clamp(0.0, constraints.maxHeight);
+                  .clamp(0.0, 360.0)
+                  .clamp(
+                    0.0,
+                    constraints.maxHeight *
+                        (constraints.maxHeight < 480 ? .28 : .34),
+                  );
               final videoHeight = _isFullscreen
                   ? constraints.maxHeight
                   : normalHeight;
@@ -515,6 +523,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                             await _toggleFullscreen();
                             if (mounted) {
                               setState(() {
+                                _workspaceIndex = 1;
                                 _requestedAnalysis = AlgorithmOperation.chords;
                                 _analysisRevision++;
                               });
@@ -535,99 +544,95 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                           ? const Center(child: CircularProgressIndicator())
                           : AnimatedBuilder(
                               animation: _controller!,
-                              builder: (context, _) => Column(
-                                children: [
-                                  if (kDebugMode)
-                                    VideoChordPlaybackStrip(
-                                      sourceId: widget.source.id,
-                                      path: path,
-                                      controller: _controller!,
-                                      enabled: !_recordingWorkflowActive,
-                                      onCalibrate: () => setState(() {
-                                        _requestedAnalysis =
-                                            AlgorithmOperation.chords;
-                                        _analysisRevision++;
-                                      }),
-                                    ),
-                                  Expanded(
-                                    child: _LocalVideoControls(
-                                      controller: _controller!,
-                                      segments: segments,
-                                      analysisPanel: kDebugMode
-                                          ? VideoAnalysisPanel(
-                                              key: ValueKey(
-                                                'video_analysis_${widget.source.id}',
-                                              ),
-                                              source: widget.source,
-                                              path: path,
-                                              controller: _controller!,
-                                              planId: widget.planId,
-                                              enabled:
-                                                  !_recordingWorkflowActive &&
-                                                  _controller!.isReady &&
-                                                  _controller!.duration >
-                                                      Duration.zero,
-                                              requestedOperation:
-                                                  _requestedAnalysis,
-                                              requestRevision:
-                                                  _analysisRevision,
-                                              onSaveLoop: _saveCurrentLoop,
-                                              recordingActive:
-                                                  _recordingWorkflowActive,
-                                            )
-                                          : null,
-                                      recordingPanel: PracticeRecordingPanel(
-                                        key: ValueKey(
-                                          'local_recording_${widget.source.id}',
-                                        ),
+                              builder: (context, _) => PracticeWorkspace(
+                                selectedSection: _workspaceIndex,
+                                keyboardVisible: keyboardVisible,
+                                recordingActive: _recordingWorkflowActive,
+                                onSelectSection: (value) =>
+                                    setState(() => _workspaceIndex = value),
+                                chordStrip: kDebugMode
+                                    ? VideoChordPlaybackStrip(
                                         sourceId: widget.source.id,
+                                        path: path,
+                                        controller: _controller!,
+                                        showTimeline: false,
+                                        enabled: !_recordingWorkflowActive,
+                                        onCalibrate: () => setState(() {
+                                          _workspaceIndex = 1;
+                                          _requestedAnalysis =
+                                              AlgorithmOperation.chords;
+                                          _analysisRevision++;
+                                        }),
+                                      )
+                                    : null,
+                                controller: _controller!,
+                                segments: segments,
+                                analysisPanel: kDebugMode
+                                    ? VideoAnalysisPanel(
+                                        key: ValueKey(
+                                          'video_analysis_${widget.source.id}',
+                                        ),
+                                        source: widget.source,
+                                        embedded: true,
+                                        path: path,
+                                        controller: _controller!,
                                         planId: widget.planId,
                                         enabled:
+                                            !_recordingWorkflowActive &&
                                             _controller!.isReady &&
                                             _controller!.duration >
                                                 Duration.zero,
-                                        captureReference: () =>
-                                            _captureRecordingReference(
-                                              _controller!,
-                                              segments.asData?.value ??
-                                                  const [],
-                                            ),
-                                        referencePosition: () =>
-                                            _controller!.position,
-                                        referenceIsPlaying: () =>
-                                            _controller!.isPlaying,
-                                        seekReference: _controller!.seek,
-                                        playReference: _controller!.play,
-                                        pauseReference: _controller!.pause,
-                                        onWorkflowActiveChanged: (value) {
-                                          if (value &&
-                                              _controller!.stemsLoaded) {
-                                            unawaited(
-                                              _controller!
-                                                  .clearStems()
-                                                  .catchError((Object _) {}),
-                                            );
-                                          }
-                                          if (mounted &&
-                                              _recordingWorkflowActive !=
-                                                  value) {
-                                            setState(
-                                              () => _recordingWorkflowActive =
-                                                  value,
-                                            );
-                                          }
-                                        },
-                                      ),
-                                      onSaveSegment: _saveCurrentLoop,
-                                      onActivateSegment: (segment) =>
-                                          unawaited(_activateSegment(segment)),
-                                      onEditSegment: (segment) =>
-                                          unawaited(_editSegment(segment)),
-                                      onDeleteSegment: (segment) =>
-                                          unawaited(_deleteSegment(segment)),
-                                    ),
+                                        requestedOperation: _requestedAnalysis,
+                                        requestRevision: _analysisRevision,
+                                        onSaveLoop: _saveCurrentLoop,
+                                        recordingActive:
+                                            _recordingWorkflowActive,
+                                      )
+                                    : null,
+                                recordingPanel: PracticeRecordingPanel(
+                                  key: ValueKey(
+                                    'local_recording_${widget.source.id}',
                                   ),
-                                ],
+                                  sourceId: widget.source.id,
+                                  planId: widget.planId,
+                                  enabled:
+                                      _controller!.isReady &&
+                                      _controller!.duration > Duration.zero,
+                                  captureReference: () =>
+                                      _captureRecordingReference(
+                                        _controller!,
+                                        segments.asData?.value ?? const [],
+                                      ),
+                                  referencePosition: () =>
+                                      _controller!.position,
+                                  referenceIsPlaying: () =>
+                                      _controller!.isPlaying,
+                                  seekReference: _controller!.seek,
+                                  playReference: _controller!.play,
+                                  pauseReference: _controller!.pause,
+                                  onWorkflowActiveChanged: (value) {
+                                    if (value && _controller!.stemsLoaded) {
+                                      unawaited(
+                                        _controller!.clearStems().catchError(
+                                          (Object _) {},
+                                        ),
+                                      );
+                                    }
+                                    if (mounted &&
+                                        _recordingWorkflowActive != value) {
+                                      setState(
+                                        () => _recordingWorkflowActive = value,
+                                      );
+                                    }
+                                  },
+                                ),
+                                onSaveSegment: _saveCurrentLoop,
+                                onActivateSegment: (segment) =>
+                                    unawaited(_activateSegment(segment)),
+                                onEditSegment: (segment) =>
+                                    unawaited(_editSegment(segment)),
+                                onDeleteSegment: (segment) =>
+                                    unawaited(_deleteSegment(segment)),
                               ),
                             ),
                     ),
@@ -701,255 +706,6 @@ class _FullscreenTransport extends StatelessWidget {
   }
 }
 
-class _LocalVideoControls extends StatelessWidget {
-  const _LocalVideoControls({
-    required this.controller,
-    required this.segments,
-    required this.recordingPanel,
-    this.analysisPanel,
-    required this.onSaveSegment,
-    required this.onActivateSegment,
-    required this.onEditSegment,
-    required this.onDeleteSegment,
-  });
-
-  final LocalVideoPlaybackController controller;
-  final AsyncValue<List<PracticeSegment>> segments;
-  final Widget recordingPanel;
-  final Widget? analysisPanel;
-  final VoidCallback onSaveSegment;
-  final ValueChanged<PracticeSegment> onActivateSegment;
-  final ValueChanged<PracticeSegment> onEditSegment;
-  final ValueChanged<PracticeSegment> onDeleteSegment;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final durationMs = controller.duration.inMilliseconds;
-    final canControl = controller.isReady && durationMs > 0;
-    final loop = controller.loopController;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    controller.isReady && controller.hasVideoFrame
-                        ? Icons.check_circle_outline_rounded
-                        : Icons.hourglass_top_rounded,
-                    color: controller.isReady && controller.hasVideoFrame
-                        ? colors.primary
-                        : colors.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(switch ((
-                      controller.isReady,
-                      controller.hasVideoFrame,
-                    )) {
-                      (true, true) => '本地播放器已就绪',
-                      (true, false) => '正在渲染视频画面…',
-                      _ => '正在读取视频…',
-                    }),
-                  ),
-                ],
-              ),
-              if (controller.playerError case final error?) ...[
-                const SizedBox(height: 8),
-                Text(error, style: TextStyle(color: colors.error)),
-              ],
-              const SizedBox(height: 8),
-              PracticeSegmentProgressSlider(
-                duration: controller.duration,
-                position: controller.position,
-                segments: segments.asData?.value ?? const [],
-                enabled: canControl,
-                sliderKey: const Key('local_video_position_slider'),
-                onChanged: (value) => controller.previewPosition(
-                  Duration(milliseconds: value.round()),
-                ),
-                onChangeEnd: (value) =>
-                    controller.seek(Duration(milliseconds: value.round())),
-                onSegmentTap: onActivateSegment,
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(_formatDuration(controller.position)),
-                    Text(_formatDuration(controller.duration)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    tooltip: '后退 5 秒',
-                    onPressed: canControl
-                        ? () => controller.seekRelative(
-                            const Duration(seconds: -5),
-                          )
-                        : null,
-                    icon: const Icon(Icons.replay_5_rounded),
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton.filled(
-                    key: const Key('local_video_play_pause'),
-                    tooltip: controller.isPlaying ? '暂停' : '播放',
-                    onPressed: canControl
-                        ? () => controller.isPlaying
-                              ? controller.pause()
-                              : controller.play()
-                        : null,
-                    icon: Icon(
-                      controller.isPlaying
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton(
-                    tooltip: '前进 5 秒',
-                    onPressed: canControl
-                        ? () => controller.seekRelative(
-                            const Duration(seconds: 5),
-                          )
-                        : null,
-                    icon: const Icon(Icons.forward_5_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              PrecisePlaybackSpeedControl(
-                value: controller.speed,
-                enabled: canControl,
-                onChanged: (_) {},
-                onChangeEnd: (value) => unawaited(controller.setSpeed(value)),
-              ),
-              const SizedBox(height: 12),
-              PlaybackVolumeControl(
-                value: controller.volume,
-                enabled: controller.isReady,
-                onChanged: controller.previewVolume,
-                onChangeEnd: (value) => unawaited(controller.setVolume(value)),
-              ),
-              const SizedBox(height: 22),
-              Text(
-                'A-B Loop',
-                style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      key: const Key('local_video_set_loop_a'),
-                      onPressed: canControl ? controller.setLoopStart : null,
-                      child: Text('A  ${_formatOptional(loop.start)}'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      key: const Key('local_video_set_loop_b'),
-                      onPressed: canControl
-                          ? () {
-                              if (!controller.setLoopEnd()) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('B 点必须晚于 A 点')),
-                                );
-                              }
-                            }
-                          : null,
-                      child: Text('B  ${_formatOptional(loop.end)}'),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: '清除循环区间',
-                    onPressed: loop.range == null ? null : controller.clearLoop,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
-                ],
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('循环播放区间'),
-                subtitle: Text('已完成 ${loop.completedLoops} 次'),
-                value: loop.enabled,
-                onChanged: canControl && loop.range != null
-                    ? controller.setLoopEnabled
-                    : null,
-              ),
-              const Divider(height: 30),
-              if (analysisPanel != null) ...[
-                analysisPanel!,
-                const Divider(height: 30),
-              ],
-              recordingPanel,
-              const Divider(height: 30),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '练习片段',
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  FilledButton.tonalIcon(
-                    key: const Key('local_video_save_loop_segment'),
-                    onPressed: loop.range == null ? null : onSaveSegment,
-                    icon: const Icon(Icons.bookmark_add_outlined),
-                    label: const Text('保存当前区间'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              segments.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (_, _) =>
-                    Text('暂时无法读取已保存片段', style: TextStyle(color: colors.error)),
-                data: (items) {
-                  if (items.isEmpty) {
-                    return Text(
-                      '设置 A、B 点后保存，之后可以一键回到这个练习区间。',
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: colors.onSurfaceVariant),
-                    );
-                  }
-                  return Column(
-                    children: items
-                        .map(
-                          (segment) => PracticeSegmentCard(
-                            cardKey: ValueKey('local_segment_${segment.id}'),
-                            segment: segment,
-                            onOpen: () => onActivateSegment(segment),
-                            onEdit: () => onEditSegment(segment),
-                            onDelete: () => onDeleteSegment(segment),
-                          ),
-                        )
-                        .toList(growable: false),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _LocalVideoUnavailableView extends StatelessWidget {
   const _LocalVideoUnavailableView({
     required this.title,
@@ -978,22 +734,6 @@ class _LocalVideoUnavailableView extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatDuration(Duration duration) {
-  final totalSeconds = duration.inSeconds;
-  final hours = totalSeconds ~/ 3600;
-  final minutes = (totalSeconds % 3600) ~/ 60;
-  final seconds = totalSeconds % 60;
-  if (hours > 0) {
-    return '$hours:${minutes.toString().padLeft(2, '0')}:'
-        '${seconds.toString().padLeft(2, '0')}';
-  }
-  return '$minutes:${seconds.toString().padLeft(2, '0')}';
-}
-
-String _formatOptional(Duration? duration) {
-  return duration == null ? '--:--' : formatPracticeTimecode(duration);
 }
 
 String _formatSpeed(double value) {

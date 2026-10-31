@@ -175,6 +175,15 @@ void main() {
         );
         Future<LocalVideoPlaybackController> open({required bool stems}) async {
           await tester.tap(find.text('打开测试练习'));
+          await _until(
+            tester,
+            () => find
+                .byKey(const Key('practice_section_1'))
+                .evaluate()
+                .isNotEmpty,
+          );
+          await tester.tap(find.byKey(const Key('practice_section_1')));
+          await tester.pump(const Duration(milliseconds: 350));
           await _until(tester, () {
             final panel = find.byType(VideoAnalysisPanel);
             if (panel.evaluate().isEmpty) return false;

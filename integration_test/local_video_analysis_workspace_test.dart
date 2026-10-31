@@ -107,9 +107,14 @@ void main() {
         await _spin(
           tester,
           () =>
-              find.byType(VideoAnalysisPanel).evaluate().isNotEmpty &&
+              find
+                  .byType(VideoAnalysisPanel, skipOffstage: false)
+                  .evaluate()
+                  .isNotEmpty &&
               tester
-                  .widget<VideoAnalysisPanel>(find.byType(VideoAnalysisPanel))
+                  .widget<VideoAnalysisPanel>(
+                    find.byType(VideoAnalysisPanel, skipOffstage: false),
+                  )
                   .controller
                   .isReady &&
               tester
@@ -212,6 +217,39 @@ void main() {
               controller.loopController.range?.start.inMilliseconds == 3250,
         );
         expect(controller.loopController.range!.end.inMilliseconds, 8000);
+        await tester.tap(find.byKey(const Key('practice_section_0')));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.byKey(const Key('local_video_position_slider')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('local_video_play_pause')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('local_video_set_loop_a')), findsOneWidget);
+        expect(controller.loopController.range!.start.inMilliseconds, 3250);
+        if (const bool.fromEnvironment('CAPTURE_PRACTICE_LAYOUT_QA')) {
+          debugPrint('PRACTICE_LAYOUT_QA_READY');
+          await Future<void>.delayed(const Duration(seconds: 15));
+        }
+        await tester.tap(find.byKey(const Key('practice_section_3')));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('我的练习片段'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('practice_section_2')));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          find.byKey(const Key('practice_recording_start')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const Key('practice_section_1')));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(
+          tester
+              .widget<VideoAnalysisPanel>(find.byType(VideoAnalysisPanel))
+              .controller,
+          same(controller),
+        );
         if (const bool.fromEnvironment('CAPTURE_TIMELINE_QA')) {
           await tester.ensureVisible(
             find.byKey(const Key('video_analysis_waveform')),
