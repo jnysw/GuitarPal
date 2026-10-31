@@ -97,7 +97,9 @@ class _Importer implements AlgorithmAudioImport {
 class _Api implements AlgorithmApi {
   int uploads = 0;
   @override
-  Future<void> ping() async {}
+  Future<void> ping({
+    AlgorithmOperation operation = AlgorithmOperation.chords,
+  }) async {}
   @override
   Future<LegacyUploadReceipt> upload(
     String path,

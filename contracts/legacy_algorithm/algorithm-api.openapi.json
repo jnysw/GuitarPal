@@ -878,6 +878,49 @@
           }
         }
       }
+    },
+    "/api/v1/separation/health": {
+      "get": {
+        "operationId": "getSeparationHealth",
+        "tags": [
+          "separation"
+        ],
+        "summary": "Optional separation worker readiness check",
+        "description": "Newer development services expose this read-only check. A 404 permits the legacy ping fallback; other failures must not be treated as readiness. Device configuration remains server-owned.",
+        "responses": {
+          "200": {
+            "description": "Ready or lazy-load worker state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "model_loaded"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready",
+                        "not_loaded",
+                        "unavailable"
+                      ]
+                    },
+                    "model_loaded": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Separation model unavailable; do not extract/upload a new task"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1254,6 +1297,14 @@
           "download_url": {
             "type": "string",
             "description": "Relative URL; never a local filesystem path"
+          },
+          "sha256": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "Optional SHA-256 of the exact published file bytes. Legacy records may omit it or return null; do not infer this value from arbitrary HTTP ETags."
           }
         }
       },
@@ -1328,6 +1379,12 @@
               "$ref": "#/components/schemas/StemFile"
             },
             "description": "Six raw stems and one derived instrumental; IDs unique; actual files from manifest"
+          },
+          "diagnostics": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Optional measured server durations in milliseconds. queue_ms excludes worker_total_ms. This metadata is not upload/download progress and may be ignored by old clients."
           }
         }
       }

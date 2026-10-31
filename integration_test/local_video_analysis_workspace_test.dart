@@ -259,7 +259,9 @@ Future<void> _spin(WidgetTester tester, bool Function() done) async {
 class _WorkspaceApi implements AlgorithmApi {
   int uploads = 0, audioBytes = 0;
   @override
-  Future<void> ping() async {}
+  Future<void> ping({
+    AlgorithmOperation operation = AlgorithmOperation.chords,
+  }) async {}
   @override
   void close() {}
   @override

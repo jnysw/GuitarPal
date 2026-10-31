@@ -1,3 +1,5 @@
+import 'separation_processing_info.dart';
+
 /// The Windows handoff API is deliberately isolated from GuitarPal /v1.
 /// Its chord coordinates are relative to silence-trimmed audio, not the source.
 enum AlgorithmOperation { chords, separation }
@@ -116,6 +118,8 @@ class LegacyAlgorithmStatus {
       progress = json['progress'] == null
           ? null
           : algorithmInteger(json['progress']) {
+    final value = json['stage'];
+    stage = value is String && value.length <= 128 ? value : null;
     if (progress != null && (progress! < 0 || progress! > 100)) {
       throw const FormatException('服务器任务进度无效');
     }
@@ -133,7 +137,22 @@ class LegacyAlgorithmStatus {
   final LegacyJobState state;
   final String message;
   final int? progress;
+  late final String? stage;
   String? error;
+
+  String displayMessage(AlgorithmOperation operation) {
+    if (operation != AlgorithmOperation.separation) return message;
+    if (state == LegacyJobState.failed) return error ?? message;
+    if (state == LegacyJobState.queued) return '等待服务器开始分轨';
+    return switch (stage) {
+      'decoding' => '正在准备音频',
+      'loading_model' => '正在准备分轨模型',
+      'separating' => '正在分离音轨',
+      'writing_outputs' => '正在保存并校验分轨结果',
+      'completed' => '分轨已完成',
+      _ => '服务器正在处理分轨',
+    };
+  }
 }
 
 class LegacyChordSegment {
@@ -203,6 +222,13 @@ class LegacyStemFile {
       sampleRate = algorithmInteger(json['sample_rate']),
       channels = algorithmInteger(json['channels']),
       contentType = algorithmText(json['content_type']) {
+    final checksum = json['sha256'];
+    if (checksum != null &&
+        (checksum is! String ||
+            !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(checksum))) {
+      throw const FormatException('分轨文件校验信息无效');
+    }
+    sha256 = (checksum as String?)?.toLowerCase();
     if (!{'model', 'derived'}.contains(origin) ||
         sizeBytes <= 0 ||
         sizeBytes > 256 * 1024 * 1024 ||
@@ -225,6 +251,7 @@ class LegacyStemFile {
   final int sampleRate;
   final int channels;
   final String contentType;
+  late final String? sha256;
   String get extension => contentType == 'audio/flac' ? 'flac' : 'wav';
   String get displayName =>
       const {
@@ -263,10 +290,12 @@ class LegacySeparationResult {
         stems.any((s) => (s.duration - duration).inMilliseconds.abs() > 100)) {
       throw const FormatException('分轨清单必须非空、无重复且时长一致（最多 16 轨）');
     }
+    processing = SeparationProcessingInfo.fromResult(json);
   }
   final String jobId;
   final DateTime expiresAt;
   final Duration duration;
+  late final SeparationProcessingInfo? processing;
   late final List<LegacyStemFile> stems;
 
   /// Derived sums must never be added on top of the model tracks they contain.

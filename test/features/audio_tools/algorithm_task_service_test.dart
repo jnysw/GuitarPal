@@ -34,6 +34,46 @@ void main() {
     tearDown(() => database.close());
 
     test(
+      'preflight forwards selected operation without creating a task',
+      () async {
+        await service.checkConnection(
+          'http://127.0.0.1:8000',
+          operation: AlgorithmOperation.separation,
+        );
+        expect(api.lastPingOperation, AlgorithmOperation.separation);
+        expect(await database.select(database.algorithmTasks).get(), isEmpty);
+        expect(api.uploadCalls, 0);
+      },
+    );
+    test('explicit model-unavailable rejection is retryable input failure, not unknown receipt', () async {
+      api.uploadError = const AlgorithmApiError(
+        'model_unavailable',
+        '模型不可用',
+        httpStatus: 503,
+      );
+      await service.submit(
+        _task('unavailable', operation: AlgorithmOperation.separation),
+      );
+      final task = (await repository.get('unavailable'))!;
+      expect(task.state, AlgorithmTaskState.failed);
+      expect(task.remoteJobId, isNull);
+      expect(task.message, isNot(contains('接收状态未知')));
+      expect(api.uploadCalls, 1);
+    });
+    test('actual processing stage is persisted as localized message without percentage', () async {
+      await service.submit(
+        _task('staged', operation: AlgorithmOperation.separation),
+      );
+      api.state = LegacyJobState.processing;
+      api.stage = 'writing_outputs';
+      await service.refresh('staged', force: true);
+      final task = (await repository.get('staged'))!;
+      expect(task.message, '正在保存并校验分轨结果');
+      expect(task.state, AlgorithmTaskState.processing);
+      expect(task.progress, isNull);
+    });
+
+    test(
       'persists receipt and caches result without requerying it offline',
       () async {
         await service.submit(_task('job-local'));
@@ -371,13 +411,20 @@ AlgorithmTaskRecord _task(
 }
 
 class _Api implements AlgorithmApi {
+  AlgorithmOperation? lastPingOperation;
+  String? stage;
   AlgorithmOperation? lastOperation;
   int uploadCalls = 0, statusCalls = 0, resultCalls = 0;
   LegacyJobState state = LegacyJobState.queued;
   AlgorithmApiError? uploadError, error;
   Completer<void>? pending;
   @override
-  Future<void> ping() async {}
+  Future<void> ping({
+    AlgorithmOperation operation = AlgorithmOperation.chords,
+  }) async {
+    lastPingOperation = operation;
+  }
+
   @override
   Future<LegacyUploadReceipt> upload(
     String path,
@@ -412,7 +459,12 @@ class _Api implements AlgorithmApi {
     return LegacyAlgorithmStatus.fromJson({
       'job_id': jobId,
       'status': state.name,
-      'progress': state == LegacyJobState.completed ? 100 : 10,
+      'progress': state == LegacyJobState.completed
+          ? 100
+          : stage == null
+          ? 10
+          : null,
+      'stage': stage,
       'message': 'test',
       'error': state == LegacyJobState.failed ? '推理失败' : null,
     }, operation);

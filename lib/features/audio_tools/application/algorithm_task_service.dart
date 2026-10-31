@@ -25,12 +25,15 @@ class AlgorithmTaskService {
       _initialization ??= repository.recoverInterruptedSubmissions();
 
   /// A read-only check before expensive extraction or creation of a task.
-  Future<void> checkConnection(String origin) async {
+  Future<void> checkConnection(
+    String origin, {
+    AlgorithmOperation operation = AlgorithmOperation.chords,
+  }) async {
     final api = _factory(
       AlgorithmEndpoint(origin, allowLocalHttp: allowLocalHttp),
     );
     try {
-      await api.ping();
+      await api.ping(operation: operation);
     } on FormatException {
       throw const AlgorithmApiError(
         'invalid_health_response',
@@ -80,6 +83,7 @@ class AlgorithmTaskService {
             'unsupported_format',
             'upload_not_sent',
           }.contains(error.code) ||
+          (error.code == 'model_unavailable' && error.httpStatus == 503) ||
           (error.httpStatus != null &&
               error.httpStatus! >= 400 &&
               error.httpStatus! < 500);
@@ -174,7 +178,7 @@ class AlgorithmTaskService {
                 : AlgorithmTaskState.processing,
             progress: status.progress,
             failures: 0,
-            message: status.message,
+            message: status.displayMessage(task.operation),
           );
         }
       } on AlgorithmApiError catch (error) {

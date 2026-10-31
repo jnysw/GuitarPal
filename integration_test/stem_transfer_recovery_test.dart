@@ -58,6 +58,7 @@ void main() {
           'sample_rate': 16000,
           'channels': 1,
           'content_type': 'audio/flac',
+          'sha256': sha256.convert(bytes).toString(),
           'download_url': '/api/v1/separation/jobs/resume/files/guitar',
         },
         AlgorithmEndpoint(

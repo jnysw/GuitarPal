@@ -29,10 +29,16 @@ void main() {
       );
       final store = AlgorithmStemStore(stems.directory);
       try {
+        await api.ping(operation: AlgorithmOperation.separation);
         final result = LegacySeparationResult.fromJson(
           await api.result(job, AlgorithmOperation.separation),
           api.endpoint,
         );
+        if (const bool.fromEnvironment('REQUIRE_GPU_DIAGNOSTICS')) {
+          expect(result.processing?.gpu, isTrue);
+          expect(result.processing?.inference, isNotNull);
+          expect(result.processing?.processing, isNotNull);
+        }
         final paths = await store.downloadBatch(
           'integration-mix-real',
           result.stems,

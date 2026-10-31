@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:guitar_pal/features/audio_tools/data/algorithm_stem_store.dart';
 import 'package:guitar_pal/features/audio_tools/domain/legacy_algorithm_models.dart';
@@ -225,6 +227,95 @@ void main() {
     expect(await File('${root.path}/task_vocals.wav.part').length(), 32768);
     await stuck.close();
   });
+
+  LegacyStemFile checked(String digest) => LegacyStemFile.fromJson(
+    {
+      ...Map<String, Object?>.from(
+        (separationFixture()['stems'] as List).first as Map,
+      ),
+      'sha256': digest,
+    },
+    endpoint,
+    'contract_job_1',
+  );
+
+  test(
+    'server checksum mismatch retries just the affected GET from zero',
+    () async {
+      final altered = List<int>.from(wav)..[100] = (wav[100] + 1) % 256;
+      var calls = 0;
+      final transfer = store((r) async {
+        expect(r.method, 'GET');
+        expect(r.headers['Range'], isNull);
+        return response(++calls == 1 ? altered : wav);
+      }, attempts: 2);
+      final file = await transfer.download(
+        'task',
+        checked(sha256.convert(wav).toString()),
+      );
+      expect(await file.readAsBytes(), wav);
+      expect(calls, 2);
+    },
+  );
+  test('legacy complete cache and partial can acquire checksum without re-downloading', () async {
+    final s = checked(sha256.convert(wav).toString());
+    await interrupted();
+    var requests = 0;
+    final transfer = store((r) async {
+      requests++;
+      expect(r.headers['Range'], 'bytes=32768-');
+      return response(
+        wav.sublist(32768),
+        status: 206,
+        headers: {
+          'content-range': 'bytes 32768-${wav.length - 1}/${wav.length}',
+        },
+      );
+    });
+    final file = await transfer.download('task', s);
+    final stamp = await file.lastModified();
+    expect((await transfer.download('task', stem)).path, file.path);
+    expect((await transfer.download('task', s)).path, file.path);
+    expect(await file.lastModified(), stamp);
+    expect(requests, 1);
+  });
+  test('new checksum revalidates in-memory cache and clears only its decoded copies', () async {
+    final transfer = store((_) async => response(wav));
+    final file = await transfer.download('task', stem);
+    final other = File('${root.path}/task_guitar.wav');
+    await other.writeAsBytes(wav);
+    for (final suffix in ['.mix.wav', '.mix.identity', '.mix.wav.part']) {
+      await File('${file.path}$suffix').writeAsBytes([1]);
+    }
+    expect(await transfer.localFile('task', checked('0' * 64)), isNull);
+    expect(await other.exists(), isTrue);
+    expect(await File('${file.path}.mix.wav').exists(), isFalse);
+    expect(await File('${file.path}.mix.identity').exists(), isFalse);
+  });
+  test(
+    'persistent server checksum mismatch is bounded and never publishes cache',
+    () async {
+      var calls = 0;
+      final transfer = store((_) async {
+        calls++;
+        return response(wav);
+      }, attempts: 2);
+      final s = checked('0' * 64);
+      await expectLater(
+        transfer.download('task', s),
+        throwsA(
+          isA<AlgorithmApiError>().having(
+            (e) => e.code,
+            'code',
+            'download_checksum_mismatch',
+          ),
+        ),
+      );
+      expect(calls, 2);
+      expect(await transfer.localFile('task', s), isNull);
+      expect(await File('${root.path}/task_vocals.wav.part').exists(), isFalse);
+    },
+  );
 
   test('same-size changed PCM cache is repaired one track at a time', () async {
     var requests = 0;

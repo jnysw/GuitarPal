@@ -211,7 +211,9 @@ class _Api implements AlgorithmApi {
   int uploads = 0;
   bool failPing = true;
   @override
-  Future<void> ping() async {
+  Future<void> ping({
+    AlgorithmOperation operation = AlgorithmOperation.chords,
+  }) async {
     if (failPing) {
       throw const AlgorithmApiError('network_error', '暂时无法连接分析服务，请稍后重试');
     }

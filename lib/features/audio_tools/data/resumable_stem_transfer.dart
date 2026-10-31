@@ -134,10 +134,14 @@ class ResumableStemTransfer {
         throw const FormatException('缓存清单已变化');
       }
       final stat = await target.stat();
-      final stamp = '${stat.size}:${stat.modified.microsecondsSinceEpoch}';
+      final stamp =
+          '${stat.size}:${stat.modified.microsecondsSinceEpoch}:${stem.sha256 ?? ''}';
       if (_verified[target.path] == stamp) return target;
       await validateStemAudio(target, stem);
       final digest = await _hash(target);
+      if (stem.sha256 != null && digest != stem.sha256) {
+        throw const FormatException('音轨缓存与服务器校验不一致');
+      }
       if (receipt != null && receipt['sha256'] != digest) {
         throw const FormatException('音轨缓存已损坏');
       }
@@ -151,6 +155,9 @@ class ResumableStemTransfer {
       _verified.remove(target.path);
       await _remove(target);
       await _remove(receiptFile);
+      for (final suffix in ['.mix.wav', '.mix.identity', '.mix.wav.part']) {
+        await _remove(File('${target.path}$suffix'));
+      }
       return null;
     }
   }
@@ -222,6 +229,7 @@ class ResumableStemTransfer {
               (error is AlgorithmApiError &&
                   (error.isTemporary ||
                       error.code == 'download_incomplete' ||
+                      error.code == 'download_checksum_mismatch' ||
                       error.code == 'partial_invalidated'));
           if (!retryable || attempt + 1 >= maxAttempts) {
             if (error is TimeoutException ||
@@ -427,6 +435,14 @@ class ResumableStemTransfer {
       rethrow;
     }
     final digest = await _hash(part);
+    if (stem.sha256 != null && digest != stem.sha256) {
+      await _remove(part);
+      await _remove(meta);
+      throw const AlgorithmApiError(
+        'download_checksum_mismatch',
+        '这一轨的文件校验未通过，请重试下载；其他完整音轨已保留，无需重新分析',
+      );
+    }
     await part.rename(target.path);
     await _writeJson(File('${target.path}.verified.json'), {
       'identity': _identity(stem),
@@ -434,7 +450,7 @@ class ResumableStemTransfer {
     });
     final stat = await target.stat();
     _verified[target.path] =
-        '${stat.size}:${stat.modified.microsecondsSinceEpoch}';
+        '${stat.size}:${stat.modified.microsecondsSinceEpoch}:${stem.sha256 ?? ''}';
     await _remove(meta);
     return target;
   }

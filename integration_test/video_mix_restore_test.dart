@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -115,12 +117,22 @@ void main() {
             mediaBindingJson: jsonEncode(binding.toJson()),
           ),
         );
+        final wav = syntheticAlgorithmWav();
+        final fixture = separationFixture(jobId: taskId)
+          ..['diagnostics'] = {
+            'queue_ms': 2000,
+            'inference_ms': 1500,
+            'worker_total_ms': 1800,
+            'device': 'cuda:0',
+          };
+        for (final stem in fixture['stems'] as List) {
+          (stem as Map)['sha256'] = sha256.convert(wav).toString();
+        }
         await repository.update(
           taskId,
           AlgorithmTaskState.completed,
-          resultJson: jsonEncode(separationFixture(jobId: taskId)),
+          resultJson: jsonEncode(fixture),
         );
-        final wav = syntheticAlgorithmWav();
         for (final id in videoStemIds) {
           final file = File('${root.path}/${taskId}_$id.wav');
           await file.writeAsBytes(wav);
@@ -231,6 +243,14 @@ void main() {
           (await preferences.load(sourceId))!.controls['guitar']!.pan,
           -.4,
         );
+        await _tap(tester, find.text('服务器处理详情'));
+        await _until(
+          tester,
+          () => find.text('处理方式：GPU 加速').evaluate().isNotEmpty,
+        );
+        expect(find.text('2.00 秒'), findsOneWidget);
+        expect(find.text('1.50 秒'), findsOneWidget);
+        expect(network, 0);
         if (const bool.fromEnvironment('CAPTURE_MIXER_QA')) {
           await _tap(tester, find.byKey(const Key('video_open_mixer')));
           await tester.pump(const Duration(milliseconds: 500));

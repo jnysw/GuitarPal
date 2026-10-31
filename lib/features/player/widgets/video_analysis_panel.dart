@@ -22,6 +22,7 @@ import '../../audio_tools/domain/stem_mix_settings.dart';
 import '../../audio_tools/data/video_mix_preferences.dart';
 import 'video_analysis_timeline.dart';
 import 'video_stem_mixer.dart';
+import 'separation_processing_details.dart';
 
 /// In-place tools for the current video. This never starts another practice session.
 class VideoAnalysisPanel extends ConsumerStatefulWidget {
@@ -321,7 +322,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         await (_configurationFuture = _resolveConfiguration());
       }
       if (!mounted || _endpoint.trim().isEmpty) return;
-      await service.checkConnection(_endpoint);
+      await service.checkConnection(_endpoint, operation: _operation);
       if (mounted) {
         setState(() => _serviceNotice = null);
         _message('分析服务已连接');
@@ -491,7 +492,10 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       _progress = null;
     });
     try {
-      await service.checkConnection(endpoint.origin.toString());
+      await service.checkConnection(
+        endpoint.origin.toString(),
+        operation: _operation,
+      );
       if (!mounted) return;
       setState(() => _stage = '正在提取当前视频音频…');
       final before = await File(widget.path).stat();
@@ -1182,6 +1186,14 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   Widget _taskCard(AlgorithmTaskRecord task) {
     try {
       final binding = _binding(task);
+      final separation =
+          task.operation == AlgorithmOperation.separation &&
+              task.resultJson != null
+          ? LegacySeparationResult.fromJson(
+              algorithmObject(jsonDecode(task.resultJson!)),
+              AlgorithmEndpoint(task.endpoint, allowLocalHttp: true),
+            )
+          : null;
       if (!binding.matches(
         widget.source.id,
         widget.path,
@@ -1235,11 +1247,12 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
               if (task.resultJson != null &&
                   task.operation == AlgorithmOperation.chords)
                 ..._chords(task),
-              if (task.resultJson != null &&
-                  task.operation == AlgorithmOperation.separation)
+              if (separation != null)
                 Text(
-                  '已分离：${LegacySeparationResult.fromJson(algorithmObject(jsonDecode(task.resultJson!)), AlgorithmEndpoint(task.endpoint, allowLocalHttp: true)).stems.map((s) => s.displayName).join('、')}。载入后可调节音量、静音、独奏及左右声像；合成伴奏不与原分轨重复叠加。',
+                  '已分离：${separation.stems.map((s) => s.displayName).join('、')}。载入后可调节音量、静音、独奏及左右声像；合成伴奏不与原分轨重复叠加。',
                 ),
+              if (separation?.processing != null)
+                SeparationProcessingDetails(info: separation!.processing!),
               if (task.resultJson != null &&
                   task.operation == AlgorithmOperation.separation)
                 TextButton(

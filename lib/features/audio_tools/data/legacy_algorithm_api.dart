@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../domain/legacy_algorithm_models.dart';
 
 abstract interface class AlgorithmApi {
-  Future<void> ping();
+  Future<void> ping({AlgorithmOperation operation = AlgorithmOperation.chords});
   Future<LegacyUploadReceipt> upload(
     String path,
     String filename, {
@@ -46,12 +46,46 @@ class LegacyAlgorithmApi implements AlgorithmApi {
       _usesTailnet ? '无法连接测试服务，请确认手机已连接 Tailscale 后重试' : '暂时无法连接分析服务，请稍后重试';
 
   @override
-  Future<void> ping() async {
+  Future<void> ping({
+    AlgorithmOperation operation = AlgorithmOperation.chords,
+  }) async {
     final data = await _get(
       '/api/v1/health/ping',
       timeout: healthTimeout < requestTimeout ? healthTimeout : requestTimeout,
     );
     if (data['ping'] != 'pong') throw const FormatException('存活检查响应无效');
+    if (operation != AlgorithmOperation.separation) return;
+    try {
+      final health = await _get(
+        '/api/v1/separation/health',
+        timeout: healthTimeout < requestTimeout
+            ? healthTimeout
+            : requestTimeout,
+      );
+      if (health['status'] == 'unavailable') {
+        throw const AlgorithmApiError(
+          'model_unavailable',
+          '分轨服务尚未就绪，请稍后重试；已下载的音轨仍可使用',
+        );
+      }
+      if (!{'ready', 'not_loaded'}.contains(health['status']) ||
+          health['model_loaded'] is! bool ||
+          (health['status'] == 'ready' && health['model_loaded'] != true)) {
+        throw const FormatException('分轨就绪检查响应无效');
+      }
+      // Older services may load the model on the first queued job.
+    } on AlgorithmApiError catch (e) {
+      if (e.httpStatus == 404) {
+        return; // Legacy service without this optional route.
+      }
+      if (e.httpStatus == 503) {
+        throw const AlgorithmApiError(
+          'model_unavailable',
+          '分轨服务尚未就绪，请稍后重试；已下载的音轨仍可使用',
+        );
+      }
+      rethrow;
+    }
   }
 
   @override
