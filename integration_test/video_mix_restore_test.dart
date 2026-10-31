@@ -133,7 +133,7 @@ void main() {
           AlgorithmTaskState.completed,
           resultJson: jsonEncode(fixture),
         );
-        for (final id in videoStemIds) {
+        for (final id in [...videoStemIds, 'instrumental']) {
           final file = File('${root.path}/${taskId}_$id.wav');
           await file.writeAsBytes(wav);
           files.add(file);
@@ -323,6 +323,84 @@ void main() {
           inInclusiveRange(1000, 2800),
         );
         expect(network, 0);
+        controller = await open(stems: true);
+        await _tap(tester, find.text('和弦与分轨'));
+        await _tap(tester, find.byKey(const Key('video_open_mixer')));
+        await _tap(tester, find.byKey(const Key('video_mixer_choose_stems')));
+        await _until(tester, () => find.text('选择练习音轨').evaluate().isNotEmpty);
+        if (const bool.fromEnvironment('CAPTURE_STEM_PICKER_QA')) {
+          await _until(
+            tester,
+            () =>
+                tester
+                    .widget<FilledButton>(
+                      find.byKey(const Key('video_apply_stem_choice')),
+                    )
+                    .onPressed !=
+                null,
+          );
+          debugPrint('SELECT_STEM_QA_READY');
+          await Future<void>.delayed(const Duration(seconds: 20));
+        }
+        await _tap(tester, find.text('只听吉他'));
+        await _tap(tester, find.byKey(const Key('video_apply_stem_choice')));
+        await _until(
+          tester,
+          () =>
+              find.byType(BottomSheet).evaluate().isEmpty &&
+              find
+                  .byKey(const Key('video_stem_volume_guitar'))
+                  .evaluate()
+                  .isNotEmpty &&
+              find
+                  .byKey(const Key('video_stem_volume_drums'))
+                  .evaluate()
+                  .isEmpty,
+        );
+        expect((await preferences.load(sourceId))!.selectedTrackIds, {
+          'guitar',
+        });
+        expect(controller.speed, closeTo(1.21, .001));
+        expect(controller.loopController.range!.start.inMilliseconds, 2000);
+        for (final id in ['drums', 'bass', 'piano', 'other']) {
+          await File('${root.path}/${taskId}_$id.wav').delete();
+        }
+        await leave();
+        controller = await open(stems: true);
+        await _tap(tester, find.text('和弦与分轨'));
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('video_stem_volume_guitar'))
+              .evaluate()
+              .isNotEmpty,
+        );
+        expect(find.byKey(const Key('video_stem_volume_drums')), findsNothing);
+        expect(network, 0);
+        await _tap(tester, find.byKey(const Key('video_choose_stems_$taskId')));
+        await _tap(tester, find.text('人声与伴奏'));
+        await _tap(tester, find.byKey(const Key('video_apply_stem_choice')));
+        await _until(
+          tester,
+          () =>
+              find.byType(BottomSheet).evaluate().isEmpty &&
+              find
+                  .byKey(const Key('video_stem_volume_instrumental'))
+                  .evaluate()
+                  .isNotEmpty,
+        );
+        expect((await preferences.load(sourceId))!.selectedTrackIds, {
+          'vocals',
+          'instrumental',
+        });
+        expect(find.byKey(const Key('video_stem_volume_guitar')), findsNothing);
+        expect(controller.loopController.range!.end.inMilliseconds, 4000);
+        expect(network, 0);
+        await leave();
+        expect(
+          await database.select(database.practiceSessions).get(),
+          hasLength(1),
+        );
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();
@@ -331,6 +409,7 @@ void main() {
         for (final file in files) {
           if (await file.exists()) await file.delete();
         }
+        await store.deleteTask(taskId);
         await video.delete();
       }
     },

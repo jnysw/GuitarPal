@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 import '../domain/legacy_algorithm_models.dart';
 import 'stem_audio_validation.dart';
@@ -112,9 +113,15 @@ class ResumableStemTransfer {
   }
 
   Future<void> _writeJson(File f, Map<String, Object?> value) async {
-    final temp = File('${f.path}.tmp');
-    await temp.writeAsString(jsonEncode(value), flush: true);
-    await temp.rename(f.path);
+    // Two read-only cache inspections can both adopt the same legacy file.
+    // Give each atomic write its own temporary file instead of sharing .tmp.
+    final temp = File('${f.path}.${const Uuid().v4()}.tmp');
+    try {
+      await temp.writeAsString(jsonEncode(value), flush: true);
+      await temp.rename(f.path);
+    } finally {
+      await _remove(temp);
+    }
   }
 
   Future<void> _remove(File f) async {

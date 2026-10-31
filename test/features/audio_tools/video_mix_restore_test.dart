@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:guitar_pal/core/database/app_database.dart';
 import 'package:guitar_pal/core/database/database_providers.dart';
 import 'package:guitar_pal/domain/practice_source/practice_source.dart'
@@ -27,6 +29,202 @@ import 'package:guitar_pal/media/playback/loop_controller.dart';
 import '../../support/algorithm_fixtures.dart';
 
 void main() {
+  testWidgets(
+    'choosing guitar downloads only that file from the existing task',
+    (tester) async {
+      final f = (await tester.runAsync(_Fixture.create))!;
+      final requests = <String>[];
+      final downloading = _DownloadStore(f.root, requests);
+      f.store = downloading;
+      try {
+        await tester.runAsync(() async {
+          await File('${f.root.path}/video_workspace/source.json').delete();
+          for (final id in videoStemIds) {
+            await File('${f.root.path}/task_$id.wav').delete();
+          }
+        });
+        await f.show(tester);
+        await tester.tap(find.text('和弦与分轨'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('分轨').first);
+        await tester.pumpAndSettle();
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('video_choose_stems_task'))
+              .evaluate()
+              .isNotEmpty,
+        );
+        tester
+            .widget<TextButton>(
+              find.byKey(const Key('video_choose_stems_task')),
+            )
+            .onPressed!();
+        await _until(
+          tester,
+          () => find.text('只听吉他').hitTestable().evaluate().isNotEmpty,
+        );
+        await tester.tap(find.text('只听吉他'));
+        await _until(
+          tester,
+          () =>
+              tester
+                  .widget<FilledButton>(
+                    find.byKey(const Key('video_apply_stem_choice')),
+                  )
+                  .onPressed !=
+              null,
+        );
+        await tester.tap(find.byKey(const Key('video_apply_stem_choice')));
+        await _until(
+          tester,
+          () =>
+              downloading.error != null ||
+              (f.controller.stemsLoaded &&
+                  find.byType(BottomSheet).evaluate().isEmpty),
+        );
+        expect(downloading.error, isNull, reason: '${downloading.stack}');
+        expect(requests, [
+          'GET /api/v1/separation/jobs/contract_job_1/files/guitar',
+        ]);
+        expect(f.bridge.paths.keys, ['guitar']);
+      } finally {
+        await f.close(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'guitar-only cache loads and reopens offline without missing unselected tracks',
+    (tester) async {
+      final f = (await tester.runAsync(_Fixture.create))!;
+      try {
+        await tester.runAsync(() async {
+          await File('${f.root.path}/video_workspace/source.json').delete();
+          for (final id in videoStemIds.where((id) => id != 'guitar')) {
+            await File('${f.root.path}/task_$id.wav').delete();
+          }
+        });
+        await f.controller.play();
+        await f.show(tester);
+        await tester.tap(find.text('和弦与分轨'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('分轨').first);
+        await tester.pumpAndSettle();
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('video_choose_stems_task'))
+              .evaluate()
+              .isNotEmpty,
+        );
+        tester
+            .widget<TextButton>(
+              find.byKey(const Key('video_choose_stems_task')),
+            )
+            .onPressed!();
+        await _until(
+          tester,
+          () => find.byTooltip('关闭').hitTestable().evaluate().isNotEmpty,
+        );
+        expect(f.controller.isPlaying, isTrue);
+        await tester.tap(find.byTooltip('关闭'));
+        await tester.pumpAndSettle();
+        expect(f.controller.isPlaying, isTrue);
+        expect(f.bridge.loadCount, 0);
+        tester
+            .widget<TextButton>(
+              find.byKey(const Key('video_choose_stems_task')),
+            )
+            .onPressed!();
+        await _until(
+          tester,
+          () => find.text('只听吉他').hitTestable().evaluate().isNotEmpty,
+        );
+        await tester.tap(find.text('只听吉他'));
+        await _until(
+          tester,
+          () =>
+              tester
+                  .widget<FilledButton>(
+                    find.byKey(const Key('video_apply_stem_choice')),
+                  )
+                  .onPressed !=
+              null,
+        );
+        await tester.tap(find.byKey(const Key('video_apply_stem_choice')));
+        await _until(
+          tester,
+          () =>
+              f.controller.stemsLoaded &&
+              find.byType(BottomSheet).evaluate().isEmpty,
+        );
+        expect(f.bridge.paths.keys, ['guitar']);
+        expect(f.networkRequests, 0);
+        expect(
+          (await _settle(
+            tester,
+            f.preferences.load('source'),
+          ))!.selectedTrackIds,
+          {'guitar'},
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        f.controller.dispose();
+        f.newController();
+        await f.show(tester);
+        await _until(tester, () => f.controller.stemsLoaded);
+        expect(f.bridge.paths.keys, ['guitar']);
+        expect(f.bridge.preserved, isTrue);
+        expect(f.networkRequests, 0);
+        await tester.tap(find.text('和弦与分轨'));
+        await _until(
+          tester,
+          () =>
+              find.byKey(const Key('video_open_mixer')).evaluate().isNotEmpty &&
+              tester
+                      .widget<FilledButton>(
+                        find.byKey(const Key('video_open_mixer')),
+                      )
+                      .onPressed !=
+                  null,
+        );
+        tester
+            .widget<FilledButton>(find.byKey(const Key('video_open_mixer')))
+            .onPressed!();
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.byKey(const Key('video_mixer_choose_stems')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('video_mixer_choose_stems')));
+        await _until(
+          tester,
+          () => find.text('全部分轨').hitTestable().evaluate().isNotEmpty,
+        );
+        await tester.tap(find.text('全部分轨'));
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('video_use_cached_stems'))
+              .evaluate()
+              .isNotEmpty,
+        );
+        await tester.tap(find.byKey(const Key('video_use_cached_stems')));
+        await _until(
+          tester,
+          () =>
+              find.byType(BottomSheet).evaluate().isEmpty &&
+              f.controller.stemsLoaded,
+        );
+        expect(f.bridge.paths.keys, ['guitar']);
+        expect(f.networkRequests, 0);
+      } finally {
+        await f.close(tester);
+      }
+    },
+  );
+
   testWidgets(
     'same range reuses completed analysis without contacting server',
     (tester) async {
@@ -492,6 +690,43 @@ class _Fixture {
   }
 }
 
+class _DownloadStore extends AlgorithmStemStore {
+  _DownloadStore(Directory root, List<String> requests)
+    : super(
+        () => Future.value(root),
+        clientFactory: () => MockClient((r) async {
+          requests.add('${r.method} ${r.url.path}');
+          return http.Response.bytes(
+            syntheticAlgorithmWav(),
+            200,
+            headers: {'content-type': 'audio/wav'},
+          );
+        }),
+      );
+  Object? error;
+  StackTrace? stack;
+  @override
+  Future<Map<String, String>> downloadBatch(
+    String taskId,
+    List<LegacyStemFile> stems, {
+    StemDownloadCancellation? cancellation,
+    void Function(StemDownloadProgress)? onProgress,
+  }) async {
+    try {
+      return await super.downloadBatch(
+        taskId,
+        stems,
+        cancellation: cancellation,
+        onProgress: onProgress,
+      );
+    } catch (e, s) {
+      error = e;
+      stack = s;
+      rethrow;
+    }
+  }
+}
+
 class _GatedStore extends AlgorithmStemStore {
   _GatedStore(Directory root, this.gate, this.entered)
     : super(() async => root);
@@ -635,7 +870,9 @@ Future<void> _until(WidgetTester tester, bool Function() ready) async {
     );
     if (ready()) return;
   }
-  fail('Restore did not reach expected state');
+  fail(
+    'Restore did not reach expected state: ${tester.widgetList<Text>(find.byType(Text)).map((w) => w.data).whereType<String>().join(' | ')}',
+  );
 }
 
 Future<T> _settle<T>(WidgetTester tester, Future<T> future) async {

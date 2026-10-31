@@ -17,12 +17,14 @@ import '../../audio_tools/domain/algorithm_task.dart';
 import '../../audio_tools/domain/legacy_algorithm_models.dart';
 import '../../audio_tools/domain/video_analysis_binding.dart';
 import '../../audio_tools/domain/video_mix_selection.dart';
+import '../../audio_tools/domain/video_stem_choice.dart';
 import '../../audio_tools/domain/video_chord_playback.dart';
 import '../../audio_tools/domain/stem_mix_settings.dart';
 import '../../audio_tools/data/video_mix_preferences.dart';
 import 'video_analysis_timeline.dart';
 import 'video_stem_mixer.dart';
 import 'separation_processing_details.dart';
+import 'video_stem_picker.dart';
 
 /// In-place tools for the current video. This never starts another practice session.
 class VideoAnalysisPanel extends ConsumerStatefulWidget {
@@ -59,6 +61,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       _foreground = true,
       _useRange = false;
   bool _confirming = false;
+  bool _choosingStems = false;
   final _expansion = ExpansibleController();
   AlgorithmOperation _operation = AlgorithmOperation.chords;
   String _endpoint = '', _stage = '';
@@ -234,7 +237,11 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     taskId: _rememberedTask!.id,
     inputSha256: _binding(_rememberedTask!).inputSha256,
     useStems: true,
+    selectedTrackIds: _volumes.keys,
     controls: {
+      if (_saved?.taskId == _rememberedTask!.id &&
+          _saved?.inputSha256 == _binding(_rememberedTask!).inputSha256)
+        ..._saved!.controls,
       for (final id in _volumes.keys)
         id: StemMixControl(
           volume: _volumes[id] ?? 1,
@@ -595,6 +602,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   Future<void> _loadStems(
     AlgorithmTaskRecord task, {
     bool restoring = false,
+    Iterable<String>? trackIds,
+    bool localOnly = false,
   }) async {
     if (_busy || !widget.enabled || widget.recordingActive) return;
     if (restoring && widget.controller.isPlaying) {
@@ -609,7 +618,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     _downloadCancellation = cancellation;
     setState(() {
       _busy = _loadingStems = true;
-      _networkDownload = !restoring;
+      _networkDownload = !restoring && !localOnly;
       _downloadNotice = null;
       _stage = restoring ? '正在恢复本机分轨…' : '正在准备当前视频的音轨…';
     });
@@ -625,13 +634,26 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       if ((result.duration.inMilliseconds - binding.durationMs).abs() > 100) {
         throw const FormatException('分轨时间轴与本视频区间不一致');
       }
+      final previous =
+          _saved?.taskId == task.id &&
+              _saved?.inputSha256 == binding.inputSha256
+          ? _saved
+          : null;
+      final chosen = videoStemSubset(
+        result,
+        trackIds ??
+            previous?.selectedTrackIds ??
+            result.mixStems.map((s) => s.id),
+      );
       final paths = <String, String>{};
-      if (restoring) {
-        for (final stem in result.mixStems) {
+      if (restoring || localOnly) {
+        for (final stem in chosen) {
           if (!_canLoad(token)) return;
           final file = await store.localFile(task.id, stem);
           if (file == null) {
-            throw const FormatException('本机分轨尚未完整，保留原声；点击继续下载，只补齐缺失部分');
+            throw FormatException(
+              restoring ? '本机分轨尚未完整，保留原声；点击继续下载，只补齐缺失部分' : '所选音轨已不在本机，请重新选择或下载',
+            );
           }
           paths[stem.id] = file.path;
         }
@@ -639,7 +661,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         paths.addAll(
           await store.downloadBatch(
             task.id,
-            result.mixStems,
+            chosen,
             cancellation: cancellation,
             onProgress: (p) {
               if (!_canLoad(token)) return;
@@ -661,7 +683,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       if (!_canLoad(token)) return;
       setState(() {
         _networkDownload = false;
-        _stage = '下载完成，正在本机解码并载入混音…';
+        _stage = '音轨已就绪，正在本机解码并载入混音…';
         _progress = null;
       });
       await _verify(binding);
@@ -669,13 +691,20 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       final selection =
           _saved?.taskId == task.id &&
               _saved?.inputSha256 == binding.inputSha256
-          ? _saved!.withMode(true).forTracks(paths.keys)
+          ? _saved!
+                .withMode(true)
+                .forTracks(
+                  paths.keys,
+                  availableIds: result.stems.map((s) => s.id),
+                )
           : VideoMixSelection(
               taskId: task.id,
               inputSha256: binding.inputSha256,
               useStems: true,
+              selectedTrackIds: paths.keys,
               controls: {
-                for (final id in paths.keys) id: const StemMixControl(),
+                for (final stem in result.stems)
+                  stem.id: const StemMixControl(),
               },
             );
       await controller.loadStems(
@@ -701,14 +730,14 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         _muted
           ..clear()
           ..addAll(
-            selection.controls.entries
+            selection.activeControls.entries
                 .where((e) => e.value.muted)
                 .map((e) => e.key),
           );
         _solo
           ..clear()
           ..addAll(
-            selection.controls.entries
+            selection.activeControls.entries
                 .where((e) => e.value.solo)
                 .map((e) => e.key),
           );
@@ -757,8 +786,52 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     await saving;
   }
 
+  Future<void> _chooseStems(AlgorithmTaskRecord task) async {
+    if (_busy || _choosingStems || !widget.enabled || widget.recordingActive) {
+      return;
+    }
+    _choosingStems = true;
+    try {
+      final binding = _binding(task);
+      await _verify(binding);
+      if (!mounted) return;
+      final result = LegacySeparationResult.fromJson(
+        algorithmObject(jsonDecode(task.resultJson!)),
+        AlgorithmEndpoint(task.endpoint, allowLocalHttp: true),
+      );
+      final initial =
+          _saved?.taskId == task.id &&
+              _saved?.inputSha256 == binding.inputSha256
+          ? _saved!.selectedTrackIds ?? result.mixStems.map((s) => s.id)
+          : result.mixStems.map((s) => s.id);
+      final choice = await showModalBottomSheet<VideoStemLoadChoice>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (_) => VideoStemPicker(
+          taskId: task.id,
+          result: result,
+          store: ref.read(algorithmStemStoreProvider),
+          initialIds: initial,
+        ),
+      );
+      if (choice != null && mounted) {
+        await _loadStems(
+          task,
+          trackIds: choice.ids,
+          localOnly: choice.localOnly,
+        );
+      }
+    } on Object catch (e) {
+      _message(_errorMessage(e, '无法读取音轨，请稍后重试'));
+    } finally {
+      _choosingStems = false;
+    }
+  }
+
   Widget _mixer([StateSetter? refreshSheet]) => VideoStemMixer(
-    controls: _currentSelection().controls,
+    controls: _currentSelection().activeControls,
     master: widget.controller.volume,
     supportsPan: widget.controller.supportsStemPan,
     enabled:
@@ -792,23 +865,41 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     },
   );
 
-  Future<void> _openMixer() => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (context) => StatefulBuilder(
-      builder: (context, refresh) => AnimatedBuilder(
-        animation: widget.controller,
-        builder: (context, _) => FractionallySizedBox(
-          heightFactor: .85,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: _mixer(refresh),
+  Future<void> _openMixer() async {
+    final choose = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, refresh) => AnimatedBuilder(
+          animation: widget.controller,
+          builder: (context, _) => FractionallySizedBox(
+            heightFactor: .85,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _mixer(refresh),
+                  TextButton.icon(
+                    key: const Key('video_mixer_choose_stems'),
+                    onPressed:
+                        _busy || !widget.enabled || widget.recordingActive
+                        ? null
+                        : () => Navigator.pop(context, true),
+                    icon: const Icon(Icons.playlist_add_check),
+                    label: const Text('选择练习音轨'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+    if (choose == true && mounted && _rememberedTask != null) {
+      await _chooseStems(_rememberedTask!);
+    }
+  }
 
   Future<void> _recoverReceipt(AlgorithmTaskRecord task) async {
     if (_busy || !widget.enabled) return;
@@ -1260,6 +1351,15 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
                       ? null
                       : () => _loadStems(task),
                   child: const Text('在当前视频中使用分轨'),
+                ),
+              if (separation != null)
+                TextButton.icon(
+                  key: Key('video_choose_stems_${task.id}'),
+                  onPressed: _busy || !widget.enabled || widget.recordingActive
+                      ? null
+                      : () => _chooseStems(task),
+                  icon: const Icon(Icons.playlist_add_check),
+                  label: const Text('选择音轨与下载'),
                 ),
               if (task.remoteJobId != null && task.resultJson == null)
                 TextButton(

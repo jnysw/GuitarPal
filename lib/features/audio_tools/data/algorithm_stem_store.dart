@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../domain/legacy_algorithm_models.dart';
+import '../domain/video_stem_choice.dart';
 import 'resumable_stem_transfer.dart';
 export 'resumable_stem_transfer.dart'
     show StemDownloadCancellation, StemDownloadPaused, StemDownloadProgress;
@@ -44,6 +45,23 @@ class AlgorithmStemStore {
   final ResumableStemTransfer _transfer;
   Future<File?> localFile(String taskId, LegacyStemFile stem) =>
       _transfer.localFile(taskId, stem);
+  Future<Map<String, StemCacheStatus>> inspect(
+    String taskId,
+    List<LegacyStemFile> stems,
+  ) async {
+    final states = <String, StemCacheStatus>{};
+    for (final stem in stems) {
+      final file = await localFile(taskId, stem);
+      states[stem.id] = StemCacheStatus(
+        complete: file != null,
+        receivedBytes: file != null
+            ? stem.sizeBytes
+            : await _transfer.partialBytes(taskId, stem),
+      );
+    }
+    return Map.unmodifiable(states);
+  }
+
   Future<File> download(
     String taskId,
     LegacyStemFile stem, {

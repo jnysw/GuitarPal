@@ -27,3 +27,14 @@ Android **6 项通过**：带服务器校验和的真实本机 HTTP 断点续传
 [服务端 Draft PR #1](https://github.com/jnysw/chordengine-algorithm-server/pull/1) 将发布阶段已经计算的 SHA-256 写入每轨可选 sha256；清单值、下载字节与 ETag 一致，不新增推理或每次下载重算。旧记录缺字段仍能读取。静态 OpenAPI 与更新说明同步。
 
 适配器 CPU CI **12 项通过**：包含清单／下载校验、旧记录兼容，以及既有队列、Range／If-Range、租约、过期清理和无效输出测试。使用假推理会话和真实文件／ffmpeg，不下载模型，不替代 CUDA 或音质验收。更新步骤见该 PR 的 `CLIENT_INTEGRITY_UPDATE.md`；保持 Draft，未自动部署 Windows。
+
+## 第十三批：按需选轨与离线子集
+
+本批只改客户端，不提交新的推理任务，不部署或修改 Windows 服务。视频练习结果／混音台共用选轨底部面板，逐轨检查完整缓存与可靠断点，显示还需下载的所选总量；只下载当前所选，允许只用完整的所选缓存。分析结果过期仍能离线使用完整轨道。v3 偏好记录显式子集并保留未选轨的控制值；旧 v1/v2 按原默认集合恢复，不把旧 controls 中仅修改过的轨道当成子集。
+
+验证：
+
+- Flutter 全量 **386 项通过**，`flutter analyze` 无问题。新增覆盖真实清单子集约束、派生轨去重、预设、过期缓存、小屏／放大字体、只 GET 所选吉他文件、缺失未选轨仍离线重开，以及隐藏独奏不影响当前轨。快速关闭／重开面板暴露同名临时收据争用，改为独立临时文件；三个独立 store 并发校验旧 WAV 已覆盖。
+- Android 模拟器 `integration_test/video_mix_restore_test.dart` **1 项通过**：真实原生视频／PCM 缓存，选吉他单轨、删除未选乐器缓存后离线重开、从混音台返回选轨并切换人声＋伴奏、保留计划 1.21x 与 A-B 2–4 秒；唯一练习会话未增加，不调用 HTTP。使用隔离数据库与自生成媒体。
+- `integration_test/video_analysis_playback_test.dart` 与 `local_video_analysis_workspace_test.dart` 合计 **2 项通过**：原视频 WAV／FLAC 共享播放与倍速／A-B、页内和弦／片段／全屏往返。使用本机替身，不请求模型。
+- 正常 Debug APK 在回归结束后重新构建并安装到模拟器，避免将集成测试入口作为交付包。未连接实体手机，本批不替代长曲、耳机听感与真机网络验收。
