@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../features/create/create_practice_screen.dart';
 import '../features/performance/performance_prepare_screen.dart';
+import '../features/performance/performance_stage_screen.dart';
+import '../features/performance/performance_route_observer.dart';
 import '../features/audio_tools/algorithm_tools_screen.dart';
 import '../features/create/local_video_draft_screen.dart';
 import '../features/home/home_screen.dart';
@@ -25,6 +27,7 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
+  observers: [performanceRouteObserver],
   initialLocation: '/today',
   routes: [
     GoRoute(
@@ -34,6 +37,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/performance/prepare',
       builder: (context, state) => PerformancePrepareRouteScreen(
+        sourceId: state.uri.queryParameters['sourceId'] ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/performance/stage',
+      builder: (context, state) => PerformanceStageRouteScreen(
         sourceId: state.uri.queryParameters['sourceId'] ?? '',
       ),
     ),

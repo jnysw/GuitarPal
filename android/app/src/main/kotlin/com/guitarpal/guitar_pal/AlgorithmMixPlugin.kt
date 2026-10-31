@@ -7,6 +7,11 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.PlaybackParams
+import android.os.Handler
+import android.os.Looper
+import io.flutter.plugin.common.EventChannel
+import java.util.ArrayDeque
+import kotlin.math.sqrt
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -18,11 +23,29 @@ import kotlin.math.min
 class AlgorithmMixPlugin(private val activity: Activity, messenger: BinaryMessenger) : MethodChannel.MethodCallHandler {
     private val channel = MethodChannel(messenger, "com.guitarpal/algorithm_mix")
     private val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val levels = EventChannel(messenger, "com.guitarpal/algorithm_mix_levels")
+    private val handler = Handler(Looper.getMainLooper())
+    private var sink: EventChannel.EventSink? = null
+    private val publish = object : Runnable {
+        override fun run() {
+            if (sink == null) return
+            val level = engine?.levelSnapshot() ?: mapOf("isPlaying" to false, "leftRms" to 0.0, "rightRms" to 0.0, "leftPeak" to 0.0, "rightPeak" to 0.0, "epoch" to 0L, "positionMs" to 0L)
+            val volume = if (audio.isStreamMute(AudioManager.STREAM_MUSIC)) 0.0 else audio.getStreamVolume(AudioManager.STREAM_MUSIC).toDouble() / max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+            sink?.success(level + mapOf("generation" to generation, "systemVolume" to volume))
+            handler.postDelayed(this, 50)
+        }
+    }
     private var engine: StemMixEngine? = null
     private var generation = 0
     private var pending: MethodChannel.Result? = null
     private val focus = AudioManager.OnAudioFocusChangeListener { change -> if (change != AudioManager.AUDIOFOCUS_GAIN) engine?.pause() }
-    init { channel.setMethodCallHandler(this) }
+    init {
+        channel.setMethodCallHandler(this)
+        levels.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink) { sink = events; handler.removeCallbacks(publish); handler.post(publish) }
+            override fun onCancel(arguments: Any?) { sink = null; handler.removeCallbacks(publish) }
+        })
+    }
 
     @Suppress("DEPRECATION")
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -58,7 +81,7 @@ class AlgorithmMixPlugin(private val activity: Activity, messenger: BinaryMessen
                 "pause" -> { engine?.pause(); audio.abandonAudioFocus(focus); result.success(null) }
                 "seek" -> { requireNotNull(engine).seek(requireNotNull(call.argument<Number>("positionMs")).toLong()); result.success(null) }
                 "configure" -> { requireNotNull(engine).configure(call.arguments as Map<*, *>); result.success(null) }
-                "snapshot" -> result.success(engine?.snapshot() ?: mapOf("isLoaded" to false, "isPlaying" to false))
+                "snapshot" -> result.success((engine?.snapshot() ?: mapOf("isLoaded" to false, "isPlaying" to false)) + mapOf("generation" to generation))
                 "stop" -> { stop(); result.success(null) }
                 else -> result.notImplemented()
             }
@@ -74,7 +97,7 @@ class AlgorithmMixPlugin(private val activity: Activity, messenger: BinaryMessen
         engine?.close(); engine = null
         audio.abandonAudioFocus(focus)
     }
-    fun dispose() { stop(); channel.setMethodCallHandler(null) }
+    fun dispose() { sink = null; handler.removeCallbacks(publish); levels.setStreamHandler(null); stop(); channel.setMethodCallHandler(null) }
 }
 
 internal class StemMixEngine(private val waves: List<StemPcmWave>) {
@@ -109,6 +132,30 @@ internal class StemMixEngine(private val waves: List<StemPcmWave>) {
     private var headWrap = 0L
     private val scratch = waves.map { ByteArray(512 * channels * 2) }
     private val output = ShortArray(512 * outputChannels)
+    private data class Meter(val start: Long, val end: Long, val left: Double, val right: Double, val leftPeak: Double, val rightPeak: Double)
+    private val meters = ArrayDeque<Meter>()
+    private var meterEpoch = 0L
+    // Meter only frames actually accepted by AudioTrack, after all mix controls and limiting.
+    private fun meter(accepted: Int) {
+        if (accepted <= 0) return
+        var l = 0.0; var r = 0.0; var lp = 0.0; var rp = 0.0
+        for (i in 0 until accepted step 2) {
+            val a = output[i].toDouble() / 32768.0; val b = output[i + 1].toDouble() / 32768.0
+            l += a * a; r += b * b; lp = max(lp, kotlin.math.abs(a)); rp = max(rp, kotlin.math.abs(b))
+        }
+        val count = accepted / 2
+        meters.addLast(Meter(emitted, emitted + count, sqrt(l / count), sqrt(r / count), lp, rp))
+        while (meters.size > 256) meters.removeFirst()
+    }
+    fun levelSnapshot(): Map<String, Any?> = synchronized(lock) {
+        val h = if (closed) 0L else head()
+        while (meters.size > 1 && meters.first.end <= h) meters.removeFirst()
+        val current = meters.peekFirst()?.takeIf { playing && !closed && error == null && h > 0 && h >= it.start && h < it.end }
+        mapOf("isPlaying" to (playing && !closed), "epoch" to meterEpoch,
+            "positionMs" to (if (closed) 0L else position(h) * 1000 / rate),
+            "leftRms" to (current?.left ?: 0.0), "rightRms" to (current?.right ?: 0.0),
+            "leftPeak" to (current?.leftPeak ?: 0.0), "rightPeak" to (current?.rightPeak ?: 0.0))
+    }
     private val thread = Thread({ render() }, "guitarpal-stem-mix")
 
     init {
@@ -133,6 +180,7 @@ internal class StemMixEngine(private val waves: List<StemPcmWave>) {
     private fun reset(target: Long) {
         track.pause(); track.flush()
         lastHead = 0; headWrap = 0
+        meters.clear(); meterEpoch++
         val a = loopA; val b = loopB
         start = if (a != null && b != null) target.coerceIn(a, b - 1) else target.coerceIn(0, frames)
         cursor = start; emitted = 0
@@ -192,7 +240,7 @@ internal class StemMixEngine(private val waves: List<StemPcmWave>) {
         val h = head()
         mapOf("isLoaded" to true, "isPlaying" to playing, "positionMs" to position(h) * 1000 / rate,
             "durationMs" to frames * 1000 / rate, "completedLoops" to completedLoops + loops(h),
-            "speed" to speed.toDouble(), "gains" to gains.toMap(), "pans" to pans.toMap(), "error" to error)
+            "epoch" to meterEpoch, "master" to master, "speed" to speed.toDouble(), "gains" to gains.toMap(), "pans" to pans.toMap(), "error" to error) + levelSnapshot()
     }
 
     private fun render() {
@@ -225,6 +273,7 @@ internal class StemMixEngine(private val waves: List<StemPcmWave>) {
                             }
                             val accepted = track.write(output, 0, count * outputChannels, AudioTrack.WRITE_NON_BLOCKING)
                             check(accepted >= 0 && accepted % outputChannels == 0) { "设备混音输出失败 ($accepted)" }
+                            meter(accepted)
                             cursor += accepted / outputChannels; emitted += accepted / outputChannels
                             wrote = accepted > 0
                         } else {

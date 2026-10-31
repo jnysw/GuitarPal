@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../domain/practice_source/practice_source.dart';
 import '../library/practice_source_providers.dart';
@@ -16,6 +17,7 @@ import '../segments/presentation/practice_segment_timecode.dart';
 import 'application/performance_preview.dart';
 import 'domain/backing_preset.dart';
 import 'performance_providers.dart';
+import 'performance_resolver_providers.dart';
 
 class PerformancePrepareRouteScreen extends ConsumerWidget {
   const PerformancePrepareRouteScreen({super.key, required this.sourceId});
@@ -295,6 +297,33 @@ class _PerformancePrepareScreenState
     }
   }
 
+  Future<void> _openStage() async {
+    if (_saving || !_preview.ready) return;
+    setState(() => _saving = true);
+    try {
+      await _preview.flush();
+      await _verify(_candidate!);
+      final preset = _preview.applied;
+      if (!_preview.ready || preset == null) {
+        throw const FormatException('请先准备有效伴奏');
+      }
+      await ref.read(backingPresetStoreProvider).save(preset);
+      await _preview.invalidate();
+      if (!mounted) return;
+      ref.invalidate(performanceBackingProvider(widget.source.id));
+      await context.push(
+        Uri(
+          path: '/performance/stage',
+          queryParameters: {'sourceId': widget.source.id},
+        ).toString(),
+      );
+    } on Object catch (e) {
+      if (mounted) setState(() => _notice = _text(e));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _reload() async {
     if (_preview.busy || _saving || _changing || _loading) return;
     await _preview.invalidate();
@@ -560,6 +589,13 @@ class _PerformancePrepareScreenState
                       ),
                     ],
                   ),
+                  FilledButton.icon(
+                    key: const Key('performance_enter_stage'),
+                    onPressed: locked ? null : _openStage,
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('进入演奏舞台'),
+                  ),
+                  const SizedBox(height: 8),
                   FilledButton.icon(
                     key: const Key('performance_save'),
                     onPressed: locked ? null : _save,

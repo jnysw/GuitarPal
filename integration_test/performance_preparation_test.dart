@@ -24,8 +24,11 @@ import 'package:guitar_pal/features/audio_tools/domain/video_mix_selection.dart'
 import 'package:guitar_pal/features/audio_tools/domain/stem_mix_settings.dart';
 import 'package:guitar_pal/features/performance/data/backing_preset_store.dart';
 import 'package:guitar_pal/features/performance/performance_prepare_screen.dart';
+import 'package:guitar_pal/features/performance/performance_stage_screen.dart';
+import 'package:guitar_pal/features/performance/performance_route_observer.dart';
 import 'package:guitar_pal/features/player/local_video_player_screen.dart';
 import 'package:guitar_pal/features/player/widgets/video_analysis_panel.dart';
+import 'package:guitar_pal/features/player/widgets/scrolling_chord_lane.dart';
 
 import '../test/support/algorithm_fixtures.dart';
 import 'support/video_analysis_fixture.dart';
@@ -126,6 +129,48 @@ void main() {
         jobId: 'contract_job_1',
         resultJson: jsonEncode(separationFixture()),
       );
+      await repository.insert(
+        AlgorithmTaskRecord(
+          id: 'stage-chords',
+          endpoint: 'https://algorithm.example',
+          inputPath: '/test-input',
+          inputName: 'test.wav',
+          inputSizeBytes: 256044,
+          inputDurationMs: 8000,
+          ownsInput: false,
+          state: AlgorithmTaskState.completed,
+          createdAt: now,
+          updatedAt: now,
+          failures: 0,
+          operation: AlgorithmOperation.chords,
+          linkedSourceId: source.id,
+          mediaBindingJson: jsonEncode(binding.toJson()),
+        ),
+      );
+      await repository.update(
+        'stage-chords',
+        AlgorithmTaskState.completed,
+        jobId: 'contract_job_1',
+        resultJson: r'''{
+  "job_id": "contract_job_1",
+  "status": "completed",
+  "audio_filename": "测试.wav",
+  "duration_seconds": 8.0,
+  "tempo_bpm": 120.0,
+  "key": "C major",
+  "progression": "I → vi → ?",
+  "chord_count": 2,
+  "segments": [
+    {"chord": "C", "roman": "I", "start": 0, "end": 3.25, "duration": 3.25, "confidence": 1.0},
+    {"chord": "A:min", "roman": "vi", "start": 3.25, "end": 7, "duration": 3.75, "confidence": 1.0},
+    {"chord": "X", "roman": "?", "start": 7, "end": 8, "duration": 1, "confidence": 1.0}
+  ],
+  "raw_chords": null,
+  "processing_time_seconds": 12.34,
+  "created_at": "2026-10-27T03:00:12.340Z"
+}
+''',
+      );
       for (final stem in [
         'vocals',
         'drums',
@@ -140,7 +185,14 @@ void main() {
       }
       final router = GoRouter(
         initialLocation: '/player',
+        observers: [performanceRouteObserver],
         routes: [
+          GoRoute(
+            path: '/performance/stage',
+            builder: (context, state) => PerformanceStageRouteScreen(
+              sourceId: state.uri.queryParameters['sourceId']!,
+            ),
+          ),
           GoRoute(
             path: '/player',
             builder: (context, state) => LocalVideoPlayerScreen(source: source),
@@ -253,6 +305,94 @@ void main() {
               .activeDurationMilliseconds,
           before.activeDurationMilliseconds,
         );
+        await _tap(tester, find.byKey(const Key('performance_enter_stage')));
+        await _until(
+          tester,
+          () => find.text('伴奏就绪，轮到你上台了').evaluate().isNotEmpty,
+        );
+        expect((await player.snapshot())['isPlaying'], isFalse);
+        expect(find.byType(PerformanceCharacterSlot), findsOneWidget);
+        expect(find.byType(ScrollingChordLane), findsOneWidget);
+        expect(find.byType(StageSpeaker), findsNWidgets(2));
+        expect(
+          (await database.select(database.practiceSessions).get()).length,
+          1,
+        );
+        await tester.tap(find.byKey(const Key('stage_play')));
+        await _nativeUntil(
+          tester,
+          player,
+          (s) => (s['positionMs'] as num) > 1200 && (s['leftRms'] as num) > .01,
+        );
+        await _until(
+          tester,
+          () =>
+              tester
+                  .widget<StageSpeaker>(
+                    find.byKey(const Key('stage_left_speaker')),
+                  )
+                  .level >
+              0,
+        );
+        if (const bool.fromEnvironment('CAPTURE_STAGE_QA')) {
+          debugPrint('STAGE_QA_READY');
+          await Future<void>.delayed(const Duration(seconds: 10));
+        }
+        await tester.tap(find.byKey(const Key('stage_play')));
+        await _nativeUntil(tester, player, (s) => s['isPlaying'] == false);
+        await _until(
+          tester,
+          () =>
+              tester
+                  .widget<StageSpeaker>(
+                    find.byKey(const Key('stage_left_speaker')),
+                  )
+                  .level ==
+              0,
+        );
+        await tester.tap(find.byTooltip('舞台设置'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        final volume = tester.widget<Slider>(
+          find.byKey(const Key('stage_master')),
+        );
+        volume.onChanged!(0);
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.tap(find.text('完成'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.tap(find.byKey(const Key('stage_play')));
+        await _nativeUntil(
+          tester,
+          player,
+          (s) =>
+              s['isPlaying'] == true && s['master'] == 0 && s['leftRms'] == 0,
+        );
+        expect(
+          tester
+              .widget<StageSpeaker>(find.byKey(const Key('stage_left_speaker')))
+              .level,
+          0,
+        );
+        await tester.binding.handlePopRoute();
+        await _until(
+          tester,
+          () => find.byType(PerformanceStageScreen).evaluate().isEmpty,
+        );
+        await _nativeUntil(tester, player, (s) => s['isLoaded'] == false);
+        final sessions = await database.select(database.practiceSessions).get();
+        expect(sessions.length, 2);
+        expect(
+          sessions.where((s) => s.id != before.id).single.completed,
+          isTrue,
+        );
+        expect(
+          sessions
+              .singleWhere((s) => s.id == before.id)
+              .activeDurationMilliseconds,
+          before.activeDurationMilliseconds,
+        );
+        expect(controller.isPlaying, isFalse);
         await tester.binding.handlePopRoute();
         await _until(
           tester,
@@ -274,7 +414,7 @@ void main() {
         );
         expect(
           (await database.select(database.practiceSessions).get()).length,
-          1,
+          2,
         );
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());

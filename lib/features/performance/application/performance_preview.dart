@@ -53,14 +53,15 @@ class PerformancePreview extends ChangeNotifier {
   void pauseDownload() => _cancel?.cancel();
   Future<void> prepare(
     PerformanceCandidate candidate,
-    BackingPreset preset,
-  ) async {
+    BackingPreset preset, {
+    bool allowDownload = true,
+  }) async {
     if (busy || !_foreground || _closed) return;
     final request = _generation;
     final pending = _pendingPreparation;
     if (pending != null) await pending;
     if (busy || !_foreground || _closed || request != _generation) return;
-    final work = _prepare(candidate, preset);
+    final work = _prepare(candidate, preset, allowDownload: allowDownload);
     _pendingPreparation = work;
     try {
       await work;
@@ -71,8 +72,9 @@ class PerformancePreview extends ChangeNotifier {
 
   Future<void> _prepare(
     PerformanceCandidate candidate,
-    BackingPreset preset,
-  ) async {
+    BackingPreset preset, {
+    required bool allowDownload,
+  }) async {
     if (busy || !_foreground || _closed) return;
     final token = ++_generation;
     final cancel = StemDownloadCancellation();
@@ -97,6 +99,7 @@ class PerformancePreview extends ChangeNotifier {
         if (cached != null) paths[stem.id] = cached.path;
       }
       if (paths.length != stems.length) {
+        if (!allowDownload) throw const FormatException('舞台需要完整伴奏，请返回准备页补齐音轨');
         if (!DateTime.now().toUtc().isBefore(candidate.result.expiresAt)) {
           throw const FormatException('服务器结果已到期，请只选本机完整音轨，或返回练习页重新分轨');
         }

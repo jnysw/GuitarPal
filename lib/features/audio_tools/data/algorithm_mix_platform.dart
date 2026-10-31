@@ -9,6 +9,7 @@ import '../domain/stem_mix_settings.dart';
 class AlgorithmMixPlatform {
   const AlgorithmMixPlatform();
   static const _channel = MethodChannel('com.guitarpal/algorithm_mix');
+  static Stream<Map<String, Object?>>? _levelsStream;
   Future<void> load(Map<String, String> paths) =>
       _channel.invokeMethod('load', {
         'tracks': paths.entries
@@ -61,6 +62,10 @@ class AlgorithmMixPlatform {
     });
   }
 
+  Stream<Map<String, Object?>> get levels =>
+      _levelsStream ??= const EventChannel('com.guitarpal/algorithm_mix_levels')
+          .receiveBroadcastStream()
+          .map((event) => (event as Map).cast<String, Object?>());
   Future<Map<String, Object?>> snapshot() async =>
       (await _channel.invokeMapMethod<String, Object?>('snapshot'))!;
 }
