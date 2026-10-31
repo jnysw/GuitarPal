@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -481,6 +482,22 @@ class _SourceDetailView extends ConsumerWidget {
                                 '此来源当前为引用模式。可以保存在练习库并打开原内容，App 内播放将在对应平台适配后开放。',
                               ),
                             ),
+                          if (kDebugMode &&
+                              source.platform == SourcePlatform.local &&
+                              source.kind == SourceKind.video) ...[
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              key: const Key('source_detail_performance'),
+                              onPressed: () => context.push(
+                                Uri(
+                                  path: '/performance/prepare',
+                                  queryParameters: {'sourceId': source.id},
+                                ).toString(),
+                              ),
+                              icon: const Icon(Icons.headphones),
+                              label: const Text('去演奏 · 准备伴奏'),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           OutlinedButton.icon(
                             key: const Key('source_detail_add_to_plan'),

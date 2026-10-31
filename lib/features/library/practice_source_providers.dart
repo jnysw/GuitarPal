@@ -6,6 +6,7 @@ import '../../domain/practice_source/practice_source.dart';
 import '../../domain/practice_source/practice_source_repository.dart';
 import '../../media/metadata/source_metadata_providers.dart';
 import '../audio_tools/algorithm_providers.dart';
+import '../performance/performance_providers.dart';
 import 'application/practice_library_service.dart';
 import 'application/practice_notes_export_service.dart';
 import 'application/source_launcher.dart';
@@ -32,6 +33,7 @@ final practiceLibraryServiceProvider = Provider<PracticeLibraryService>((ref) {
     localVideoGateway: ref.watch(localVideoGatewayProvider),
     metadataLoader: ref.watch(sourceMetadataLoaderProvider),
     deleteVideoMixPreferences: ref.watch(videoMixPreferencesProvider).delete,
+    deletePerformancePreferences: ref.watch(backingPresetStoreProvider).delete,
   );
 });
 

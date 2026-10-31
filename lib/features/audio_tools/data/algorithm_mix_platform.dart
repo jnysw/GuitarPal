@@ -27,6 +27,40 @@ class AlgorithmMixPlatform {
     'configure',
     settings.platformConfiguration(loadedIds),
   );
+
+  /// Dynamic manifest controls used by performance preview; never writes mix preferences.
+  Future<void> configureTracks(
+    Map<String, StemMixControl> controls, {
+    required double master,
+    required double speed,
+  }) {
+    if (controls.isEmpty ||
+        controls.length > 16 ||
+        !master.isFinite ||
+        master < 0 ||
+        master > 1 ||
+        !speed.isFinite ||
+        speed < .5 ||
+        speed > 2) {
+      throw const FormatException('混音设置无效');
+    }
+    for (final e in controls.entries) {
+      algorithmId(e.key);
+      StemMixControl.fromJson(e.value.toJson());
+    }
+    final solo = controls.values.any((c) => c.solo);
+    return _channel.invokeMethod('configure', {
+      'gains': controls.map(
+        (id, c) => MapEntry(id, c.muted || (solo && !c.solo) ? 0.0 : c.volume),
+      ),
+      'pans': controls.map((id, c) => MapEntry(id, c.pan)),
+      'master': master,
+      'speed': speed,
+      'loopStartMs': null,
+      'loopEndMs': null,
+    });
+  }
+
   Future<Map<String, Object?>> snapshot() async =>
       (await _channel.invokeMapMethod<String, Object?>('snapshot'))!;
 }

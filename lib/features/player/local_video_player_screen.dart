@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/practice_segment/practice_segment.dart';
@@ -355,6 +356,25 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _preparePerformance() async {
+    if (_recordingWorkflowActive || _controller?.isReady != true) return;
+    try {
+      await _controller!.pause();
+      if (_controller!.isPlaying) throw StateError('视频尚未暂停');
+      _trackPlayback();
+      await _sessionRecorder.checkpoint();
+      if (!mounted) return;
+      await context.push(
+        Uri(
+          path: '/performance/prepare',
+          queryParameters: {'sourceId': widget.source.id},
+        ).toString(),
+      );
+    } on Object {
+      if (mounted) _showMessage('暂时无法进入伴奏准备，请重试');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final path = _videoPath;
@@ -386,6 +406,20 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                   overflow: TextOverflow.ellipsis,
                 ),
                 actions: [
+                  if (kDebugMode)
+                    AnimatedBuilder(
+                      animation: _controller ?? kAlwaysCompleteAnimation,
+                      builder: (context, _) => IconButton(
+                        key: const Key('local_video_performance'),
+                        tooltip: '去演奏，准备伴奏',
+                        onPressed:
+                            _recordingWorkflowActive ||
+                                _controller?.isReady != true
+                            ? null
+                            : _preparePerformance,
+                        icon: const Icon(Icons.headphones),
+                      ),
+                    ),
                   if (kDebugMode)
                     AnimatedBuilder(
                       animation: _controller ?? kAlwaysCompleteAnimation,

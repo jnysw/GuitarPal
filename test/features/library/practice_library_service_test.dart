@@ -37,7 +37,7 @@ void main() {
     );
   });
 
-  test('deleting a source cleans its local mix preference without making cleanup failure undo deletion', () async {
+  test('deleting a source cleans independent mix and performance preferences even if one cleanup fails', () async {
     final cleaned = <String>[];
     final service = PracticeLibraryService(
       repository,
@@ -45,9 +45,12 @@ void main() {
         cleaned.add(id);
         throw StateError('private settings unavailable');
       },
+      deletePerformancePreferences: (id) async {
+        cleaned.add('performance:$id');
+      },
     );
     await service.delete(source);
-    expect(cleaned, [source.id]);
+    expect(cleaned, [source.id, 'performance:${source.id}']);
     expect(await repository.getById(source.id), isNull);
   });
 
