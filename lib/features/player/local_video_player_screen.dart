@@ -555,7 +555,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                         sourceId: widget.source.id,
                                         path: path,
                                         controller: _controller!,
-                                        showTimeline: false,
+                                        showTimeline: true,
                                         enabled: !_recordingWorkflowActive,
                                         onCalibrate: () => setState(() {
                                           _workspaceIndex = 1;

@@ -157,6 +157,23 @@ void main() {
             .controller;
         await _spin(tester, () => controller.position.inMilliseconds >= 3000);
         await _spin(tester, () => find.text('当前和弦 Am').evaluate().isNotEmpty);
+        await _spin(
+          tester,
+          () =>
+              find
+                  .byKey(const Key('chord_follow_scroll'))
+                  .evaluate()
+                  .isNotEmpty &&
+              tester
+                      .widget<SingleChildScrollView>(
+                        find.byKey(const Key('chord_follow_scroll')),
+                      )
+                      .controller!
+                      .offset >
+                  50,
+        );
+        expect(find.byKey(const Key('chord_follow_cursor')), findsOneWidget);
+
         await _tapVisible(
           tester,
           find.byKey(const Key('video_chord_settings')).hitTestable(),
@@ -284,6 +301,8 @@ void main() {
         );
         await _spin(tester, () => fullscreen.evaluate().isNotEmpty);
         expect(find.text('当前和弦 Am'), findsOneWidget);
+        expect(find.byKey(const Key('chord_follow_scroll')), findsOneWidget);
+        expect(find.byKey(const Key('chord_follow_cursor')), findsOneWidget);
         expect(find.byType(GuitarChordDiagram), findsOneWidget);
         expect(
           tester
