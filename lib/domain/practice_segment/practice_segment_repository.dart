@@ -1,6 +1,8 @@
 import 'practice_segment.dart';
 
 abstract interface class PracticeSegmentRepository {
+  Stream<List<PracticeSegment>> watchAll();
+
   Stream<List<PracticeSegment>> watchBySource(String sourceId);
 
   Future<PracticeSegment?> getById(String id);

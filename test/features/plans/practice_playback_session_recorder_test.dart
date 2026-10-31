@@ -44,6 +44,24 @@ void main() {
   });
 
   test(
+    'a failed final save can be retried without creating a second session',
+    () async {
+      repository.failNext = true;
+      recorder.observe(isPlaying: true, completedLoops: 0);
+      clock.advance(const Duration(seconds: 3));
+      await expectLater(recorder.finish(), throwsStateError);
+      clock.advance(const Duration(seconds: 10));
+      final saved = await recorder.finish();
+      expect(saved!.activeDuration, const Duration(seconds: 3));
+      expect(repository.sessions, hasLength(1));
+      expect(repository.sessions.single.id, saved.id);
+      expect(saved.completed, isTrue);
+    expect(repository.attemptedIds, hasLength(2));
+    expect(repository.attemptedIds.toSet(), hasLength(1));
+    },
+  );
+
+  test(
     'continues accumulating loops after the controller counter resets',
     () async {
       recorder.observe(isPlaying: false, completedLoops: 0);
@@ -254,6 +272,8 @@ final class _MutableClock {
 }
 
 final class _MemorySessionRepository implements PracticeSessionRepository {
+  bool failNext = false;
+  final List<String> attemptedIds = [];
   final List<PracticeSession> sessions = [];
   int saveCallCount = 0;
 
@@ -262,6 +282,11 @@ final class _MemorySessionRepository implements PracticeSessionRepository {
 
   @override
   Future<void> save(PracticeSession session) async {
+    attemptedIds.add(session.id);
+    if (failNext) {
+      failNext = false;
+      throw StateError('disk unavailable');
+    }
     saveCallCount += 1;
     final index = sessions.indexWhere((item) => item.id == session.id);
     if (index == -1) {

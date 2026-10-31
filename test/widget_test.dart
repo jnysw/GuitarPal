@@ -7,6 +7,7 @@ import 'package:guitar_pal/core/database/database_providers.dart';
 import 'package:guitar_pal/core/platform/local_video_gateway.dart';
 import 'package:guitar_pal/core/platform/share_intent_gateway.dart';
 import 'package:guitar_pal/core/platform/text_share_gateway.dart';
+import 'package:guitar_pal/core/sync/sync_outbox.dart';
 import 'package:guitar_pal/domain/practice_plan/calendar_date.dart';
 import 'package:guitar_pal/domain/practice_plan/practice_plan.dart';
 import 'package:guitar_pal/domain/practice_plan/practice_plan_repository.dart';
@@ -22,6 +23,7 @@ import 'package:guitar_pal/features/create/application/local_video_draft_store.d
 import 'package:guitar_pal/features/create/local_video_providers.dart';
 import 'package:guitar_pal/features/library/practice_source_providers.dart';
 import 'package:guitar_pal/features/plans/practice_plan_providers.dart';
+import 'package:guitar_pal/features/profile/account_providers.dart';
 import 'package:guitar_pal/features/recordings/practice_recording_providers.dart';
 import 'package:guitar_pal/features/segments/practice_segment_providers.dart';
 import 'package:guitar_pal/media/metadata/source_metadata.dart';
@@ -108,7 +110,7 @@ void main() {
     expect(find.text('准备开始今天的练习'), findsOneWidget);
   });
 
-  testWidgets('profile shows lifetime metrics and switches trend ranges', (
+  testWidgets('profile opens collapsible feedback and switches trend ranges', (
     tester,
   ) async {
     final sourceRepository = _MemoryPracticeSourceRepository();
@@ -169,8 +171,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('训练反馈'), findsOneWidget);
+    expect(find.byKey(const Key('profile_insights_entry')), findsOneWidget);
+    expect(find.byKey(const Key('profile_practice_trend')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('profile_insights_entry')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('练习反馈'), findsOneWidget);
     expect(find.byKey(const Key('profile_practice_trend')), findsOneWidget);
     expect(find.byKey(const Key('profile_trend_bar_13')), findsOneWidget);
+    expect(find.byKey(const Key('profile_total_duration')), findsNothing);
+
+    await tester.tap(find.text('12 周'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('profile_trend_bar_11')), findsOneWidget);
+    expect(find.byKey(const Key('profile_trend_bar_13')), findsNothing);
+
+    await tester.scrollUntilVisible(find.text('累计统计'), 220);
+    await tester.tap(find.text('累计统计'));
+    await tester.pumpAndSettle();
+
     expect(
       find.descendant(
         of: find.byKey(const Key('profile_total_duration')),
@@ -192,12 +213,38 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
 
-    await tester.tap(find.text('12 周'));
+  testWidgets('profile explains local account and synchronization roadmap', (
+    tester,
+  ) async {
+    appRouter.go('/profile');
+    await tester.pumpWidget(_testApp(_MemoryPracticeSourceRepository()));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('profile_trend_bar_11')), findsOneWidget);
-    expect(find.byKey(const Key('profile_trend_bar_13')), findsNothing);
+    await tester.tap(find.byKey(const Key('profile_account_header_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('账号与同步'), findsOneWidget);
+    expect(find.text('当前使用本地模式'), findsOneWidget);
+    expect(find.text('登录与同步尚未开放'), findsOneWidget);
+    expect(find.text('本机数据迁移预览'), findsOneWidget);
+    expect(find.text('本机目前还没有需要迁移的练习数据'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('account_inventory_sources')),
+        matching: find.text('曲目 0'),
+      ),
+      findsOneWidget,
+    );
+    final signIn = tester.widget<FilledButton>(
+      find.byKey(const Key('account_sign_in_disabled')),
+    );
+    expect(signIn.onPressed, isNull);
+    await tester.scrollUntilVisible(find.text('第一阶段：练习数据'), 220);
+    expect(find.text('第一阶段：练习数据'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('第二阶段：录音文件'), 220);
+    expect(find.text('第二阶段：录音文件'), findsOneWidget);
   });
 
   testWidgets(
@@ -780,6 +827,9 @@ Widget _testApp(
       practiceRecordingRepositoryProvider.overrideWithValue(
         _MemoryPracticeRecordingRepository(),
       ),
+      syncOutboxSummaryProvider.overrideWithValue(
+        const AsyncData(SyncOutboxSummary.empty()),
+      ),
       if (currentDate != null)
         currentCalendarDateProvider.overrideWithValue(currentDate),
       shareIntentGatewayProvider.overrideWithValue(
@@ -881,6 +931,9 @@ class _MemoryPracticeSourceRepository implements PracticeSourceRepository {
 
 class _MemoryPracticeSegmentRepository implements PracticeSegmentRepository {
   final List<PracticeSegment> segments = [];
+
+  @override
+  Stream<List<PracticeSegment>> watchAll() => Stream.value(List.of(segments));
 
   @override
   Future<void> delete(String id) async {

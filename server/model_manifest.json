@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "profile_id": "btc_pending_m0",
+      "engine": "chord_engine",
+      "enabled": false,
+      "code_commit": "df2c526a82b5a3df0bb9c8fbf36d4de4d659b520",
+      "checkpoint_uri": null,
+      "checkpoint_sha256": null,
+      "config_sha256": null,
+      "vocabulary_sha256": null,
+      "sample_rate": null,
+      "channels": null,
+      "hop_length": null,
+      "detector_type": null,
+      "smoothing": null,
+      "confidence_method": null,
+      "license_evidence": [],
+      "benchmark_evidence": []
+    },
+    {
+      "profile_id": "bs_roformer_pending_m0",
+      "engine": "bs_roformer",
+      "enabled": false,
+      "code_commit": "84f2b25297424e93f721d5fb9d42291c6d934284",
+      "checkpoint_uri": null,
+      "checkpoint_sha256": null,
+      "config_sha256": null,
+      "targets": [],
+      "sample_rate": null,
+      "channels": null,
+      "chunk_samples": null,
+      "overlap_samples": null,
+      "precision": null,
+      "estimated_vram_mb": null,
+      "license_evidence": [],
+      "benchmark_evidence": []
+    }
+  ]
+}

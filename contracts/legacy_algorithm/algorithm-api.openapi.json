@@ -1,0 +1,1393 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Flutter Algorithm Server — Existing Chords + Proposed Separation",
+    "version": "1.0.0-handoff",
+    "description": "Source audit: 2026-10-27. This combined specification documents existing chord routes and a NEW separation adapter contract. proposed-not-implemented operations do not exist yet. No service deployment or real-model integration test was performed. No authentication is currently implemented in chord-engine; production identity/ownership enforcement must be supplied by the business gateway. See FLUTTER_ALGORITHM_API.md for source discrepancies."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Development placeholder only; not a verified running server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "chords",
+      "description": "Existing chord-engine HTTP routes"
+    },
+    {
+      "name": "health",
+      "description": "Existing chord-engine health routes"
+    },
+    {
+      "name": "separation",
+      "description": "Proposed HTTP adapter; implementation required"
+    }
+  ],
+  "paths": {
+    "/api/v1/jobs": {
+      "post": {
+        "x-implementation-status": "existing",
+        "tags": [
+          "chords"
+        ],
+        "summary": "Upload audio for chord recognition",
+        "operationId": "createChordJob",
+        "parameters": [
+          {
+            "name": "smooth_method",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hmm",
+                "median"
+              ],
+              "default": "hmm"
+            },
+            "description": "Chord smoothing"
+          },
+          {
+            "name": "device",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cpu",
+                "cuda"
+              ],
+              "default": "cpu"
+            },
+            "description": "Existing public option; cached detector does not switch per request"
+          },
+          {
+            "name": "include_raw_chords",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Include raw frame labels"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "audio"
+                ],
+                "properties": {
+                  "audio": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "MP3/WAV/FLAC/OGG/M4A; max 52,428,800 bytes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "unsupported_format or invalid_file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "file_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "validation_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_server_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/status": {
+      "get": {
+        "x-implementation-status": "existing",
+        "tags": [
+          "chords"
+        ],
+        "summary": "Poll chord job status",
+        "operationId": "getChordStatus",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque job ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Includes failed jobs as HTTP 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChordStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "job_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_server_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/result": {
+      "get": {
+        "x-implementation-status": "existing",
+        "tags": [
+          "chords"
+        ],
+        "summary": "Fetch completed chord analysis",
+        "operationId": "getChordResult",
+        "description": "Current output is on a silence-trimmed timeline; no beats field; confidence defaults to 1.0. See handoff document before playback synchronization.",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque job ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chord analysis result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChordResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "job_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "job_not_complete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "processing_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_server_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "x-implementation-status": "existing",
+        "tags": [
+          "health"
+        ],
+        "summary": "Existing chord service health",
+        "operationId": "getChordHealth",
+        "responses": {
+          "200": {
+            "description": "Process health, not verified model readiness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/ping": {
+      "get": {
+        "x-implementation-status": "existing",
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness ping",
+        "operationId": "ping",
+        "responses": {
+          "200": {
+            "description": "Pong",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ping"
+                  ],
+                  "properties": {
+                    "ping": {
+                      "type": "string",
+                      "enum": [
+                        "pong"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/separation/jobs": {
+      "post": {
+        "x-implementation-status": "proposed-not-implemented",
+        "tags": [
+          "separation"
+        ],
+        "summary": "Upload audio for separation (to implement)",
+        "operationId": "createSeparationJob",
+        "description": "New adapter contract. Max 50 MiB; decoded duration 2–600 seconds checked in background. Server chooses device and fixed default model. Converts upload to an isolated WAV folder before Session.infer().",
+        "parameters": [
+          {
+            "name": "output_format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "wav_s16",
+                "wav_float32",
+                "flac16"
+              ],
+              "default": "wav_s16"
+            },
+            "description": "Explicit wrapper default; library default remains wav_float32"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "audio"
+                ],
+                "properties": {
+                  "audio": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "MP3/WAV/FLAC/OGG/M4A; max 52,428,800 bytes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "unsupported_format or invalid_file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "file_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "validation_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "queue_full",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Retry delay in seconds",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_server_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "model_unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/separation/jobs/{job_id}/status": {
+      "get": {
+        "x-implementation-status": "proposed-not-implemented",
+        "tags": [
+          "separation"
+        ],
+        "summary": "Poll separation job status (to implement)",
+        "operationId": "getSeparationStatus",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque job ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Includes failed jobs as HTTP 200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeparationStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "job_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "result_expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_server_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/separation/jobs/{job_id}/result": {
+      "get": {
+        "x-implementation-status": "proposed-not-implemented",
+        "tags": [
+          "separation"
+        ],
+        "summary": "Fetch separation outputs (to implement)",
+        "operationId": "getSeparationResult",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque job ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actual output file descriptors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeparationResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "job_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "job_not_complete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "result_expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "processing_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_server_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/separation/jobs/{job_id}/files/{stem_id}": {
+      "get": {
+        "x-implementation-status": "proposed-not-implemented",
+        "tags": [
+          "separation"
+        ],
+        "summary": "Read audio output with optional Range (to implement)",
+        "operationId": "downloadStem",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque job ID"
+          },
+          {
+            "name": "stem_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bass",
+                "drums",
+                "other",
+                "vocals",
+                "guitar",
+                "piano",
+                "instrumental"
+              ]
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Single byte range only, e.g. bytes=0-1048575"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full audio file",
+            "headers": {
+              "Content-Length": {
+                "description": "Number of bytes in this response body (full representation for HEAD)",
+                "schema": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "Accept-Ranges": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/flac": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Requested single byte range",
+            "headers": {
+              "Content-Length": {
+                "description": "Number of bytes in this response body (full representation for HEAD)",
+                "schema": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "Accept-Ranges": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "Content-Range": {
+                "description": "bytes start-end/total",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/flac": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "job_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "job_not_complete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "result_expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "range_not_satisfiable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "headers": {
+              "Content-Range": {
+                "description": "bytes */total",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "processing_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_server_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "x-implementation-status": "proposed-not-implemented",
+        "tags": [
+          "separation"
+        ],
+        "summary": "Read audio output headers (to implement)",
+        "operationId": "headStem",
+        "description": "No response body, including on errors. Uses full-file metadata; Range not supported for HEAD.",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque job ID"
+          },
+          {
+            "name": "stem_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bass",
+                "drums",
+                "other",
+                "vocals",
+                "guitar",
+                "piano",
+                "instrumental"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Same headers as full GET; no body",
+            "headers": {
+              "Content-Length": {
+                "description": "Number of bytes in this response body (full representation for HEAD)",
+                "schema": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              },
+              "Accept-Ranges": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "audio/wav",
+                    "audio/flac"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "job_not_found or stem_not_found; no body"
+          },
+          "409": {
+            "description": "job_not_complete; no body"
+          },
+          "410": {
+            "description": "result_expired; no body"
+          },
+          "422": {
+            "description": "processing_failed; no body"
+          },
+          "500": {
+            "description": "internal_server_error; no body"
+          }
+        }
+      }
+    },
+    "/api/v1/separation/health": {
+      "get": {
+        "operationId": "getSeparationHealth",
+        "tags": [
+          "separation"
+        ],
+        "summary": "Optional separation worker readiness check",
+        "description": "Newer development services expose this read-only check. A 404 permits the legacy ping fallback; other failures must not be treated as readiness. Device configuration remains server-owned.",
+        "responses": {
+          "200": {
+            "description": "Ready or lazy-load worker state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "model_loaded"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ready",
+                        "not_loaded",
+                        "unavailable"
+                      ]
+                    },
+                    "model_loaded": {
+                      "type": "boolean"
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Separation model unavailable; do not extract/upload a new task"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "required": [
+          "error",
+          "detail"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Machine-readable error code"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Human-readable error explanation"
+          },
+          "job_id": {
+            "type": "string",
+            "nullable": true,
+            "default": null
+          }
+        }
+      },
+      "UploadResponse": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "message",
+          "poll_url",
+          "result_url"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued"
+            ],
+            "default": "queued"
+          },
+          "message": {
+            "type": "string"
+          },
+          "poll_url": {
+            "type": "string",
+            "description": "Relative URL"
+          },
+          "result_url": {
+            "type": "string",
+            "description": "Relative URL"
+          }
+        }
+      },
+      "ChordSegment": {
+        "type": "object",
+        "required": [
+          "chord",
+          "roman",
+          "start",
+          "end",
+          "duration",
+          "confidence"
+        ],
+        "properties": {
+          "chord": {
+            "type": "string",
+            "description": "Actual major chords use bare roots, e.g. C; N=no chord, X=unknown"
+          },
+          "roman": {
+            "type": "string"
+          },
+          "start": {
+            "type": "number",
+            "description": "Seconds on trimmed analysis timeline"
+          },
+          "end": {
+            "type": "number",
+            "description": "Seconds on trimmed analysis timeline"
+          },
+          "duration": {
+            "type": "number",
+            "description": "Seconds"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Current pipeline fills 1.0; not actual model probability"
+          }
+        }
+      },
+      "ChordStatus": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "progress",
+          "message",
+          "created_at"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "processing",
+              "completed",
+              "failed"
+            ]
+          },
+          "progress": {
+            "type": "integer",
+            "description": "Stage checkpoint, 0–100"
+          },
+          "message": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Job creation time"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "default": null
+          }
+        }
+      },
+      "ChordResult": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "audio_filename",
+          "duration_seconds",
+          "tempo_bpm",
+          "key",
+          "progression",
+          "chord_count",
+          "segments",
+          "processing_time_seconds",
+          "created_at"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed"
+            ],
+            "default": "completed"
+          },
+          "audio_filename": {
+            "type": "string"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "description": "Duration after silence trimming"
+          },
+          "tempo_bpm": {
+            "type": "number"
+          },
+          "key": {
+            "type": "string"
+          },
+          "progression": {
+            "type": "string"
+          },
+          "chord_count": {
+            "type": "integer",
+            "description": "Unique chord labels, excluding N/X/-"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChordSegment"
+            }
+          },
+          "raw_chords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "default": null
+          },
+          "processing_time_seconds": {
+            "type": "number"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Despite the field name, this is completion time"
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": [
+          "status",
+          "version",
+          "model_loaded",
+          "uptime_seconds"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "model_loaded": {
+            "type": "boolean",
+            "description": "Existing imported binding may remain stale; does not reliably indicate readiness"
+          },
+          "uptime_seconds": {
+            "type": "number"
+          }
+        }
+      },
+      "TaskError": {
+        "type": "object",
+        "nullable": true,
+        "description": "Failure object on failed separation tasks; null for other states.",
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SeparationStatus": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "stage",
+          "progress",
+          "message",
+          "created_at",
+          "updated_at",
+          "error"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "processing",
+              "completed",
+              "failed"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "decoding",
+              "loading_model",
+              "separating",
+              "writing_outputs",
+              "completed",
+              "failed"
+            ]
+          },
+          "progress": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "nullable": true,
+            "description": "Unknown progress is null; completed is 100"
+          },
+          "message": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "$ref": "#/components/schemas/TaskError"
+          }
+        }
+      },
+      "StemFile": {
+        "type": "object",
+        "required": [
+          "id",
+          "origin",
+          "filename",
+          "content_type",
+          "size_bytes",
+          "duration_seconds",
+          "sample_rate",
+          "channels",
+          "download_url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "bass",
+              "drums",
+              "other",
+              "vocals",
+              "guitar",
+              "piano",
+              "instrumental"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "model",
+              "derived"
+            ]
+          },
+          "filename": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "audio/wav",
+              "audio/flac"
+            ]
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "duration_seconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "sample_rate": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "channels": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "download_url": {
+            "type": "string",
+            "description": "Relative URL; never a local filesystem path"
+          },
+          "sha256": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "Optional SHA-256 of the exact published file bytes. Legacy records may omit it or return null; do not infer this value from arbitrary HTTP ETags."
+          }
+        }
+      },
+      "SeparationResult": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "audio_filename",
+          "model",
+          "duration_seconds",
+          "output_format",
+          "processing_time_seconds",
+          "created_at",
+          "completed_at",
+          "expires_at",
+          "stems"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed"
+            ]
+          },
+          "audio_filename": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "roformer-model-bs-roformer-sw-by-jarredou"
+            ]
+          },
+          "duration_seconds": {
+            "type": "number",
+            "description": "Full decoded input duration, no silence trimming"
+          },
+          "output_format": {
+            "type": "string",
+            "enum": [
+              "wav_s16",
+              "wav_float32",
+              "flac16"
+            ]
+          },
+          "processing_time_seconds": {
+            "type": "number",
+            "description": "Background processing time, excludes queue wait and client upload"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "24 hours after completion"
+          },
+          "stems": {
+            "type": "array",
+            "minItems": 7,
+            "maxItems": 7,
+            "items": {
+              "$ref": "#/components/schemas/StemFile"
+            },
+            "description": "Six raw stems and one derived instrumental; IDs unique; actual files from manifest"
+          },
+          "diagnostics": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Optional measured server durations in milliseconds. queue_ms excludes worker_total_ms. This metadata is not upload/download progress and may be ignored by old clients."
+          }
+        }
+      }
+    }
+  }
+}

@@ -12,6 +12,12 @@ final practiceSegmentRepositoryProvider = Provider<PracticeSegmentRepository>((
   return DriftPracticeSegmentRepository(ref.watch(databaseProvider));
 });
 
+final allPracticeSegmentsProvider = StreamProvider<List<PracticeSegment>>((
+  ref,
+) {
+  return ref.watch(practiceSegmentRepositoryProvider).watchAll();
+});
+
 final practiceSegmentsProvider = StreamProvider.autoDispose
     .family<List<PracticeSegment>, String>((ref, sourceId) {
       return ref

@@ -14,8 +14,8 @@ void main() {
     await database.close();
   });
 
-  test('schema version includes practice recordings', () {
-    expect(database.schemaVersion, 8);
+  test('schema version includes persisted algorithm tasks', () {
+    expect(database.schemaVersion, 13);
   });
 
   test('practice source can be stored in the initial schema', () async {

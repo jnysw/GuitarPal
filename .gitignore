@@ -32,6 +32,14 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/config/supabase.local.json
+/config/algorithm.local.json
+/server/.venv/
+__pycache__/
+.pytest_cache/
+/server/.env
+/server/models/
+/server/benchmark_outputs/
 
 # Flutter platform files generated for this machine
 /android/local.properties

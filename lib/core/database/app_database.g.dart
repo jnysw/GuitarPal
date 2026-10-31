@@ -3701,6 +3701,1678 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
   }
 }
 
+class $SyncOutboxEntriesTable extends SyncOutboxEntries
+    with TableInfo<$SyncOutboxEntriesTable, SyncOutboxEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncOutboxEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationMeta = const VerificationMeta(
+    'operation',
+  );
+  @override
+  late final GeneratedColumn<String> operation = GeneratedColumn<String>(
+    'operation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _revisionMeta = const VerificationMeta(
+    'revision',
+  );
+  @override
+  late final GeneratedColumn<int> revision = GeneratedColumn<int>(
+    'revision',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _changedAtMeta = const VerificationMeta(
+    'changedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> changedAt = GeneratedColumn<DateTime>(
+    'changed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptCountMeta = const VerificationMeta(
+    'attemptCount',
+  );
+  @override
+  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
+    'attempt_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastErrorMeta = const VerificationMeta(
+    'lastError',
+  );
+  @override
+  late final GeneratedColumn<String> lastError = GeneratedColumn<String>(
+    'last_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    entityType,
+    entityId,
+    operation,
+    revision,
+    changedAt,
+    attemptCount,
+    lastError,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_outbox_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncOutboxEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('operation')) {
+      context.handle(
+        _operationMeta,
+        operation.isAcceptableOrUnknown(data['operation']!, _operationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_operationMeta);
+    }
+    if (data.containsKey('revision')) {
+      context.handle(
+        _revisionMeta,
+        revision.isAcceptableOrUnknown(data['revision']!, _revisionMeta),
+      );
+    }
+    if (data.containsKey('changed_at')) {
+      context.handle(
+        _changedAtMeta,
+        changedAt.isAcceptableOrUnknown(data['changed_at']!, _changedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_changedAtMeta);
+    }
+    if (data.containsKey('attempt_count')) {
+      context.handle(
+        _attemptCountMeta,
+        attemptCount.isAcceptableOrUnknown(
+          data['attempt_count']!,
+          _attemptCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error')) {
+      context.handle(
+        _lastErrorMeta,
+        lastError.isAcceptableOrUnknown(data['last_error']!, _lastErrorMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entityType, entityId};
+  @override
+  SyncOutboxEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncOutboxEntry(
+      entityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_type'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      operation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation'],
+      )!,
+      revision: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}revision'],
+      )!,
+      changedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}changed_at'],
+      )!,
+      attemptCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempt_count'],
+      )!,
+      lastError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error'],
+      ),
+    );
+  }
+
+  @override
+  $SyncOutboxEntriesTable createAlias(String alias) {
+    return $SyncOutboxEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class SyncOutboxEntry extends DataClass implements Insertable<SyncOutboxEntry> {
+  final String entityType;
+  final String entityId;
+  final String operation;
+  final int revision;
+  final DateTime changedAt;
+  final int attemptCount;
+  final String? lastError;
+  const SyncOutboxEntry({
+    required this.entityType,
+    required this.entityId,
+    required this.operation,
+    required this.revision,
+    required this.changedAt,
+    required this.attemptCount,
+    this.lastError,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entity_type'] = Variable<String>(entityType);
+    map['entity_id'] = Variable<String>(entityId);
+    map['operation'] = Variable<String>(operation);
+    map['revision'] = Variable<int>(revision);
+    map['changed_at'] = Variable<DateTime>(changedAt);
+    map['attempt_count'] = Variable<int>(attemptCount);
+    if (!nullToAbsent || lastError != null) {
+      map['last_error'] = Variable<String>(lastError);
+    }
+    return map;
+  }
+
+  SyncOutboxEntriesCompanion toCompanion(bool nullToAbsent) {
+    return SyncOutboxEntriesCompanion(
+      entityType: Value(entityType),
+      entityId: Value(entityId),
+      operation: Value(operation),
+      revision: Value(revision),
+      changedAt: Value(changedAt),
+      attemptCount: Value(attemptCount),
+      lastError: lastError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastError),
+    );
+  }
+
+  factory SyncOutboxEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncOutboxEntry(
+      entityType: serializer.fromJson<String>(json['entityType']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      operation: serializer.fromJson<String>(json['operation']),
+      revision: serializer.fromJson<int>(json['revision']),
+      changedAt: serializer.fromJson<DateTime>(json['changedAt']),
+      attemptCount: serializer.fromJson<int>(json['attemptCount']),
+      lastError: serializer.fromJson<String?>(json['lastError']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entityType': serializer.toJson<String>(entityType),
+      'entityId': serializer.toJson<String>(entityId),
+      'operation': serializer.toJson<String>(operation),
+      'revision': serializer.toJson<int>(revision),
+      'changedAt': serializer.toJson<DateTime>(changedAt),
+      'attemptCount': serializer.toJson<int>(attemptCount),
+      'lastError': serializer.toJson<String?>(lastError),
+    };
+  }
+
+  SyncOutboxEntry copyWith({
+    String? entityType,
+    String? entityId,
+    String? operation,
+    int? revision,
+    DateTime? changedAt,
+    int? attemptCount,
+    Value<String?> lastError = const Value.absent(),
+  }) => SyncOutboxEntry(
+    entityType: entityType ?? this.entityType,
+    entityId: entityId ?? this.entityId,
+    operation: operation ?? this.operation,
+    revision: revision ?? this.revision,
+    changedAt: changedAt ?? this.changedAt,
+    attemptCount: attemptCount ?? this.attemptCount,
+    lastError: lastError.present ? lastError.value : this.lastError,
+  );
+  SyncOutboxEntry copyWithCompanion(SyncOutboxEntriesCompanion data) {
+    return SyncOutboxEntry(
+      entityType: data.entityType.present
+          ? data.entityType.value
+          : this.entityType,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      operation: data.operation.present ? data.operation.value : this.operation,
+      revision: data.revision.present ? data.revision.value : this.revision,
+      changedAt: data.changedAt.present ? data.changedAt.value : this.changedAt,
+      attemptCount: data.attemptCount.present
+          ? data.attemptCount.value
+          : this.attemptCount,
+      lastError: data.lastError.present ? data.lastError.value : this.lastError,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncOutboxEntry(')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('operation: $operation, ')
+          ..write('revision: $revision, ')
+          ..write('changedAt: $changedAt, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('lastError: $lastError')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    entityType,
+    entityId,
+    operation,
+    revision,
+    changedAt,
+    attemptCount,
+    lastError,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncOutboxEntry &&
+          other.entityType == this.entityType &&
+          other.entityId == this.entityId &&
+          other.operation == this.operation &&
+          other.revision == this.revision &&
+          other.changedAt == this.changedAt &&
+          other.attemptCount == this.attemptCount &&
+          other.lastError == this.lastError);
+}
+
+class SyncOutboxEntriesCompanion extends UpdateCompanion<SyncOutboxEntry> {
+  final Value<String> entityType;
+  final Value<String> entityId;
+  final Value<String> operation;
+  final Value<int> revision;
+  final Value<DateTime> changedAt;
+  final Value<int> attemptCount;
+  final Value<String?> lastError;
+  final Value<int> rowid;
+  const SyncOutboxEntriesCompanion({
+    this.entityType = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.operation = const Value.absent(),
+    this.revision = const Value.absent(),
+    this.changedAt = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncOutboxEntriesCompanion.insert({
+    required String entityType,
+    required String entityId,
+    required String operation,
+    this.revision = const Value.absent(),
+    required DateTime changedAt,
+    this.attemptCount = const Value.absent(),
+    this.lastError = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : entityType = Value(entityType),
+       entityId = Value(entityId),
+       operation = Value(operation),
+       changedAt = Value(changedAt);
+  static Insertable<SyncOutboxEntry> custom({
+    Expression<String>? entityType,
+    Expression<String>? entityId,
+    Expression<String>? operation,
+    Expression<int>? revision,
+    Expression<DateTime>? changedAt,
+    Expression<int>? attemptCount,
+    Expression<String>? lastError,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entityType != null) 'entity_type': entityType,
+      if (entityId != null) 'entity_id': entityId,
+      if (operation != null) 'operation': operation,
+      if (revision != null) 'revision': revision,
+      if (changedAt != null) 'changed_at': changedAt,
+      if (attemptCount != null) 'attempt_count': attemptCount,
+      if (lastError != null) 'last_error': lastError,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncOutboxEntriesCompanion copyWith({
+    Value<String>? entityType,
+    Value<String>? entityId,
+    Value<String>? operation,
+    Value<int>? revision,
+    Value<DateTime>? changedAt,
+    Value<int>? attemptCount,
+    Value<String?>? lastError,
+    Value<int>? rowid,
+  }) {
+    return SyncOutboxEntriesCompanion(
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      operation: operation ?? this.operation,
+      revision: revision ?? this.revision,
+      changedAt: changedAt ?? this.changedAt,
+      attemptCount: attemptCount ?? this.attemptCount,
+      lastError: lastError ?? this.lastError,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (operation.present) {
+      map['operation'] = Variable<String>(operation.value);
+    }
+    if (revision.present) {
+      map['revision'] = Variable<int>(revision.value);
+    }
+    if (changedAt.present) {
+      map['changed_at'] = Variable<DateTime>(changedAt.value);
+    }
+    if (attemptCount.present) {
+      map['attempt_count'] = Variable<int>(attemptCount.value);
+    }
+    if (lastError.present) {
+      map['last_error'] = Variable<String>(lastError.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncOutboxEntriesCompanion(')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('operation: $operation, ')
+          ..write('revision: $revision, ')
+          ..write('changedAt: $changedAt, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('lastError: $lastError, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AlgorithmTasksTable extends AlgorithmTasks
+    with TableInfo<$AlgorithmTasksTable, AlgorithmTask> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AlgorithmTasksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationMeta = const VerificationMeta(
+    'operation',
+  );
+  @override
+  late final GeneratedColumn<String> operation = GeneratedColumn<String>(
+    'operation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('chords'),
+  );
+  static const VerificationMeta _endpointMeta = const VerificationMeta(
+    'endpoint',
+  );
+  @override
+  late final GeneratedColumn<String> endpoint = GeneratedColumn<String>(
+    'endpoint',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _inputPathMeta = const VerificationMeta(
+    'inputPath',
+  );
+  @override
+  late final GeneratedColumn<String> inputPath = GeneratedColumn<String>(
+    'input_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _inputNameMeta = const VerificationMeta(
+    'inputName',
+  );
+  @override
+  late final GeneratedColumn<String> inputName = GeneratedColumn<String>(
+    'input_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _inputSizeBytesMeta = const VerificationMeta(
+    'inputSizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> inputSizeBytes = GeneratedColumn<int>(
+    'input_size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _inputDurationMsMeta = const VerificationMeta(
+    'inputDurationMs',
+  );
+  @override
+  late final GeneratedColumn<int> inputDurationMs = GeneratedColumn<int>(
+    'input_duration_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ownsInputMeta = const VerificationMeta(
+    'ownsInput',
+  );
+  @override
+  late final GeneratedColumn<bool> ownsInput = GeneratedColumn<bool>(
+    'owns_input',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("owns_input" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _recordingIdMeta = const VerificationMeta(
+    'recordingId',
+  );
+  @override
+  late final GeneratedColumn<String> recordingId = GeneratedColumn<String>(
+    'recording_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _linkedSourceIdMeta = const VerificationMeta(
+    'linkedSourceId',
+  );
+  @override
+  late final GeneratedColumn<String> linkedSourceId = GeneratedColumn<String>(
+    'linked_source_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES practice_sources (id) ON DELETE SET NULL',
+    ),
+  );
+  static const VerificationMeta _linkedPlanIdMeta = const VerificationMeta(
+    'linkedPlanId',
+  );
+  @override
+  late final GeneratedColumn<String> linkedPlanId = GeneratedColumn<String>(
+    'linked_plan_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES practice_plans (id) ON DELETE SET NULL',
+    ),
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mediaBindingJsonMeta = const VerificationMeta(
+    'mediaBindingJson',
+  );
+  @override
+  late final GeneratedColumn<String> mediaBindingJson = GeneratedColumn<String>(
+    'media_binding_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _remoteJobIdMeta = const VerificationMeta(
+    'remoteJobId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteJobId = GeneratedColumn<String>(
+    'remote_job_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _progressMeta = const VerificationMeta(
+    'progress',
+  );
+  @override
+  late final GeneratedColumn<int> progress = GeneratedColumn<int>(
+    'progress',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _messageMeta = const VerificationMeta(
+    'message',
+  );
+  @override
+  late final GeneratedColumn<String> message = GeneratedColumn<String>(
+    'message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _resultJsonMeta = const VerificationMeta(
+    'resultJson',
+  );
+  @override
+  late final GeneratedColumn<String> resultJson = GeneratedColumn<String>(
+    'result_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _consecutiveFailuresMeta =
+      const VerificationMeta('consecutiveFailures');
+  @override
+  late final GeneratedColumn<int> consecutiveFailures = GeneratedColumn<int>(
+    'consecutive_failures',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _nextPollAtMeta = const VerificationMeta(
+    'nextPollAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextPollAt = GeneratedColumn<DateTime>(
+    'next_poll_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    operation,
+    endpoint,
+    inputPath,
+    inputName,
+    inputSizeBytes,
+    inputDurationMs,
+    ownsInput,
+    recordingId,
+    linkedSourceId,
+    linkedPlanId,
+    status,
+    mediaBindingJson,
+    remoteJobId,
+    progress,
+    message,
+    resultJson,
+    consecutiveFailures,
+    nextPollAt,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'algorithm_tasks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AlgorithmTask> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('operation')) {
+      context.handle(
+        _operationMeta,
+        operation.isAcceptableOrUnknown(data['operation']!, _operationMeta),
+      );
+    }
+    if (data.containsKey('endpoint')) {
+      context.handle(
+        _endpointMeta,
+        endpoint.isAcceptableOrUnknown(data['endpoint']!, _endpointMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_endpointMeta);
+    }
+    if (data.containsKey('input_path')) {
+      context.handle(
+        _inputPathMeta,
+        inputPath.isAcceptableOrUnknown(data['input_path']!, _inputPathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_inputPathMeta);
+    }
+    if (data.containsKey('input_name')) {
+      context.handle(
+        _inputNameMeta,
+        inputName.isAcceptableOrUnknown(data['input_name']!, _inputNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_inputNameMeta);
+    }
+    if (data.containsKey('input_size_bytes')) {
+      context.handle(
+        _inputSizeBytesMeta,
+        inputSizeBytes.isAcceptableOrUnknown(
+          data['input_size_bytes']!,
+          _inputSizeBytesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_inputSizeBytesMeta);
+    }
+    if (data.containsKey('input_duration_ms')) {
+      context.handle(
+        _inputDurationMsMeta,
+        inputDurationMs.isAcceptableOrUnknown(
+          data['input_duration_ms']!,
+          _inputDurationMsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_inputDurationMsMeta);
+    }
+    if (data.containsKey('owns_input')) {
+      context.handle(
+        _ownsInputMeta,
+        ownsInput.isAcceptableOrUnknown(data['owns_input']!, _ownsInputMeta),
+      );
+    }
+    if (data.containsKey('recording_id')) {
+      context.handle(
+        _recordingIdMeta,
+        recordingId.isAcceptableOrUnknown(
+          data['recording_id']!,
+          _recordingIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('linked_source_id')) {
+      context.handle(
+        _linkedSourceIdMeta,
+        linkedSourceId.isAcceptableOrUnknown(
+          data['linked_source_id']!,
+          _linkedSourceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('linked_plan_id')) {
+      context.handle(
+        _linkedPlanIdMeta,
+        linkedPlanId.isAcceptableOrUnknown(
+          data['linked_plan_id']!,
+          _linkedPlanIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('media_binding_json')) {
+      context.handle(
+        _mediaBindingJsonMeta,
+        mediaBindingJson.isAcceptableOrUnknown(
+          data['media_binding_json']!,
+          _mediaBindingJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remote_job_id')) {
+      context.handle(
+        _remoteJobIdMeta,
+        remoteJobId.isAcceptableOrUnknown(
+          data['remote_job_id']!,
+          _remoteJobIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('progress')) {
+      context.handle(
+        _progressMeta,
+        progress.isAcceptableOrUnknown(data['progress']!, _progressMeta),
+      );
+    }
+    if (data.containsKey('message')) {
+      context.handle(
+        _messageMeta,
+        message.isAcceptableOrUnknown(data['message']!, _messageMeta),
+      );
+    }
+    if (data.containsKey('result_json')) {
+      context.handle(
+        _resultJsonMeta,
+        resultJson.isAcceptableOrUnknown(data['result_json']!, _resultJsonMeta),
+      );
+    }
+    if (data.containsKey('consecutive_failures')) {
+      context.handle(
+        _consecutiveFailuresMeta,
+        consecutiveFailures.isAcceptableOrUnknown(
+          data['consecutive_failures']!,
+          _consecutiveFailuresMeta,
+        ),
+      );
+    }
+    if (data.containsKey('next_poll_at')) {
+      context.handle(
+        _nextPollAtMeta,
+        nextPollAt.isAcceptableOrUnknown(
+          data['next_poll_at']!,
+          _nextPollAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AlgorithmTask map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AlgorithmTask(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      operation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation'],
+      )!,
+      endpoint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}endpoint'],
+      )!,
+      inputPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}input_path'],
+      )!,
+      inputName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}input_name'],
+      )!,
+      inputSizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}input_size_bytes'],
+      )!,
+      inputDurationMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}input_duration_ms'],
+      )!,
+      ownsInput: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}owns_input'],
+      )!,
+      recordingId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}recording_id'],
+      ),
+      linkedSourceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}linked_source_id'],
+      ),
+      linkedPlanId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}linked_plan_id'],
+      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      mediaBindingJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}media_binding_json'],
+      ),
+      remoteJobId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_job_id'],
+      ),
+      progress: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}progress'],
+      ),
+      message: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}message'],
+      ),
+      resultJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}result_json'],
+      ),
+      consecutiveFailures: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}consecutive_failures'],
+      )!,
+      nextPollAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_poll_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $AlgorithmTasksTable createAlias(String alias) {
+    return $AlgorithmTasksTable(attachedDatabase, alias);
+  }
+}
+
+class AlgorithmTask extends DataClass implements Insertable<AlgorithmTask> {
+  final String id;
+  final String operation;
+  final String endpoint;
+  final String inputPath;
+  final String inputName;
+  final int inputSizeBytes;
+  final int inputDurationMs;
+  final bool ownsInput;
+  final String? recordingId;
+  final String? linkedSourceId;
+  final String? linkedPlanId;
+  final String status;
+  final String? mediaBindingJson;
+  final String? remoteJobId;
+  final int? progress;
+  final String? message;
+  final String? resultJson;
+  final int consecutiveFailures;
+  final DateTime? nextPollAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const AlgorithmTask({
+    required this.id,
+    required this.operation,
+    required this.endpoint,
+    required this.inputPath,
+    required this.inputName,
+    required this.inputSizeBytes,
+    required this.inputDurationMs,
+    required this.ownsInput,
+    this.recordingId,
+    this.linkedSourceId,
+    this.linkedPlanId,
+    required this.status,
+    this.mediaBindingJson,
+    this.remoteJobId,
+    this.progress,
+    this.message,
+    this.resultJson,
+    required this.consecutiveFailures,
+    this.nextPollAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['operation'] = Variable<String>(operation);
+    map['endpoint'] = Variable<String>(endpoint);
+    map['input_path'] = Variable<String>(inputPath);
+    map['input_name'] = Variable<String>(inputName);
+    map['input_size_bytes'] = Variable<int>(inputSizeBytes);
+    map['input_duration_ms'] = Variable<int>(inputDurationMs);
+    map['owns_input'] = Variable<bool>(ownsInput);
+    if (!nullToAbsent || recordingId != null) {
+      map['recording_id'] = Variable<String>(recordingId);
+    }
+    if (!nullToAbsent || linkedSourceId != null) {
+      map['linked_source_id'] = Variable<String>(linkedSourceId);
+    }
+    if (!nullToAbsent || linkedPlanId != null) {
+      map['linked_plan_id'] = Variable<String>(linkedPlanId);
+    }
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || mediaBindingJson != null) {
+      map['media_binding_json'] = Variable<String>(mediaBindingJson);
+    }
+    if (!nullToAbsent || remoteJobId != null) {
+      map['remote_job_id'] = Variable<String>(remoteJobId);
+    }
+    if (!nullToAbsent || progress != null) {
+      map['progress'] = Variable<int>(progress);
+    }
+    if (!nullToAbsent || message != null) {
+      map['message'] = Variable<String>(message);
+    }
+    if (!nullToAbsent || resultJson != null) {
+      map['result_json'] = Variable<String>(resultJson);
+    }
+    map['consecutive_failures'] = Variable<int>(consecutiveFailures);
+    if (!nullToAbsent || nextPollAt != null) {
+      map['next_poll_at'] = Variable<DateTime>(nextPollAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  AlgorithmTasksCompanion toCompanion(bool nullToAbsent) {
+    return AlgorithmTasksCompanion(
+      id: Value(id),
+      operation: Value(operation),
+      endpoint: Value(endpoint),
+      inputPath: Value(inputPath),
+      inputName: Value(inputName),
+      inputSizeBytes: Value(inputSizeBytes),
+      inputDurationMs: Value(inputDurationMs),
+      ownsInput: Value(ownsInput),
+      recordingId: recordingId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recordingId),
+      linkedSourceId: linkedSourceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(linkedSourceId),
+      linkedPlanId: linkedPlanId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(linkedPlanId),
+      status: Value(status),
+      mediaBindingJson: mediaBindingJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mediaBindingJson),
+      remoteJobId: remoteJobId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteJobId),
+      progress: progress == null && nullToAbsent
+          ? const Value.absent()
+          : Value(progress),
+      message: message == null && nullToAbsent
+          ? const Value.absent()
+          : Value(message),
+      resultJson: resultJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resultJson),
+      consecutiveFailures: Value(consecutiveFailures),
+      nextPollAt: nextPollAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextPollAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AlgorithmTask.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AlgorithmTask(
+      id: serializer.fromJson<String>(json['id']),
+      operation: serializer.fromJson<String>(json['operation']),
+      endpoint: serializer.fromJson<String>(json['endpoint']),
+      inputPath: serializer.fromJson<String>(json['inputPath']),
+      inputName: serializer.fromJson<String>(json['inputName']),
+      inputSizeBytes: serializer.fromJson<int>(json['inputSizeBytes']),
+      inputDurationMs: serializer.fromJson<int>(json['inputDurationMs']),
+      ownsInput: serializer.fromJson<bool>(json['ownsInput']),
+      recordingId: serializer.fromJson<String?>(json['recordingId']),
+      linkedSourceId: serializer.fromJson<String?>(json['linkedSourceId']),
+      linkedPlanId: serializer.fromJson<String?>(json['linkedPlanId']),
+      status: serializer.fromJson<String>(json['status']),
+      mediaBindingJson: serializer.fromJson<String?>(json['mediaBindingJson']),
+      remoteJobId: serializer.fromJson<String?>(json['remoteJobId']),
+      progress: serializer.fromJson<int?>(json['progress']),
+      message: serializer.fromJson<String?>(json['message']),
+      resultJson: serializer.fromJson<String?>(json['resultJson']),
+      consecutiveFailures: serializer.fromJson<int>(
+        json['consecutiveFailures'],
+      ),
+      nextPollAt: serializer.fromJson<DateTime?>(json['nextPollAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'operation': serializer.toJson<String>(operation),
+      'endpoint': serializer.toJson<String>(endpoint),
+      'inputPath': serializer.toJson<String>(inputPath),
+      'inputName': serializer.toJson<String>(inputName),
+      'inputSizeBytes': serializer.toJson<int>(inputSizeBytes),
+      'inputDurationMs': serializer.toJson<int>(inputDurationMs),
+      'ownsInput': serializer.toJson<bool>(ownsInput),
+      'recordingId': serializer.toJson<String?>(recordingId),
+      'linkedSourceId': serializer.toJson<String?>(linkedSourceId),
+      'linkedPlanId': serializer.toJson<String?>(linkedPlanId),
+      'status': serializer.toJson<String>(status),
+      'mediaBindingJson': serializer.toJson<String?>(mediaBindingJson),
+      'remoteJobId': serializer.toJson<String?>(remoteJobId),
+      'progress': serializer.toJson<int?>(progress),
+      'message': serializer.toJson<String?>(message),
+      'resultJson': serializer.toJson<String?>(resultJson),
+      'consecutiveFailures': serializer.toJson<int>(consecutiveFailures),
+      'nextPollAt': serializer.toJson<DateTime?>(nextPollAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  AlgorithmTask copyWith({
+    String? id,
+    String? operation,
+    String? endpoint,
+    String? inputPath,
+    String? inputName,
+    int? inputSizeBytes,
+    int? inputDurationMs,
+    bool? ownsInput,
+    Value<String?> recordingId = const Value.absent(),
+    Value<String?> linkedSourceId = const Value.absent(),
+    Value<String?> linkedPlanId = const Value.absent(),
+    String? status,
+    Value<String?> mediaBindingJson = const Value.absent(),
+    Value<String?> remoteJobId = const Value.absent(),
+    Value<int?> progress = const Value.absent(),
+    Value<String?> message = const Value.absent(),
+    Value<String?> resultJson = const Value.absent(),
+    int? consecutiveFailures,
+    Value<DateTime?> nextPollAt = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => AlgorithmTask(
+    id: id ?? this.id,
+    operation: operation ?? this.operation,
+    endpoint: endpoint ?? this.endpoint,
+    inputPath: inputPath ?? this.inputPath,
+    inputName: inputName ?? this.inputName,
+    inputSizeBytes: inputSizeBytes ?? this.inputSizeBytes,
+    inputDurationMs: inputDurationMs ?? this.inputDurationMs,
+    ownsInput: ownsInput ?? this.ownsInput,
+    recordingId: recordingId.present ? recordingId.value : this.recordingId,
+    linkedSourceId: linkedSourceId.present
+        ? linkedSourceId.value
+        : this.linkedSourceId,
+    linkedPlanId: linkedPlanId.present ? linkedPlanId.value : this.linkedPlanId,
+    status: status ?? this.status,
+    mediaBindingJson: mediaBindingJson.present
+        ? mediaBindingJson.value
+        : this.mediaBindingJson,
+    remoteJobId: remoteJobId.present ? remoteJobId.value : this.remoteJobId,
+    progress: progress.present ? progress.value : this.progress,
+    message: message.present ? message.value : this.message,
+    resultJson: resultJson.present ? resultJson.value : this.resultJson,
+    consecutiveFailures: consecutiveFailures ?? this.consecutiveFailures,
+    nextPollAt: nextPollAt.present ? nextPollAt.value : this.nextPollAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  AlgorithmTask copyWithCompanion(AlgorithmTasksCompanion data) {
+    return AlgorithmTask(
+      id: data.id.present ? data.id.value : this.id,
+      operation: data.operation.present ? data.operation.value : this.operation,
+      endpoint: data.endpoint.present ? data.endpoint.value : this.endpoint,
+      inputPath: data.inputPath.present ? data.inputPath.value : this.inputPath,
+      inputName: data.inputName.present ? data.inputName.value : this.inputName,
+      inputSizeBytes: data.inputSizeBytes.present
+          ? data.inputSizeBytes.value
+          : this.inputSizeBytes,
+      inputDurationMs: data.inputDurationMs.present
+          ? data.inputDurationMs.value
+          : this.inputDurationMs,
+      ownsInput: data.ownsInput.present ? data.ownsInput.value : this.ownsInput,
+      recordingId: data.recordingId.present
+          ? data.recordingId.value
+          : this.recordingId,
+      linkedSourceId: data.linkedSourceId.present
+          ? data.linkedSourceId.value
+          : this.linkedSourceId,
+      linkedPlanId: data.linkedPlanId.present
+          ? data.linkedPlanId.value
+          : this.linkedPlanId,
+      status: data.status.present ? data.status.value : this.status,
+      mediaBindingJson: data.mediaBindingJson.present
+          ? data.mediaBindingJson.value
+          : this.mediaBindingJson,
+      remoteJobId: data.remoteJobId.present
+          ? data.remoteJobId.value
+          : this.remoteJobId,
+      progress: data.progress.present ? data.progress.value : this.progress,
+      message: data.message.present ? data.message.value : this.message,
+      resultJson: data.resultJson.present
+          ? data.resultJson.value
+          : this.resultJson,
+      consecutiveFailures: data.consecutiveFailures.present
+          ? data.consecutiveFailures.value
+          : this.consecutiveFailures,
+      nextPollAt: data.nextPollAt.present
+          ? data.nextPollAt.value
+          : this.nextPollAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AlgorithmTask(')
+          ..write('id: $id, ')
+          ..write('operation: $operation, ')
+          ..write('endpoint: $endpoint, ')
+          ..write('inputPath: $inputPath, ')
+          ..write('inputName: $inputName, ')
+          ..write('inputSizeBytes: $inputSizeBytes, ')
+          ..write('inputDurationMs: $inputDurationMs, ')
+          ..write('ownsInput: $ownsInput, ')
+          ..write('recordingId: $recordingId, ')
+          ..write('linkedSourceId: $linkedSourceId, ')
+          ..write('linkedPlanId: $linkedPlanId, ')
+          ..write('status: $status, ')
+          ..write('mediaBindingJson: $mediaBindingJson, ')
+          ..write('remoteJobId: $remoteJobId, ')
+          ..write('progress: $progress, ')
+          ..write('message: $message, ')
+          ..write('resultJson: $resultJson, ')
+          ..write('consecutiveFailures: $consecutiveFailures, ')
+          ..write('nextPollAt: $nextPollAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    operation,
+    endpoint,
+    inputPath,
+    inputName,
+    inputSizeBytes,
+    inputDurationMs,
+    ownsInput,
+    recordingId,
+    linkedSourceId,
+    linkedPlanId,
+    status,
+    mediaBindingJson,
+    remoteJobId,
+    progress,
+    message,
+    resultJson,
+    consecutiveFailures,
+    nextPollAt,
+    createdAt,
+    updatedAt,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AlgorithmTask &&
+          other.id == this.id &&
+          other.operation == this.operation &&
+          other.endpoint == this.endpoint &&
+          other.inputPath == this.inputPath &&
+          other.inputName == this.inputName &&
+          other.inputSizeBytes == this.inputSizeBytes &&
+          other.inputDurationMs == this.inputDurationMs &&
+          other.ownsInput == this.ownsInput &&
+          other.recordingId == this.recordingId &&
+          other.linkedSourceId == this.linkedSourceId &&
+          other.linkedPlanId == this.linkedPlanId &&
+          other.status == this.status &&
+          other.mediaBindingJson == this.mediaBindingJson &&
+          other.remoteJobId == this.remoteJobId &&
+          other.progress == this.progress &&
+          other.message == this.message &&
+          other.resultJson == this.resultJson &&
+          other.consecutiveFailures == this.consecutiveFailures &&
+          other.nextPollAt == this.nextPollAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AlgorithmTasksCompanion extends UpdateCompanion<AlgorithmTask> {
+  final Value<String> id;
+  final Value<String> operation;
+  final Value<String> endpoint;
+  final Value<String> inputPath;
+  final Value<String> inputName;
+  final Value<int> inputSizeBytes;
+  final Value<int> inputDurationMs;
+  final Value<bool> ownsInput;
+  final Value<String?> recordingId;
+  final Value<String?> linkedSourceId;
+  final Value<String?> linkedPlanId;
+  final Value<String> status;
+  final Value<String?> mediaBindingJson;
+  final Value<String?> remoteJobId;
+  final Value<int?> progress;
+  final Value<String?> message;
+  final Value<String?> resultJson;
+  final Value<int> consecutiveFailures;
+  final Value<DateTime?> nextPollAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const AlgorithmTasksCompanion({
+    this.id = const Value.absent(),
+    this.operation = const Value.absent(),
+    this.endpoint = const Value.absent(),
+    this.inputPath = const Value.absent(),
+    this.inputName = const Value.absent(),
+    this.inputSizeBytes = const Value.absent(),
+    this.inputDurationMs = const Value.absent(),
+    this.ownsInput = const Value.absent(),
+    this.recordingId = const Value.absent(),
+    this.linkedSourceId = const Value.absent(),
+    this.linkedPlanId = const Value.absent(),
+    this.status = const Value.absent(),
+    this.mediaBindingJson = const Value.absent(),
+    this.remoteJobId = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.message = const Value.absent(),
+    this.resultJson = const Value.absent(),
+    this.consecutiveFailures = const Value.absent(),
+    this.nextPollAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AlgorithmTasksCompanion.insert({
+    required String id,
+    this.operation = const Value.absent(),
+    required String endpoint,
+    required String inputPath,
+    required String inputName,
+    required int inputSizeBytes,
+    required int inputDurationMs,
+    this.ownsInput = const Value.absent(),
+    this.recordingId = const Value.absent(),
+    this.linkedSourceId = const Value.absent(),
+    this.linkedPlanId = const Value.absent(),
+    required String status,
+    this.mediaBindingJson = const Value.absent(),
+    this.remoteJobId = const Value.absent(),
+    this.progress = const Value.absent(),
+    this.message = const Value.absent(),
+    this.resultJson = const Value.absent(),
+    this.consecutiveFailures = const Value.absent(),
+    this.nextPollAt = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       endpoint = Value(endpoint),
+       inputPath = Value(inputPath),
+       inputName = Value(inputName),
+       inputSizeBytes = Value(inputSizeBytes),
+       inputDurationMs = Value(inputDurationMs),
+       status = Value(status),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<AlgorithmTask> custom({
+    Expression<String>? id,
+    Expression<String>? operation,
+    Expression<String>? endpoint,
+    Expression<String>? inputPath,
+    Expression<String>? inputName,
+    Expression<int>? inputSizeBytes,
+    Expression<int>? inputDurationMs,
+    Expression<bool>? ownsInput,
+    Expression<String>? recordingId,
+    Expression<String>? linkedSourceId,
+    Expression<String>? linkedPlanId,
+    Expression<String>? status,
+    Expression<String>? mediaBindingJson,
+    Expression<String>? remoteJobId,
+    Expression<int>? progress,
+    Expression<String>? message,
+    Expression<String>? resultJson,
+    Expression<int>? consecutiveFailures,
+    Expression<DateTime>? nextPollAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (operation != null) 'operation': operation,
+      if (endpoint != null) 'endpoint': endpoint,
+      if (inputPath != null) 'input_path': inputPath,
+      if (inputName != null) 'input_name': inputName,
+      if (inputSizeBytes != null) 'input_size_bytes': inputSizeBytes,
+      if (inputDurationMs != null) 'input_duration_ms': inputDurationMs,
+      if (ownsInput != null) 'owns_input': ownsInput,
+      if (recordingId != null) 'recording_id': recordingId,
+      if (linkedSourceId != null) 'linked_source_id': linkedSourceId,
+      if (linkedPlanId != null) 'linked_plan_id': linkedPlanId,
+      if (status != null) 'status': status,
+      if (mediaBindingJson != null) 'media_binding_json': mediaBindingJson,
+      if (remoteJobId != null) 'remote_job_id': remoteJobId,
+      if (progress != null) 'progress': progress,
+      if (message != null) 'message': message,
+      if (resultJson != null) 'result_json': resultJson,
+      if (consecutiveFailures != null)
+        'consecutive_failures': consecutiveFailures,
+      if (nextPollAt != null) 'next_poll_at': nextPollAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AlgorithmTasksCompanion copyWith({
+    Value<String>? id,
+    Value<String>? operation,
+    Value<String>? endpoint,
+    Value<String>? inputPath,
+    Value<String>? inputName,
+    Value<int>? inputSizeBytes,
+    Value<int>? inputDurationMs,
+    Value<bool>? ownsInput,
+    Value<String?>? recordingId,
+    Value<String?>? linkedSourceId,
+    Value<String?>? linkedPlanId,
+    Value<String>? status,
+    Value<String?>? mediaBindingJson,
+    Value<String?>? remoteJobId,
+    Value<int?>? progress,
+    Value<String?>? message,
+    Value<String?>? resultJson,
+    Value<int>? consecutiveFailures,
+    Value<DateTime?>? nextPollAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return AlgorithmTasksCompanion(
+      id: id ?? this.id,
+      operation: operation ?? this.operation,
+      endpoint: endpoint ?? this.endpoint,
+      inputPath: inputPath ?? this.inputPath,
+      inputName: inputName ?? this.inputName,
+      inputSizeBytes: inputSizeBytes ?? this.inputSizeBytes,
+      inputDurationMs: inputDurationMs ?? this.inputDurationMs,
+      ownsInput: ownsInput ?? this.ownsInput,
+      recordingId: recordingId ?? this.recordingId,
+      linkedSourceId: linkedSourceId ?? this.linkedSourceId,
+      linkedPlanId: linkedPlanId ?? this.linkedPlanId,
+      status: status ?? this.status,
+      mediaBindingJson: mediaBindingJson ?? this.mediaBindingJson,
+      remoteJobId: remoteJobId ?? this.remoteJobId,
+      progress: progress ?? this.progress,
+      message: message ?? this.message,
+      resultJson: resultJson ?? this.resultJson,
+      consecutiveFailures: consecutiveFailures ?? this.consecutiveFailures,
+      nextPollAt: nextPollAt ?? this.nextPollAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (operation.present) {
+      map['operation'] = Variable<String>(operation.value);
+    }
+    if (endpoint.present) {
+      map['endpoint'] = Variable<String>(endpoint.value);
+    }
+    if (inputPath.present) {
+      map['input_path'] = Variable<String>(inputPath.value);
+    }
+    if (inputName.present) {
+      map['input_name'] = Variable<String>(inputName.value);
+    }
+    if (inputSizeBytes.present) {
+      map['input_size_bytes'] = Variable<int>(inputSizeBytes.value);
+    }
+    if (inputDurationMs.present) {
+      map['input_duration_ms'] = Variable<int>(inputDurationMs.value);
+    }
+    if (ownsInput.present) {
+      map['owns_input'] = Variable<bool>(ownsInput.value);
+    }
+    if (recordingId.present) {
+      map['recording_id'] = Variable<String>(recordingId.value);
+    }
+    if (linkedSourceId.present) {
+      map['linked_source_id'] = Variable<String>(linkedSourceId.value);
+    }
+    if (linkedPlanId.present) {
+      map['linked_plan_id'] = Variable<String>(linkedPlanId.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (mediaBindingJson.present) {
+      map['media_binding_json'] = Variable<String>(mediaBindingJson.value);
+    }
+    if (remoteJobId.present) {
+      map['remote_job_id'] = Variable<String>(remoteJobId.value);
+    }
+    if (progress.present) {
+      map['progress'] = Variable<int>(progress.value);
+    }
+    if (message.present) {
+      map['message'] = Variable<String>(message.value);
+    }
+    if (resultJson.present) {
+      map['result_json'] = Variable<String>(resultJson.value);
+    }
+    if (consecutiveFailures.present) {
+      map['consecutive_failures'] = Variable<int>(consecutiveFailures.value);
+    }
+    if (nextPollAt.present) {
+      map['next_poll_at'] = Variable<DateTime>(nextPollAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AlgorithmTasksCompanion(')
+          ..write('id: $id, ')
+          ..write('operation: $operation, ')
+          ..write('endpoint: $endpoint, ')
+          ..write('inputPath: $inputPath, ')
+          ..write('inputName: $inputName, ')
+          ..write('inputSizeBytes: $inputSizeBytes, ')
+          ..write('inputDurationMs: $inputDurationMs, ')
+          ..write('ownsInput: $ownsInput, ')
+          ..write('recordingId: $recordingId, ')
+          ..write('linkedSourceId: $linkedSourceId, ')
+          ..write('linkedPlanId: $linkedPlanId, ')
+          ..write('status: $status, ')
+          ..write('mediaBindingJson: $mediaBindingJson, ')
+          ..write('remoteJobId: $remoteJobId, ')
+          ..write('progress: $progress, ')
+          ..write('message: $message, ')
+          ..write('resultJson: $resultJson, ')
+          ..write('consecutiveFailures: $consecutiveFailures, ')
+          ..write('nextPollAt: $nextPollAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3716,6 +5388,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $PracticeRecordingsTable practiceRecordings =
       $PracticeRecordingsTable(this);
+  late final $SyncOutboxEntriesTable syncOutboxEntries =
+      $SyncOutboxEntriesTable(this);
+  late final $AlgorithmTasksTable algorithmTasks = $AlgorithmTasksTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3726,6 +5401,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     practicePlans,
     practiceSessions,
     practiceRecordings,
+    syncOutboxEntries,
+    algorithmTasks,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -3756,6 +5433,20 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('practice_sessions', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'practice_sources',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('algorithm_tasks', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'practice_plans',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('algorithm_tasks', kind: UpdateKind.update)],
     ),
   ]);
 }
@@ -3839,6 +5530,24 @@ final class $$PracticeSourcesTableReferences
     ).filter((f) => f.sourceId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_practicePlansRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$AlgorithmTasksTable, List<AlgorithmTask>>
+  _algorithmTasksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.algorithmTasks,
+    aliasName: 'practice_sources__id__algorithm_tasks__linked_source_id',
+  );
+
+  $$AlgorithmTasksTableProcessedTableManager get algorithmTasksRefs {
+    final manager = $$AlgorithmTasksTableTableManager(
+      $_db,
+      $_db.algorithmTasks,
+    ).filter((f) => f.linkedSourceId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_algorithmTasksRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -3965,6 +5674,31 @@ class $$PracticeSourcesTableFilterComposer
           }) => $$PracticePlansTableFilterComposer(
             $db: $db,
             $table: $db.practicePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> algorithmTasksRefs(
+    Expression<bool> Function($$AlgorithmTasksTableFilterComposer f) f,
+  ) {
+    final $$AlgorithmTasksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.algorithmTasks,
+      getReferencedColumn: (t) => t.linkedSourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AlgorithmTasksTableFilterComposer(
+            $db: $db,
+            $table: $db.algorithmTasks,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -4169,6 +5903,31 @@ class $$PracticeSourcesTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> algorithmTasksRefs<T extends Object>(
+    Expression<T> Function($$AlgorithmTasksTableAnnotationComposer a) f,
+  ) {
+    final $$AlgorithmTasksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.algorithmTasks,
+      getReferencedColumn: (t) => t.linkedSourceId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AlgorithmTasksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.algorithmTasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$PracticeSourcesTableTableManager
@@ -4187,6 +5946,7 @@ class $$PracticeSourcesTableTableManager
           PrefetchHooks Function({
             bool practiceSegmentsRefs,
             bool practicePlansRefs,
+            bool algorithmTasksRefs,
           })
         > {
   $$PracticeSourcesTableTableManager(
@@ -4279,12 +6039,17 @@ class $$PracticeSourcesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({practiceSegmentsRefs = false, practicePlansRefs = false}) {
+              ({
+                practiceSegmentsRefs = false,
+                practicePlansRefs = false,
+                algorithmTasksRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (practiceSegmentsRefs) db.practiceSegments,
                     if (practicePlansRefs) db.practicePlans,
+                    if (algorithmTasksRefs) db.algorithmTasks,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -4331,6 +6096,27 @@ class $$PracticeSourcesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (algorithmTasksRefs)
+                        await $_getPrefetchedData<
+                          PracticeSource,
+                          $PracticeSourcesTable,
+                          AlgorithmTask
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PracticeSourcesTableReferences
+                              ._algorithmTasksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PracticeSourcesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).algorithmTasksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.linkedSourceId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -4354,6 +6140,7 @@ typedef $$PracticeSourcesTableProcessedTableManager =
       PrefetchHooks Function({
         bool practiceSegmentsRefs,
         bool practicePlansRefs,
+        bool algorithmTasksRefs,
       })
     >;
 typedef $$PracticeSegmentsTableCreateCompanionBuilder =
@@ -4952,6 +6739,24 @@ final class $$PracticePlansTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$AlgorithmTasksTable, List<AlgorithmTask>>
+  _algorithmTasksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.algorithmTasks,
+    aliasName: 'practice_plans__id__algorithm_tasks__linked_plan_id',
+  );
+
+  $$AlgorithmTasksTableProcessedTableManager get algorithmTasksRefs {
+    final manager = $$AlgorithmTasksTableTableManager(
+      $_db,
+      $_db.algorithmTasks,
+    ).filter((f) => f.linkedPlanId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_algorithmTasksRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$PracticePlansTableFilterComposer
@@ -5080,6 +6885,31 @@ class $$PracticePlansTableFilterComposer
           }) => $$PracticeSessionsTableFilterComposer(
             $db: $db,
             $table: $db.practiceSessions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> algorithmTasksRefs(
+    Expression<bool> Function($$AlgorithmTasksTableFilterComposer f) f,
+  ) {
+    final $$AlgorithmTasksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.algorithmTasks,
+      getReferencedColumn: (t) => t.linkedPlanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AlgorithmTasksTableFilterComposer(
+            $db: $db,
+            $table: $db.algorithmTasks,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5321,6 +7151,31 @@ class $$PracticePlansTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> algorithmTasksRefs<T extends Object>(
+    Expression<T> Function($$AlgorithmTasksTableAnnotationComposer a) f,
+  ) {
+    final $$AlgorithmTasksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.algorithmTasks,
+      getReferencedColumn: (t) => t.linkedPlanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AlgorithmTasksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.algorithmTasks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$PracticePlansTableTableManager
@@ -5340,6 +7195,7 @@ class $$PracticePlansTableTableManager
             bool sourceId,
             bool segmentId,
             bool practiceSessionsRefs,
+            bool algorithmTasksRefs,
           })
         > {
   $$PracticePlansTableTableManager(_$AppDatabase db, $PracticePlansTable table)
@@ -5430,11 +7286,13 @@ class $$PracticePlansTableTableManager
                 sourceId = false,
                 segmentId = false,
                 practiceSessionsRefs = false,
+                algorithmTasksRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (practiceSessionsRefs) db.practiceSessions,
+                    if (algorithmTasksRefs) db.algorithmTasks,
                   ],
                   addJoins:
                       <
@@ -5500,6 +7358,27 @@ class $$PracticePlansTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (algorithmTasksRefs)
+                        await $_getPrefetchedData<
+                          PracticePlan,
+                          $PracticePlansTable,
+                          AlgorithmTask
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PracticePlansTableReferences
+                              ._algorithmTasksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PracticePlansTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).algorithmTasksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.linkedPlanId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -5524,6 +7403,7 @@ typedef $$PracticePlansTableProcessedTableManager =
         bool sourceId,
         bool segmentId,
         bool practiceSessionsRefs,
+        bool algorithmTasksRefs,
       })
     >;
 typedef $$PracticeSessionsTableCreateCompanionBuilder =
@@ -6352,6 +8232,994 @@ typedef $$PracticeRecordingsTableProcessedTableManager =
       PracticeRecording,
       PrefetchHooks Function()
     >;
+typedef $$SyncOutboxEntriesTableCreateCompanionBuilder =
+    SyncOutboxEntriesCompanion Function({
+      required String entityType,
+      required String entityId,
+      required String operation,
+      Value<int> revision,
+      required DateTime changedAt,
+      Value<int> attemptCount,
+      Value<String?> lastError,
+      Value<int> rowid,
+    });
+typedef $$SyncOutboxEntriesTableUpdateCompanionBuilder =
+    SyncOutboxEntriesCompanion Function({
+      Value<String> entityType,
+      Value<String> entityId,
+      Value<String> operation,
+      Value<int> revision,
+      Value<DateTime> changedAt,
+      Value<int> attemptCount,
+      Value<String?> lastError,
+      Value<int> rowid,
+    });
+
+class $$SyncOutboxEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncOutboxEntriesTable> {
+  $$SyncOutboxEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncOutboxEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncOutboxEntriesTable> {
+  $$SyncOutboxEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get revision => $composableBuilder(
+    column: $table.revision,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get changedAt => $composableBuilder(
+    column: $table.changedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastError => $composableBuilder(
+    column: $table.lastError,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncOutboxEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncOutboxEntriesTable> {
+  $$SyncOutboxEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<String> get operation =>
+      $composableBuilder(column: $table.operation, builder: (column) => column);
+
+  GeneratedColumn<int> get revision =>
+      $composableBuilder(column: $table.revision, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get changedAt =>
+      $composableBuilder(column: $table.changedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastError =>
+      $composableBuilder(column: $table.lastError, builder: (column) => column);
+}
+
+class $$SyncOutboxEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncOutboxEntriesTable,
+          SyncOutboxEntry,
+          $$SyncOutboxEntriesTableFilterComposer,
+          $$SyncOutboxEntriesTableOrderingComposer,
+          $$SyncOutboxEntriesTableAnnotationComposer,
+          $$SyncOutboxEntriesTableCreateCompanionBuilder,
+          $$SyncOutboxEntriesTableUpdateCompanionBuilder,
+          (
+            SyncOutboxEntry,
+            BaseReferences<
+              _$AppDatabase,
+              $SyncOutboxEntriesTable,
+              SyncOutboxEntry
+            >,
+          ),
+          SyncOutboxEntry,
+          PrefetchHooks Function()
+        > {
+  $$SyncOutboxEntriesTableTableManager(
+    _$AppDatabase db,
+    $SyncOutboxEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncOutboxEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncOutboxEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncOutboxEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> entityType = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<String> operation = const Value.absent(),
+                Value<int> revision = const Value.absent(),
+                Value<DateTime> changedAt = const Value.absent(),
+                Value<int> attemptCount = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncOutboxEntriesCompanion(
+                entityType: entityType,
+                entityId: entityId,
+                operation: operation,
+                revision: revision,
+                changedAt: changedAt,
+                attemptCount: attemptCount,
+                lastError: lastError,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entityType,
+                required String entityId,
+                required String operation,
+                Value<int> revision = const Value.absent(),
+                required DateTime changedAt,
+                Value<int> attemptCount = const Value.absent(),
+                Value<String?> lastError = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncOutboxEntriesCompanion.insert(
+                entityType: entityType,
+                entityId: entityId,
+                operation: operation,
+                revision: revision,
+                changedAt: changedAt,
+                attemptCount: attemptCount,
+                lastError: lastError,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SyncOutboxEntriesTable, SyncOutboxEntry>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncOutboxEntriesTable,
+                    SyncOutboxEntry
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncOutboxEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncOutboxEntriesTable,
+      SyncOutboxEntry,
+      $$SyncOutboxEntriesTableFilterComposer,
+      $$SyncOutboxEntriesTableOrderingComposer,
+      $$SyncOutboxEntriesTableAnnotationComposer,
+      $$SyncOutboxEntriesTableCreateCompanionBuilder,
+      $$SyncOutboxEntriesTableUpdateCompanionBuilder,
+      (
+        SyncOutboxEntry,
+        BaseReferences<_$AppDatabase, $SyncOutboxEntriesTable, SyncOutboxEntry>,
+      ),
+      SyncOutboxEntry,
+      PrefetchHooks Function()
+    >;
+typedef $$AlgorithmTasksTableCreateCompanionBuilder =
+    AlgorithmTasksCompanion Function({
+      required String id,
+      Value<String> operation,
+      required String endpoint,
+      required String inputPath,
+      required String inputName,
+      required int inputSizeBytes,
+      required int inputDurationMs,
+      Value<bool> ownsInput,
+      Value<String?> recordingId,
+      Value<String?> linkedSourceId,
+      Value<String?> linkedPlanId,
+      required String status,
+      Value<String?> mediaBindingJson,
+      Value<String?> remoteJobId,
+      Value<int?> progress,
+      Value<String?> message,
+      Value<String?> resultJson,
+      Value<int> consecutiveFailures,
+      Value<DateTime?> nextPollAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$AlgorithmTasksTableUpdateCompanionBuilder =
+    AlgorithmTasksCompanion Function({
+      Value<String> id,
+      Value<String> operation,
+      Value<String> endpoint,
+      Value<String> inputPath,
+      Value<String> inputName,
+      Value<int> inputSizeBytes,
+      Value<int> inputDurationMs,
+      Value<bool> ownsInput,
+      Value<String?> recordingId,
+      Value<String?> linkedSourceId,
+      Value<String?> linkedPlanId,
+      Value<String> status,
+      Value<String?> mediaBindingJson,
+      Value<String?> remoteJobId,
+      Value<int?> progress,
+      Value<String?> message,
+      Value<String?> resultJson,
+      Value<int> consecutiveFailures,
+      Value<DateTime?> nextPollAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$AlgorithmTasksTableReferences
+    extends BaseReferences<_$AppDatabase, $AlgorithmTasksTable, AlgorithmTask> {
+  $$AlgorithmTasksTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PracticeSourcesTable _linkedSourceIdTable(_$AppDatabase db) => db
+      .practiceSources
+      .createAlias('algorithm_tasks__linked_source_id__practice_sources__id');
+
+  $$PracticeSourcesTableProcessedTableManager? get linkedSourceId {
+    final $_column = $_itemColumn<String>('linked_source_id');
+    if ($_column == null) return null;
+    final manager = $$PracticeSourcesTableTableManager(
+      $_db,
+      $_db.practiceSources,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_linkedSourceIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $PracticePlansTable _linkedPlanIdTable(_$AppDatabase db) => db
+      .practicePlans
+      .createAlias('algorithm_tasks__linked_plan_id__practice_plans__id');
+
+  $$PracticePlansTableProcessedTableManager? get linkedPlanId {
+    final $_column = $_itemColumn<String>('linked_plan_id');
+    if ($_column == null) return null;
+    final manager = $$PracticePlansTableTableManager(
+      $_db,
+      $_db.practicePlans,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_linkedPlanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$AlgorithmTasksTableFilterComposer
+    extends Composer<_$AppDatabase, $AlgorithmTasksTable> {
+  $$AlgorithmTasksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get endpoint => $composableBuilder(
+    column: $table.endpoint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get inputPath => $composableBuilder(
+    column: $table.inputPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get inputName => $composableBuilder(
+    column: $table.inputName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get inputSizeBytes => $composableBuilder(
+    column: $table.inputSizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get inputDurationMs => $composableBuilder(
+    column: $table.inputDurationMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get ownsInput => $composableBuilder(
+    column: $table.ownsInput,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recordingId => $composableBuilder(
+    column: $table.recordingId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mediaBindingJson => $composableBuilder(
+    column: $table.mediaBindingJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteJobId => $composableBuilder(
+    column: $table.remoteJobId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get progress => $composableBuilder(
+    column: $table.progress,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resultJson => $composableBuilder(
+    column: $table.resultJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get consecutiveFailures => $composableBuilder(
+    column: $table.consecutiveFailures,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextPollAt => $composableBuilder(
+    column: $table.nextPollAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PracticeSourcesTableFilterComposer get linkedSourceId {
+    final $$PracticeSourcesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedSourceId,
+      referencedTable: $db.practiceSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticeSourcesTableFilterComposer(
+            $db: $db,
+            $table: $db.practiceSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$PracticePlansTableFilterComposer get linkedPlanId {
+    final $$PracticePlansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedPlanId,
+      referencedTable: $db.practicePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticePlansTableFilterComposer(
+            $db: $db,
+            $table: $db.practicePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AlgorithmTasksTableOrderingComposer
+    extends Composer<_$AppDatabase, $AlgorithmTasksTable> {
+  $$AlgorithmTasksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get endpoint => $composableBuilder(
+    column: $table.endpoint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get inputPath => $composableBuilder(
+    column: $table.inputPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get inputName => $composableBuilder(
+    column: $table.inputName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get inputSizeBytes => $composableBuilder(
+    column: $table.inputSizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get inputDurationMs => $composableBuilder(
+    column: $table.inputDurationMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get ownsInput => $composableBuilder(
+    column: $table.ownsInput,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get recordingId => $composableBuilder(
+    column: $table.recordingId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mediaBindingJson => $composableBuilder(
+    column: $table.mediaBindingJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteJobId => $composableBuilder(
+    column: $table.remoteJobId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get progress => $composableBuilder(
+    column: $table.progress,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resultJson => $composableBuilder(
+    column: $table.resultJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get consecutiveFailures => $composableBuilder(
+    column: $table.consecutiveFailures,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextPollAt => $composableBuilder(
+    column: $table.nextPollAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PracticeSourcesTableOrderingComposer get linkedSourceId {
+    final $$PracticeSourcesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedSourceId,
+      referencedTable: $db.practiceSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticeSourcesTableOrderingComposer(
+            $db: $db,
+            $table: $db.practiceSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$PracticePlansTableOrderingComposer get linkedPlanId {
+    final $$PracticePlansTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedPlanId,
+      referencedTable: $db.practicePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticePlansTableOrderingComposer(
+            $db: $db,
+            $table: $db.practicePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AlgorithmTasksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AlgorithmTasksTable> {
+  $$AlgorithmTasksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get operation =>
+      $composableBuilder(column: $table.operation, builder: (column) => column);
+
+  GeneratedColumn<String> get endpoint =>
+      $composableBuilder(column: $table.endpoint, builder: (column) => column);
+
+  GeneratedColumn<String> get inputPath =>
+      $composableBuilder(column: $table.inputPath, builder: (column) => column);
+
+  GeneratedColumn<String> get inputName =>
+      $composableBuilder(column: $table.inputName, builder: (column) => column);
+
+  GeneratedColumn<int> get inputSizeBytes => $composableBuilder(
+    column: $table.inputSizeBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get inputDurationMs => $composableBuilder(
+    column: $table.inputDurationMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get ownsInput =>
+      $composableBuilder(column: $table.ownsInput, builder: (column) => column);
+
+  GeneratedColumn<String> get recordingId => $composableBuilder(
+    column: $table.recordingId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get mediaBindingJson => $composableBuilder(
+    column: $table.mediaBindingJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remoteJobId => $composableBuilder(
+    column: $table.remoteJobId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get progress =>
+      $composableBuilder(column: $table.progress, builder: (column) => column);
+
+  GeneratedColumn<String> get message =>
+      $composableBuilder(column: $table.message, builder: (column) => column);
+
+  GeneratedColumn<String> get resultJson => $composableBuilder(
+    column: $table.resultJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get consecutiveFailures => $composableBuilder(
+    column: $table.consecutiveFailures,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get nextPollAt => $composableBuilder(
+    column: $table.nextPollAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$PracticeSourcesTableAnnotationComposer get linkedSourceId {
+    final $$PracticeSourcesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedSourceId,
+      referencedTable: $db.practiceSources,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticeSourcesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.practiceSources,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$PracticePlansTableAnnotationComposer get linkedPlanId {
+    final $$PracticePlansTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.linkedPlanId,
+      referencedTable: $db.practicePlans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PracticePlansTableAnnotationComposer(
+            $db: $db,
+            $table: $db.practicePlans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$AlgorithmTasksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AlgorithmTasksTable,
+          AlgorithmTask,
+          $$AlgorithmTasksTableFilterComposer,
+          $$AlgorithmTasksTableOrderingComposer,
+          $$AlgorithmTasksTableAnnotationComposer,
+          $$AlgorithmTasksTableCreateCompanionBuilder,
+          $$AlgorithmTasksTableUpdateCompanionBuilder,
+          (AlgorithmTask, $$AlgorithmTasksTableReferences),
+          AlgorithmTask,
+          PrefetchHooks Function({bool linkedSourceId, bool linkedPlanId})
+        > {
+  $$AlgorithmTasksTableTableManager(
+    _$AppDatabase db,
+    $AlgorithmTasksTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AlgorithmTasksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AlgorithmTasksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AlgorithmTasksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> operation = const Value.absent(),
+                Value<String> endpoint = const Value.absent(),
+                Value<String> inputPath = const Value.absent(),
+                Value<String> inputName = const Value.absent(),
+                Value<int> inputSizeBytes = const Value.absent(),
+                Value<int> inputDurationMs = const Value.absent(),
+                Value<bool> ownsInput = const Value.absent(),
+                Value<String?> recordingId = const Value.absent(),
+                Value<String?> linkedSourceId = const Value.absent(),
+                Value<String?> linkedPlanId = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> mediaBindingJson = const Value.absent(),
+                Value<String?> remoteJobId = const Value.absent(),
+                Value<int?> progress = const Value.absent(),
+                Value<String?> message = const Value.absent(),
+                Value<String?> resultJson = const Value.absent(),
+                Value<int> consecutiveFailures = const Value.absent(),
+                Value<DateTime?> nextPollAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AlgorithmTasksCompanion(
+                id: id,
+                operation: operation,
+                endpoint: endpoint,
+                inputPath: inputPath,
+                inputName: inputName,
+                inputSizeBytes: inputSizeBytes,
+                inputDurationMs: inputDurationMs,
+                ownsInput: ownsInput,
+                recordingId: recordingId,
+                linkedSourceId: linkedSourceId,
+                linkedPlanId: linkedPlanId,
+                status: status,
+                mediaBindingJson: mediaBindingJson,
+                remoteJobId: remoteJobId,
+                progress: progress,
+                message: message,
+                resultJson: resultJson,
+                consecutiveFailures: consecutiveFailures,
+                nextPollAt: nextPollAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                Value<String> operation = const Value.absent(),
+                required String endpoint,
+                required String inputPath,
+                required String inputName,
+                required int inputSizeBytes,
+                required int inputDurationMs,
+                Value<bool> ownsInput = const Value.absent(),
+                Value<String?> recordingId = const Value.absent(),
+                Value<String?> linkedSourceId = const Value.absent(),
+                Value<String?> linkedPlanId = const Value.absent(),
+                required String status,
+                Value<String?> mediaBindingJson = const Value.absent(),
+                Value<String?> remoteJobId = const Value.absent(),
+                Value<int?> progress = const Value.absent(),
+                Value<String?> message = const Value.absent(),
+                Value<String?> resultJson = const Value.absent(),
+                Value<int> consecutiveFailures = const Value.absent(),
+                Value<DateTime?> nextPollAt = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => AlgorithmTasksCompanion.insert(
+                id: id,
+                operation: operation,
+                endpoint: endpoint,
+                inputPath: inputPath,
+                inputName: inputName,
+                inputSizeBytes: inputSizeBytes,
+                inputDurationMs: inputDurationMs,
+                ownsInput: ownsInput,
+                recordingId: recordingId,
+                linkedSourceId: linkedSourceId,
+                linkedPlanId: linkedPlanId,
+                status: status,
+                mediaBindingJson: mediaBindingJson,
+                remoteJobId: remoteJobId,
+                progress: progress,
+                message: message,
+                resultJson: resultJson,
+                consecutiveFailures: consecutiveFailures,
+                nextPollAt: nextPollAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$AlgorithmTasksTable, AlgorithmTask>(table),
+                  $$AlgorithmTasksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({linkedSourceId = false, linkedPlanId = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (linkedSourceId) {
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.linkedSourceId,
+                            referencedTable: $$AlgorithmTasksTableReferences
+                                ._linkedSourceIdTable(db),
+                            referencedColumn: $$AlgorithmTasksTableReferences
+                                ._linkedSourceIdTable(db)
+                                .id,
+                          ) as T;
+                        }
+                        if (linkedPlanId) {
+                          state = state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.linkedPlanId,
+                            referencedTable: $$AlgorithmTasksTableReferences
+                                ._linkedPlanIdTable(db),
+                            referencedColumn: $$AlgorithmTasksTableReferences
+                                ._linkedPlanIdTable(db)
+                                .id,
+                          ) as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$AlgorithmTasksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AlgorithmTasksTable,
+      AlgorithmTask,
+      $$AlgorithmTasksTableFilterComposer,
+      $$AlgorithmTasksTableOrderingComposer,
+      $$AlgorithmTasksTableAnnotationComposer,
+      $$AlgorithmTasksTableCreateCompanionBuilder,
+      $$AlgorithmTasksTableUpdateCompanionBuilder,
+      (AlgorithmTask, $$AlgorithmTasksTableReferences),
+      AlgorithmTask,
+      PrefetchHooks Function({bool linkedSourceId, bool linkedPlanId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6366,4 +9234,8 @@ class $AppDatabaseManager {
       $$PracticeSessionsTableTableManager(_db, _db.practiceSessions);
   $$PracticeRecordingsTableTableManager get practiceRecordings =>
       $$PracticeRecordingsTableTableManager(_db, _db.practiceRecordings);
+  $$SyncOutboxEntriesTableTableManager get syncOutboxEntries =>
+      $$SyncOutboxEntriesTableTableManager(_db, _db.syncOutboxEntries);
+  $$AlgorithmTasksTableTableManager get algorithmTasks =>
+      $$AlgorithmTasksTableTableManager(_db, _db.algorithmTasks);
 }

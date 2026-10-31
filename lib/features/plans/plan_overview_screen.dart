@@ -29,6 +29,12 @@ class PlanOverviewScreen extends ConsumerWidget {
         title: const Text('练习计划'),
         actions: [
           IconButton(
+            key: const Key('plans_reminders_button'),
+            tooltip: '管理练习提醒',
+            onPressed: () => context.push('/plans/reminders'),
+            icon: const Icon(Icons.notifications_outlined),
+          ),
+          IconButton(
             key: const Key('plans_create_button'),
             tooltip: '新建计划',
             onPressed: () => context.push('/plans/new'),
@@ -109,6 +115,9 @@ class PlanOverviewScreen extends ConsumerWidget {
                           : null,
                       onEdit: () => context.push(
                         '/plans/${Uri.encodeComponent(plan.id)}/edit',
+                      ),
+                      onReminder: () => context.push(
+                        '/plans/${Uri.encodeComponent(plan.id)}/reminder',
                       ),
                       onOutcomes: () => context.push(
                         '/plans/${Uri.encodeComponent(plan.id)}/recordings',
@@ -470,6 +479,7 @@ class _PlanCard extends ConsumerWidget {
     required this.onOpenOriginal,
     required this.onRecord,
     required this.onEdit,
+    required this.onReminder,
     required this.onOutcomes,
     required this.onDelete,
   });
@@ -481,6 +491,7 @@ class _PlanCard extends ConsumerWidget {
   final ValueChanged<PracticeSource> onOpenOriginal;
   final VoidCallback? onRecord;
   final VoidCallback onEdit;
+  final VoidCallback onReminder;
   final VoidCallback onOutcomes;
   final VoidCallback onDelete;
 
@@ -610,11 +621,16 @@ class _PlanCard extends ConsumerWidget {
                   icon: Icons.repeat_rounded,
                   label: _weekdayLabel(plan.repeatWeekdays),
                 ),
-                if (plan.reminderTime case final reminder?)
-                  _InfoChip(
-                    icon: Icons.notifications_active_outlined,
-                    label: '${reminder.hhmm} 提醒',
-                  ),
+                _InfoChip(
+                  key: ValueKey('plan_reminder_${plan.id}'),
+                  icon: plan.reminderTime == null
+                      ? Icons.notifications_none_rounded
+                      : Icons.notifications_active_outlined,
+                  label: plan.reminderTime == null
+                      ? '设置提醒'
+                      : '${plan.reminderTime!.hhmm} 提醒',
+                  onTap: onReminder,
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -780,27 +796,40 @@ class _RecordPracticeDialogState extends State<_RecordPracticeDialog> {
 }
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.label});
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    super.key,
+  });
 
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: colors.onSurfaceVariant),
-          const SizedBox(width: 5),
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
-        ],
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: colors.onSurfaceVariant),
+        const SizedBox(width: 5),
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+      ],
+    );
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: onTap == null
+              ? colors.surfaceContainerHighest
+              : colors.secondaryContainer,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: content,
       ),
     );
   }

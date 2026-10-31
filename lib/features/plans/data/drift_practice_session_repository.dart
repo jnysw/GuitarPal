@@ -1,14 +1,18 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart' as db;
+import '../../../core/sync/drift_sync_outbox_repository.dart';
+import '../../../core/sync/sync_outbox.dart';
 import '../../../domain/practice_plan/calendar_date.dart';
 import '../../../domain/practice_session/practice_session.dart' as domain;
 import '../../../domain/practice_session/practice_session_repository.dart';
 
 class DriftPracticeSessionRepository implements PracticeSessionRepository {
-  const DriftPracticeSessionRepository(this._database);
+  DriftPracticeSessionRepository(this._database)
+    : _syncOutbox = DriftSyncOutboxRepository(_database);
 
   final db.AppDatabase _database;
+  final DriftSyncOutboxRepository _syncOutbox;
 
   @override
   Stream<List<domain.PracticeSession>> watchAll() {
@@ -48,24 +52,32 @@ class DriftPracticeSessionRepository implements PracticeSessionRepository {
 
   @override
   Future<void> save(domain.PracticeSession session) async {
-    await _database
-        .into(_database.practiceSessions)
-        .insertOnConflictUpdate(
-          db.PracticeSessionsCompanion(
-            id: Value(session.id),
-            planId: Value(session.planId),
-            sourceId: Value(session.sourceId),
-            segmentId: Value(session.segmentId),
-            practiceDay: Value(session.practiceDate.dayKey),
-            startedAt: Value(session.startedAt),
-            endedAt: Value(session.endedAt),
-            activeDurationMilliseconds: Value(
-              session.activeDuration.inMilliseconds,
+    await _database.transaction(() async {
+      await _database
+          .into(_database.practiceSessions)
+          .insertOnConflictUpdate(
+            db.PracticeSessionsCompanion(
+              id: Value(session.id),
+              planId: Value(session.planId),
+              sourceId: Value(session.sourceId),
+              segmentId: Value(session.segmentId),
+              practiceDay: Value(session.practiceDate.dayKey),
+              startedAt: Value(session.startedAt),
+              endedAt: Value(session.endedAt),
+              activeDurationMilliseconds: Value(
+                session.activeDuration.inMilliseconds,
+              ),
+              loopCount: Value(session.loopCount),
+              completed: Value(session.completed),
             ),
-            loopCount: Value(session.loopCount),
-            completed: Value(session.completed),
-          ),
-        );
+          );
+      await _syncOutbox.enqueue(
+        entityType: SyncEntityType.practiceSession,
+        entityId: session.id,
+        operation: SyncOperation.upsert,
+        changedAt: session.endedAt ?? session.startedAt,
+      );
+    });
   }
 
   domain.PracticeSession _toDomain(db.PracticeSession row) {
