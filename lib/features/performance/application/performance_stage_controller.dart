@@ -228,6 +228,21 @@ class PerformanceStageController extends ChangeNotifier {
     _settings = _preview.applied ?? _settings;
   }
 
+  BackingPreset get appliedPreset => _preview.applied ?? _settings;
+  bool get ready => _preview.ready;
+  Future<void> preparePaused() async {
+    if (playing) await pause();
+    if (!ready) await _loadAt(positionMs);
+  }
+
+  Future<void> pause() async {
+    if (_preview.playing) await _preview.toggle();
+  }
+
+  Future<void> play() async {
+    if (!playing) await toggle();
+  }
+
   double get master => _preview.applied?.master ?? _settings.master;
   Future<void> suspend() async {
     if (_closed) return;

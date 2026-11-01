@@ -1,6 +1,6 @@
 # 演奏空间开发规划
 
-版本：2026-10-31 / v2。当前 P0a 伴奏准备与 P0b 自由演奏舞台已实现（Android Debug），包括已有分轨准备、独立方案、中央 IP 留位与真实混音电平音响；详见 [实际进度](progress.md)。用户 IP 素材尚未提供，P0c 演奏录音仍按下列里程碑开发。没有数据库迁移。
+版本：2026-11-01 / v3。P0a 伴奏准备、P0b 自由演奏与 P0c 原始麦克风录音／本机对齐回听首版已实现（Android Debug），详见 [实际进度](progress.md)。当前 Drift v14，保留旧录音种类与字段。正式 IP 素材待用户提供；耳机／蓝牙设备延迟尚未校准，数字作品导出属于后续阶段。
 
 ## 1. 产品定位与闭环
 
@@ -80,7 +80,7 @@ IP 首批接入静态 PNG／WebP 与少量状态即可：待机、倒计时准�
 
 当前已有练习录音／计划成果录音、试听和原曲对比，可复用权限、设备私有存储、列表与保存流程。但不能把「伴奏外放后由麦克风收到」当成数字混音。
 
-第一阶段先提供「耳机伴奏 + 纯麦克风原始录音」：推荐用耳机并提供试录／输入检查；保存可复现的伴奏预设、源区间、实际速度、录音开始相对伴奏的偏移、设备／路由与已确认延迟。伴奏本机回听时与麦克风轨分别可调，麦克风原始文件始终保留。
+P0c 首版已提供「耳机伴奏 + 纯麦克风原始录音」：推荐用耳机并提供试录／输入检查；保存可复现的伴奏预设、源区间、实际速度、录音开始相对伴奏的偏移、设备／路由与已确认延迟。伴奏本机回听时与麦克风轨分别可调，麦克风原始文件始终保留。首版保存的是可用设备列表（不冒充已验证的实际路由）、录音启动确认与伴奏硬件播放头估计；`deviceLatencyCalibrated=false`。本机双播放器合听按实际速度映射并做粗粒度进度纠偏，提供 ±2 秒／10ms 步进的手动对齐；这不是逐样本同步或数字混音导出。设备变化／中断会结束本条 take，不把中断前后拼成连续作品。
 
 后续才开发可导出的「麦克风 + 数字伴奏」混音和视频 cover：统一时间基准、采样率、通道数与延迟补偿，导出以同一 preset 和 offset 离线渲染。当前录音接口不暴露采样级启动时间，不能声称现有 MediaRecorder 与 AudioTrack 已逐样本同步。需先测量有线／USB／蓝牙耳机延迟与系统音频处理，并支持试听对齐；未经验证不默认开实时人声监听，避免反馈啸叫与蓝牙延迟困扰。
 
@@ -97,7 +97,7 @@ IP 首批接入静态 PNG／WebP 与少量状态即可：待机、倒计时准�
 | recorder／计划成果 | 一次演奏只写一个会话；成果仅显式关联，重复保存幂等 |
 | 离线指法与滚动和弦带 | 舞台显示开关，随同一媒体时钟运行 |
 
-建议新增 `features/performance/{domain,application,data,presentation}`，先在领域层定义会话状态、伴奏预设、IP 事件、节奏包络，再接 UI。候选实体：`PerformanceSession`、`BackingPreset`、`PerformanceTake`（引用现有录音并保存 mix／同步快照）。当前 `PracticeRecordingKind` 仅 segmentTake／planOutcome，不能直接假装已有 performanceTake；正式实现时设计向后兼容迁移，不覆写旧种类。只同步允许的元数据，录音文件上传／分享以后显式触发。
+建议新增 `features/performance/{domain,application,data,presentation}`，先在领域层定义会话状态、伴奏预设、IP 事件、节奏包络，再接 UI。候选实体：`PerformanceSession`、`BackingPreset`、`PerformanceTake`（引用现有录音并保存 mix／同步快照）。已新增 `PracticeRecordingKind.performanceTake` 及 nullable `performanceContextJson`（v14），原 segmentTake／planOutcome 与旧字段保持。已完成录音在同一行保存原始文件引用与不可变伴奏／来源／设备／起点估计快照，草稿使用原子 JSON 日志；不覆写旧种类。只同步允许的元数据，录音文件上传／分享以后显式触发。
 
 IP 资源候选描述：`assetId/version`、舞台归一化 anchor／safeBounds、各状态资源映射、过渡规则和 reducedMotion fallback。素材后续到位即可按契约适配，不影响伴奏与录音核心。
 

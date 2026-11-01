@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../features/create/create_practice_screen.dart';
 import '../features/performance/performance_prepare_screen.dart';
 import '../features/performance/performance_stage_screen.dart';
+import '../features/performance/performance_review_screen.dart';
+import '../features/performance/performance_takes_screen.dart';
 import '../features/performance/performance_route_observer.dart';
 import '../features/audio_tools/algorithm_tools_screen.dart';
 import '../features/create/local_video_draft_screen.dart';
@@ -43,6 +45,18 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/performance/stage',
       builder: (context, state) => PerformanceStageRouteScreen(
+        sourceId: state.uri.queryParameters['sourceId'] ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/performance/review',
+      builder: (context, state) => PerformanceReviewRouteScreen(
+        takeId: state.uri.queryParameters['takeId'] ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/performance/takes',
+      builder: (context, state) => PerformanceTakesScreen(
         sourceId: state.uri.queryParameters['sourceId'] ?? '',
       ),
     ),

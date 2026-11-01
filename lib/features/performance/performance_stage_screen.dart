@@ -5,6 +5,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../recordings/practice_recording_providers.dart';
+import 'application/performance_capture_controller.dart';
+import 'performance_take_providers.dart';
+import 'performance_dialog.dart';
 
 import '../audio_tools/algorithm_providers.dart';
 import '../audio_tools/domain/algorithm_task.dart';
@@ -56,6 +62,7 @@ class PerformanceStageScreen extends ConsumerStatefulWidget {
 class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
     with WidgetsBindingObserver, RouteAware {
   late final PerformanceStageController _stage;
+  late final PerformanceCaptureController _capture;
   bool _allowPop = false, _leaving = false, _motion = true, _showChords = true;
   double? _drag;
   VideoChordPlayback? _chords;
@@ -75,7 +82,80 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
           .trackPlayback(sourceId: b.source.id),
       verify: ref.read(performanceSourceResolverProvider).verify,
     );
+    _capture = PerformanceCaptureController(
+      _stage,
+      ref.read(practiceAudioRecorderProvider),
+      ref.read(performanceAudioProvider),
+      ref.read(performanceTakeServiceProvider),
+    )..addListener(_captureChanged);
+    unawaited(_capture.restore());
     unawaited(_stage.initialize());
+  }
+
+  void _captureChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _suspend() async {
+    await _capture.interrupt();
+    await _stage.suspend();
+  }
+
+  Future<void> _reviewDraft() async {
+    final draft = _capture.draft;
+    if (draft == null || _capture.active) return;
+    await _stage.suspend();
+    if (!mounted) return;
+    await context.push(
+      Uri(
+        path: '/performance/review',
+        queryParameters: {'takeId': draft.id},
+      ).toString(),
+    );
+    _stage.resume();
+    _capture.resume();
+    await _capture.refreshDraft();
+  }
+
+  Future<void> _history() async {
+    if (_capture.active) return;
+    await _stage.suspend();
+    if (!mounted) return;
+    await context.push(
+      Uri(
+        path: '/performance/takes',
+        queryParameters: {'sourceId': widget.backing.source.id},
+      ).toString(),
+    );
+    _stage.resume();
+    _capture.resume();
+    await _capture.refreshDraft();
+  }
+
+  Future<void> _record(bool trial) async {
+    final yes = await showPerformanceDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(trial ? '先试录 3 秒' : '录一遍演奏'),
+        content: Text(
+          trial
+              ? '建议戴耳机。试录只录麦克风，不播放伴奏；听后确认输入是否正常。'
+              : '建议戴耳机，伴奏外放可能被再次录入。三秒倒计时后，从所选伴奏区间开头录制。暂停、后台或音频设备变化会结束本条录音。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('开始'),
+          ),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    await _capture.begin(trial: trial);
   }
 
   PageRoute<dynamic>? _route;
@@ -92,24 +172,49 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
 
   @override
   void didPushNext() {
-    unawaited(_stage.suspend());
+    unawaited(_suspend());
   }
 
   @override
   void didPopNext() {
     if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
       _stage.resume();
+      _capture.resume();
     }
   }
 
   Future<void> _leave() async {
     if (_leaving) return;
     setState(() => _leaving = true);
+    if (_capture.active) await _capture.stop();
+    if (_capture.draft != null && mounted) {
+      final yes = await showPerformanceDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('还有未保存的录音'),
+          content: const Text('退出后保留录音草稿。下次可从演奏录音继续回听、保存或丢弃。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('留在舞台'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('保留草稿退出'),
+            ),
+          ],
+        ),
+      );
+      if (yes != true) {
+        if (mounted) setState(() => _leaving = false);
+        return;
+      }
+    }
     try {
       await _stage.leave();
     } on Object {
       if (!mounted) return;
-      final leave = await showDialog<bool>(
+      final leave = await showPerformanceDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('演奏记录暂未保存'),
@@ -236,8 +341,12 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _stage.resume();
-    } else {
-      unawaited(_stage.suspend());
+      _capture.resume();
+    } else if (!(state == AppLifecycleState.inactive &&
+        _capture.phase == PerformanceCapturePhase.checking)) {
+      // The system permission sheet may temporarily mark this page inactive.
+      // A real background/hidden transition still cancels the pending start.
+      unawaited(_suspend());
     }
   }
 
@@ -245,6 +354,8 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     performanceRouteObserver.unsubscribe(this);
+    _capture.removeListener(_captureChanged);
+    _capture.dispose();
     _stage.dispose();
     super.dispose();
   }
@@ -263,8 +374,13 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
           leading: BackButton(onPressed: _leaving ? null : _leave),
           actions: [
             IconButton(
+              tooltip: '演奏录音',
+              icon: const Icon(Icons.library_music_outlined),
+              onPressed: _capture.active ? null : _history,
+            ),
+            IconButton(
               tooltip: '舞台设置',
-              onPressed: _settings,
+              onPressed: _capture.active ? null : _settings,
               icon: const Icon(Icons.tune),
             ),
           ],
@@ -322,12 +438,13 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
                           ),
                           enabled:
                               !_stage.busy &&
+                              !_capture.active &&
                               position >= _chords!.binding.startMs &&
                               position < _chords!.binding.endMs,
                         ),
                       ),
                     _StageFlex(
-                      tiny: constraints.maxHeight < 300,
+                      tiny: constraints.maxHeight < 600,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: DecoratedBox(
@@ -432,7 +549,7 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
                       ),
                       min: 0,
                       max: _stage.durationMs.toDouble(),
-                      onChanged: _stage.busy || _leaving
+                      onChanged: _stage.busy || _leaving || _capture.active
                           ? null
                           : (v) => setState(() => _drag = v),
                       onChangeEnd: (v) {
@@ -462,13 +579,105 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
                       ),
                     ),
                     Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Semantics(
+                            container: true,
+                            liveRegion: _capture.active,
+                            child: _capture.active
+                                ? Text(switch (_capture.phase) {
+                                    PerformanceCapturePhase.checking =>
+                                      '正在检查麦克风与空间…',
+                                    PerformanceCapturePhase.countdown =>
+                                      '${_capture.countdown} · 准备好上台',
+                                    PerformanceCapturePhase.recording =>
+                                      '正在录音 · ${_capture.elapsedMs ~/ 1000} 秒',
+                                    PerformanceCapturePhase.finalizing =>
+                                      '正在保留录音…',
+                                    PerformanceCapturePhase.idle => '',
+                                  }, key: const Key('stage_capture_status'))
+                                : const SizedBox.shrink(),
+                          ),
+                          if (_capture.error != null)
+                            Text(
+                              _capture.error!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          if (_capture.permanentlyDenied)
+                            TextButton(
+                              onPressed: () => ref
+                                  .read(practiceAudioRecorderProvider)
+                                  .openAppSettings(),
+                              child: const Text('打开麦克风设置'),
+                            ),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 12,
+                            children: [
+                              if (_capture.recording)
+                                FilledButton.icon(
+                                  key: const Key('stage_capture_stop'),
+                                  onPressed: _capture.stop,
+                                  icon: const Icon(Icons.stop),
+                                  label: const Text('结束录音'),
+                                )
+                              else if (_capture.active)
+                                TextButton(
+                                  onPressed:
+                                      _capture.phase ==
+                                          PerformanceCapturePhase.finalizing
+                                      ? null
+                                      : _capture.stop,
+                                  child: const Text('取消准备'),
+                                )
+                              else if (_capture.draft != null)
+                                OutlinedButton.icon(
+                                  key: const Key('stage_capture_review'),
+                                  onPressed: _reviewDraft,
+                                  icon: const Icon(Icons.headphones),
+                                  label: const Text('回听未保存录音'),
+                                )
+                              else ...[
+                                TextButton.icon(
+                                  key: const Key('stage_capture_trial'),
+                                  onPressed:
+                                      _capture.loading ||
+                                          _leaving ||
+                                          _stage.busy
+                                      ? null
+                                      : () => _record(true),
+                                  icon: const Icon(Icons.mic_none),
+                                  label: const Text('麦克风试录'),
+                                ),
+                                OutlinedButton.icon(
+                                  key: const Key('stage_capture_start'),
+                                  onPressed:
+                                      _capture.loading ||
+                                          _leaving ||
+                                          _stage.busy
+                                      ? null
+                                      : () => _record(false),
+                                  icon: const Icon(Icons.mic),
+                                  label: const Text('录一遍'),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           IconButton(
                             tooltip: '从头演奏',
-                            onPressed: _stage.busy || _leaving
+                            onPressed:
+                                _stage.busy || _leaving || _capture.active
                                 ? null
                                 : () => unawaited(_stage.seek(0)),
                             icon: const Icon(Icons.replay),
@@ -477,7 +686,8 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
                           Expanded(
                             child: FilledButton.icon(
                               key: const Key('stage_play'),
-                              onPressed: _stage.busy || _leaving
+                              onPressed:
+                                  _stage.busy || _leaving || _capture.active
                                   ? null
                                   : () => unawaited(_stage.toggle()),
                               icon: Icon(
@@ -497,7 +707,7 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
                     ),
                   ],
                 );
-                return constraints.maxHeight < 300
+                return constraints.maxHeight < 600
                     ? SingleChildScrollView(child: content)
                     : content;
               },

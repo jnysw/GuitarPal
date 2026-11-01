@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:async';
+
+import 'package:guitar_pal/core/platform/practice_audio_recorder.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +15,12 @@ import 'package:guitar_pal/features/performance/performance_resolver_providers.d
 import 'package:guitar_pal/features/plans/application/practice_session_service.dart';
 import 'package:guitar_pal/features/plans/practice_plan_providers.dart';
 import 'package:guitar_pal/features/performance/performance_stage_screen.dart';
+
+import '../../support/performance_audio_fakes.dart';
+
+import 'package:guitar_pal/features/recordings/practice_recording_providers.dart';
+import 'package:guitar_pal/features/performance/performance_take_providers.dart';
+import 'package:guitar_pal/features/performance/data/performance_take_store.dart';
 
 import 'performance_backing_test.dart' show fixtureCandidate;
 import 'performance_stage_controller_test.dart'
@@ -34,6 +43,7 @@ void main() {
           () => find.text('伴奏就绪，轮到你上台了').evaluate().isNotEmpty,
         );
         expect(f.player.plays, 0);
+        await tester.ensureVisible(find.byKey(const Key('stage_play')));
         await tester.ensureVisible(find.byKey(const Key('stage_play')));
         await tester.tap(find.byKey(const Key('stage_play')));
         await _until(tester, () => f.player.playing);
@@ -63,6 +73,83 @@ void main() {
     });
   }
   testWidgets(
+    'system permission sheet inactivity does not cancel foreground capture',
+    (tester) async {
+      final f = (await tester.runAsync(_Fixture.create))!;
+      final semantics = tester.ensureSemantics();
+      f.mic.permission = MicrophonePermissionStatus.denied;
+      f.mic.permissionGate = Completer<MicrophonePermissionStatus>();
+      try {
+        await tester.pumpWidget(f.app());
+        await _until(
+          tester,
+          () => find.text('伴奏就绪，轮到你上台了').evaluate().isNotEmpty,
+        );
+        await _until(
+          tester,
+          () =>
+              tester
+                  .widget<OutlinedButton>(
+                    find.byKey(const Key('stage_capture_start')),
+                  )
+                  .onPressed !=
+              null,
+        );
+        await tester.ensureVisible(
+          find.byKey(const Key('stage_capture_start')),
+        );
+        await tester.tap(find.byKey(const Key('stage_capture_start')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('开始'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await _until(
+          tester,
+          () => find.text('正在检查麦克风与空间…').evaluate().isNotEmpty,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await tester.pump();
+        f.mic.permissionGate!.complete(MicrophonePermissionStatus.granted);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        for (var i = 0; i < 4; i++) {
+          await tester.pump(const Duration(seconds: 1));
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 15)),
+          );
+        }
+        await _until(
+          tester,
+          () =>
+              find.byKey(const Key('stage_capture_stop')).evaluate().isNotEmpty,
+        );
+        expect(f.mic.recording, isTrue);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byKey(const Key('stage_capture_stop')));
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('stage_capture_review'))
+              .evaluate()
+              .isNotEmpty,
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (var i = 0; i < 5; i++) {
+          await tester.pump();
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 20)),
+          );
+        }
+        semantics.dispose();
+        await tester.runAsync(f.close);
+      }
+    },
+  );
+  testWidgets(
     'speaker responds to real meter events and settings disable motion',
     (tester) async {
       final f = (await tester.runAsync(_Fixture.create))!;
@@ -72,6 +159,7 @@ void main() {
           tester,
           () => find.text('伴奏就绪，轮到你上台了').evaluate().isNotEmpty,
         );
+        await tester.ensureVisible(find.byKey(const Key('stage_play')));
         await tester.tap(find.byKey(const Key('stage_play')));
         await _until(tester, () => f.player.playing);
         f.player.emit(left: .4, right: .3);
@@ -135,6 +223,7 @@ class _Fixture {
   final Directory root;
   final PerformanceBacking backing;
   final player = StagePlayer();
+  final mic = FakePerformanceMic();
   static Future<_Fixture> create() async {
     final root = await Directory.systemTemp.createTemp('gp_stage_ui_');
     final c = fixtureCandidate(root);
@@ -164,6 +253,14 @@ class _Fixture {
   Widget app({double scale = 1, bool reduced = false}) => ProviderScope(
     overrides: [
       performanceSourceResolverProvider.overrideWithValue(_Resolver()),
+      practiceAudioRecorderProvider.overrideWithValue(mic),
+      performanceAudioProvider.overrideWithValue(FakePerformanceAudio(mic)),
+      practiceRecordingRepositoryProvider.overrideWithValue(
+        MemoryPerformanceRecordings(),
+      ),
+      performanceTakeStoreProvider.overrideWithValue(
+        PerformanceTakeStore(() async => root),
+      ),
       algorithmTasksProvider.overrideWith((ref) => Stream.value(const [])),
       practiceSessionServiceProvider.overrideWithValue(
         PracticeSessionService(StageSessions()),

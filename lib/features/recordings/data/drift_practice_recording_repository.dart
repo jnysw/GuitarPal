@@ -52,6 +52,7 @@ class DriftPracticeRecordingRepository implements PracticeRecordingRepository {
             planId: Value(recording.planId),
             sessionId: Value(recording.sessionId),
             kind: Value(recording.kind.name),
+            performanceContextJson: Value(recording.performanceContextJson),
             filePath: Value(recording.filePath),
             durationMilliseconds: Value(recording.duration.inMilliseconds),
             referenceStartMilliseconds: Value(
@@ -88,6 +89,7 @@ class DriftPracticeRecordingRepository implements PracticeRecordingRepository {
       sessionId: row.sessionId,
       kind: domain.PracticeRecordingKind.values.byName(row.kind),
       filePath: row.filePath,
+      performanceContextJson: row.performanceContextJson,
       duration: Duration(milliseconds: row.durationMilliseconds),
       referenceStart: Duration(milliseconds: row.referenceStartMilliseconds),
       referenceEnd: row.referenceEndMilliseconds == null

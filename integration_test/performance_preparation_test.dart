@@ -25,6 +25,10 @@ import 'package:guitar_pal/features/audio_tools/domain/stem_mix_settings.dart';
 import 'package:guitar_pal/features/performance/data/backing_preset_store.dart';
 import 'package:guitar_pal/features/performance/performance_prepare_screen.dart';
 import 'package:guitar_pal/features/performance/performance_stage_screen.dart';
+import 'package:guitar_pal/features/performance/performance_review_screen.dart';
+import 'package:guitar_pal/features/performance/performance_takes_screen.dart';
+import 'package:guitar_pal/features/performance/data/performance_take_store.dart';
+import 'package:guitar_pal/core/platform/practice_audio_recorder.dart';
 import 'package:guitar_pal/features/performance/performance_route_observer.dart';
 import 'package:guitar_pal/features/player/local_video_player_screen.dart';
 import 'package:guitar_pal/features/player/widgets/video_analysis_panel.dart';
@@ -61,6 +65,13 @@ void main() {
           'No network is allowed in this cached native test',
         ),
       );
+      final drafts = PerformanceTakeStore(() async => root);
+      for (final old in await drafts.list(source.id)) {
+        await const MethodChannelPracticeAudioRecorder().deleteRecording(
+          old.filePath,
+        );
+        await drafts.delete(old.id);
+      }
       final prefs = BackingPresetStore(() async => root);
       await prefs.delete(source.id);
       // A fresh store simulates a new app lifetime after cleaning previous test artifacts.
@@ -187,6 +198,18 @@ void main() {
         initialLocation: '/player',
         observers: [performanceRouteObserver],
         routes: [
+          GoRoute(
+            path: '/performance/review',
+            builder: (context, state) => PerformanceReviewRouteScreen(
+              takeId: state.uri.queryParameters['takeId']!,
+            ),
+          ),
+          GoRoute(
+            path: '/performance/takes',
+            builder: (context, state) => PerformanceTakesScreen(
+              sourceId: state.uri.queryParameters['sourceId']!,
+            ),
+          ),
           GoRoute(
             path: '/performance/stage',
             builder: (context, state) => PerformanceStageRouteScreen(
@@ -374,6 +397,85 @@ void main() {
               .level,
           0,
         );
+        // Formal capture uses the same stage recorder, then review must never add practice time.
+        await tester.tap(find.byKey(const Key('stage_play')));
+        await _nativeUntil(tester, player, (s) => s['isPlaying'] == false);
+        await tester.tap(find.byKey(const Key('stage_capture_start')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('开始'));
+        await _until(
+          tester,
+          () =>
+              find.byKey(const Key('stage_capture_stop')).evaluate().isNotEmpty,
+        );
+        await _nativeUntil(
+          tester,
+          player,
+          (s) => s['isPlaying'] == true && (s['positionMs'] as num) > 1200,
+        );
+        await tester.tap(find.byKey(const Key('stage_capture_stop')));
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('stage_capture_review'))
+              .evaluate()
+              .isNotEmpty,
+        );
+        await tester.tap(find.byKey(const Key('stage_capture_review')));
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('performance_review_play'))
+              .evaluate()
+              .isNotEmpty,
+        );
+        await _until(
+          tester,
+          () =>
+              tester
+                  .widget<FilledButton>(
+                    find.byKey(const Key('performance_review_play')),
+                  )
+                  .onPressed !=
+              null,
+        );
+        final beforeReview =
+            (await database.select(database.practiceSessions).get()).fold<int>(
+              0,
+              (v, s) => v + s.activeDurationMilliseconds,
+            );
+        await tester.tap(find.byKey(const Key('performance_review_play')));
+        await _until(tester, () => find.text('暂停回听').evaluate().isNotEmpty);
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        if (const bool.fromEnvironment('CAPTURE_TAKE_QA')) {
+          debugPrint('PERFORMANCE_TAKE_QA_READY');
+          await Future<void>.delayed(const Duration(seconds: 3));
+        }
+        await _tap(tester, find.byKey(const Key('performance_take_save')));
+        await _until(
+          tester,
+          () => find.text('演奏已保存，可以从同曲演奏录音再次回听').evaluate().isNotEmpty,
+        );
+        final takes = await database.select(database.practiceRecordings).get();
+        expect(takes.length, 1);
+        expect(takes.single.kind, 'performanceTake');
+        final context = jsonDecode(takes.single.performanceContextJson!) as Map;
+        expect((context['preset'] as Map)['master'], 0);
+        expect(context['deviceLatencyCalibrated'], false);
+        expect(
+          (await database.select(database.practiceSessions).get()).fold<int>(
+            0,
+            (v, s) => v + s.activeDurationMilliseconds,
+          ),
+          beforeReview,
+        );
+        await tester.binding.handlePopRoute();
+        await _until(
+          tester,
+          () => find.byType(PerformanceReviewScreen).evaluate().isEmpty,
+        );
+        expect(find.byKey(const Key('stage_capture_start')), findsOneWidget);
+        expect((await player.snapshot())['isPlaying'], isFalse);
         await tester.binding.handlePopRoute();
         await _until(
           tester,
@@ -426,6 +528,19 @@ void main() {
         await activePrefs.delete(source.id);
         await mixPrefs.delete(source.id);
         await store.deleteTask('performance-task');
+        for (final take
+            in await database.select(database.practiceRecordings).get()) {
+          await const MethodChannelPracticeAudioRecorder().deleteRecording(
+            take.filePath,
+          );
+          await drafts.delete(take.id);
+        }
+        for (final draft in await drafts.list(source.id)) {
+          await const MethodChannelPracticeAudioRecorder().deleteRecording(
+            draft.filePath,
+          );
+          await drafts.delete(draft.id);
+        }
         await database.close();
         if (await video.exists()) await video.delete();
       }

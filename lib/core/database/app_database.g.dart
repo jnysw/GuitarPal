@@ -2921,6 +2921,17 @@ class $PracticeRecordingsTable extends PracticeRecordings
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _performanceContextJsonMeta =
+      const VerificationMeta('performanceContextJson');
+  @override
+  late final GeneratedColumn<String> performanceContextJson =
+      GeneratedColumn<String>(
+        'performance_context_json',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _filePathMeta = const VerificationMeta(
     'filePath',
   );
@@ -3018,6 +3029,7 @@ class $PracticeRecordingsTable extends PracticeRecordings
     planId,
     sessionId,
     kind,
+    performanceContextJson,
     filePath,
     durationMilliseconds,
     referenceStartMilliseconds,
@@ -3077,6 +3089,15 @@ class $PracticeRecordingsTable extends PracticeRecordings
       );
     } else if (isInserting) {
       context.missing(_kindMeta);
+    }
+    if (data.containsKey('performance_context_json')) {
+      context.handle(
+        _performanceContextJsonMeta,
+        performanceContextJson.isAcceptableOrUnknown(
+          data['performance_context_json']!,
+          _performanceContextJsonMeta,
+        ),
+      );
     }
     if (data.containsKey('file_path')) {
       context.handle(
@@ -3181,6 +3202,10 @@ class $PracticeRecordingsTable extends PracticeRecordings
         DriftSqlType.string,
         data['${effectivePrefix}kind'],
       )!,
+      performanceContextJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}performance_context_json'],
+      ),
       filePath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}file_path'],
@@ -3230,6 +3255,7 @@ class PracticeRecording extends DataClass
   final String? planId;
   final String? sessionId;
   final String kind;
+  final String? performanceContextJson;
   final String filePath;
   final int durationMilliseconds;
   final int referenceStartMilliseconds;
@@ -3245,6 +3271,7 @@ class PracticeRecording extends DataClass
     this.planId,
     this.sessionId,
     required this.kind,
+    this.performanceContextJson,
     required this.filePath,
     required this.durationMilliseconds,
     required this.referenceStartMilliseconds,
@@ -3269,6 +3296,11 @@ class PracticeRecording extends DataClass
       map['session_id'] = Variable<String>(sessionId);
     }
     map['kind'] = Variable<String>(kind);
+    if (!nullToAbsent || performanceContextJson != null) {
+      map['performance_context_json'] = Variable<String>(
+        performanceContextJson,
+      );
+    }
     map['file_path'] = Variable<String>(filePath);
     map['duration_milliseconds'] = Variable<int>(durationMilliseconds);
     map['reference_start_milliseconds'] = Variable<int>(
@@ -3302,6 +3334,9 @@ class PracticeRecording extends DataClass
           ? const Value.absent()
           : Value(sessionId),
       kind: Value(kind),
+      performanceContextJson: performanceContextJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(performanceContextJson),
       filePath: Value(filePath),
       durationMilliseconds: Value(durationMilliseconds),
       referenceStartMilliseconds: Value(referenceStartMilliseconds),
@@ -3327,6 +3362,9 @@ class PracticeRecording extends DataClass
       planId: serializer.fromJson<String?>(json['planId']),
       sessionId: serializer.fromJson<String?>(json['sessionId']),
       kind: serializer.fromJson<String>(json['kind']),
+      performanceContextJson: serializer.fromJson<String?>(
+        json['performanceContextJson'],
+      ),
       filePath: serializer.fromJson<String>(json['filePath']),
       durationMilliseconds: serializer.fromJson<int>(
         json['durationMilliseconds'],
@@ -3353,6 +3391,9 @@ class PracticeRecording extends DataClass
       'planId': serializer.toJson<String?>(planId),
       'sessionId': serializer.toJson<String?>(sessionId),
       'kind': serializer.toJson<String>(kind),
+      'performanceContextJson': serializer.toJson<String?>(
+        performanceContextJson,
+      ),
       'filePath': serializer.toJson<String>(filePath),
       'durationMilliseconds': serializer.toJson<int>(durationMilliseconds),
       'referenceStartMilliseconds': serializer.toJson<int>(
@@ -3375,6 +3416,7 @@ class PracticeRecording extends DataClass
     Value<String?> planId = const Value.absent(),
     Value<String?> sessionId = const Value.absent(),
     String? kind,
+    Value<String?> performanceContextJson = const Value.absent(),
     String? filePath,
     int? durationMilliseconds,
     int? referenceStartMilliseconds,
@@ -3390,6 +3432,9 @@ class PracticeRecording extends DataClass
     planId: planId.present ? planId.value : this.planId,
     sessionId: sessionId.present ? sessionId.value : this.sessionId,
     kind: kind ?? this.kind,
+    performanceContextJson: performanceContextJson.present
+        ? performanceContextJson.value
+        : this.performanceContextJson,
     filePath: filePath ?? this.filePath,
     durationMilliseconds: durationMilliseconds ?? this.durationMilliseconds,
     referenceStartMilliseconds:
@@ -3410,6 +3455,9 @@ class PracticeRecording extends DataClass
       planId: data.planId.present ? data.planId.value : this.planId,
       sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
       kind: data.kind.present ? data.kind.value : this.kind,
+      performanceContextJson: data.performanceContextJson.present
+          ? data.performanceContextJson.value
+          : this.performanceContextJson,
       filePath: data.filePath.present ? data.filePath.value : this.filePath,
       durationMilliseconds: data.durationMilliseconds.present
           ? data.durationMilliseconds.value
@@ -3440,6 +3488,7 @@ class PracticeRecording extends DataClass
           ..write('planId: $planId, ')
           ..write('sessionId: $sessionId, ')
           ..write('kind: $kind, ')
+          ..write('performanceContextJson: $performanceContextJson, ')
           ..write('filePath: $filePath, ')
           ..write('durationMilliseconds: $durationMilliseconds, ')
           ..write('referenceStartMilliseconds: $referenceStartMilliseconds, ')
@@ -3460,6 +3509,7 @@ class PracticeRecording extends DataClass
     planId,
     sessionId,
     kind,
+    performanceContextJson,
     filePath,
     durationMilliseconds,
     referenceStartMilliseconds,
@@ -3479,6 +3529,7 @@ class PracticeRecording extends DataClass
           other.planId == this.planId &&
           other.sessionId == this.sessionId &&
           other.kind == this.kind &&
+          other.performanceContextJson == this.performanceContextJson &&
           other.filePath == this.filePath &&
           other.durationMilliseconds == this.durationMilliseconds &&
           other.referenceStartMilliseconds == this.referenceStartMilliseconds &&
@@ -3496,6 +3547,7 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
   final Value<String?> planId;
   final Value<String?> sessionId;
   final Value<String> kind;
+  final Value<String?> performanceContextJson;
   final Value<String> filePath;
   final Value<int> durationMilliseconds;
   final Value<int> referenceStartMilliseconds;
@@ -3512,6 +3564,7 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
     this.planId = const Value.absent(),
     this.sessionId = const Value.absent(),
     this.kind = const Value.absent(),
+    this.performanceContextJson = const Value.absent(),
     this.filePath = const Value.absent(),
     this.durationMilliseconds = const Value.absent(),
     this.referenceStartMilliseconds = const Value.absent(),
@@ -3529,6 +3582,7 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
     this.planId = const Value.absent(),
     this.sessionId = const Value.absent(),
     required String kind,
+    this.performanceContextJson = const Value.absent(),
     required String filePath,
     required int durationMilliseconds,
     required int referenceStartMilliseconds,
@@ -3553,6 +3607,7 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
     Expression<String>? planId,
     Expression<String>? sessionId,
     Expression<String>? kind,
+    Expression<String>? performanceContextJson,
     Expression<String>? filePath,
     Expression<int>? durationMilliseconds,
     Expression<int>? referenceStartMilliseconds,
@@ -3570,6 +3625,8 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
       if (planId != null) 'plan_id': planId,
       if (sessionId != null) 'session_id': sessionId,
       if (kind != null) 'kind': kind,
+      if (performanceContextJson != null)
+        'performance_context_json': performanceContextJson,
       if (filePath != null) 'file_path': filePath,
       if (durationMilliseconds != null)
         'duration_milliseconds': durationMilliseconds,
@@ -3592,6 +3649,7 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
     Value<String?>? planId,
     Value<String?>? sessionId,
     Value<String>? kind,
+    Value<String?>? performanceContextJson,
     Value<String>? filePath,
     Value<int>? durationMilliseconds,
     Value<int>? referenceStartMilliseconds,
@@ -3609,6 +3667,8 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
       planId: planId ?? this.planId,
       sessionId: sessionId ?? this.sessionId,
       kind: kind ?? this.kind,
+      performanceContextJson:
+          performanceContextJson ?? this.performanceContextJson,
       filePath: filePath ?? this.filePath,
       durationMilliseconds: durationMilliseconds ?? this.durationMilliseconds,
       referenceStartMilliseconds:
@@ -3643,6 +3703,11 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
     }
     if (kind.present) {
       map['kind'] = Variable<String>(kind.value);
+    }
+    if (performanceContextJson.present) {
+      map['performance_context_json'] = Variable<String>(
+        performanceContextJson.value,
+      );
     }
     if (filePath.present) {
       map['file_path'] = Variable<String>(filePath.value);
@@ -3687,6 +3752,7 @@ class PracticeRecordingsCompanion extends UpdateCompanion<PracticeRecording> {
           ..write('planId: $planId, ')
           ..write('sessionId: $sessionId, ')
           ..write('kind: $kind, ')
+          ..write('performanceContextJson: $performanceContextJson, ')
           ..write('filePath: $filePath, ')
           ..write('durationMilliseconds: $durationMilliseconds, ')
           ..write('referenceStartMilliseconds: $referenceStartMilliseconds, ')
@@ -7835,6 +7901,7 @@ typedef $$PracticeRecordingsTableCreateCompanionBuilder =
       Value<String?> planId,
       Value<String?> sessionId,
       required String kind,
+      Value<String?> performanceContextJson,
       required String filePath,
       required int durationMilliseconds,
       required int referenceStartMilliseconds,
@@ -7853,6 +7920,7 @@ typedef $$PracticeRecordingsTableUpdateCompanionBuilder =
       Value<String?> planId,
       Value<String?> sessionId,
       Value<String> kind,
+      Value<String?> performanceContextJson,
       Value<String> filePath,
       Value<int> durationMilliseconds,
       Value<int> referenceStartMilliseconds,
@@ -7900,6 +7968,11 @@ class $$PracticeRecordingsTableFilterComposer
 
   ColumnFilters<String> get kind => $composableBuilder(
     column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get performanceContextJson => $composableBuilder(
+    column: $table.performanceContextJson,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7983,6 +8056,11 @@ class $$PracticeRecordingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get performanceContextJson => $composableBuilder(
+    column: $table.performanceContextJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get filePath => $composableBuilder(
     column: $table.filePath,
     builder: (column) => ColumnOrderings(column),
@@ -8050,6 +8128,11 @@ class $$PracticeRecordingsTableAnnotationComposer
 
   GeneratedColumn<String> get kind =>
       $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get performanceContextJson => $composableBuilder(
+    column: $table.performanceContextJson,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get filePath =>
       $composableBuilder(column: $table.filePath, builder: (column) => column);
@@ -8132,6 +8215,7 @@ class $$PracticeRecordingsTableTableManager
                 Value<String?> planId = const Value.absent(),
                 Value<String?> sessionId = const Value.absent(),
                 Value<String> kind = const Value.absent(),
+                Value<String?> performanceContextJson = const Value.absent(),
                 Value<String> filePath = const Value.absent(),
                 Value<int> durationMilliseconds = const Value.absent(),
                 Value<int> referenceStartMilliseconds = const Value.absent(),
@@ -8148,6 +8232,7 @@ class $$PracticeRecordingsTableTableManager
                 planId: planId,
                 sessionId: sessionId,
                 kind: kind,
+                performanceContextJson: performanceContextJson,
                 filePath: filePath,
                 durationMilliseconds: durationMilliseconds,
                 referenceStartMilliseconds: referenceStartMilliseconds,
@@ -8166,6 +8251,7 @@ class $$PracticeRecordingsTableTableManager
                 Value<String?> planId = const Value.absent(),
                 Value<String?> sessionId = const Value.absent(),
                 required String kind,
+                Value<String?> performanceContextJson = const Value.absent(),
                 required String filePath,
                 required int durationMilliseconds,
                 required int referenceStartMilliseconds,
@@ -8182,6 +8268,7 @@ class $$PracticeRecordingsTableTableManager
                 planId: planId,
                 sessionId: sessionId,
                 kind: kind,
+                performanceContextJson: performanceContextJson,
                 filePath: filePath,
                 durationMilliseconds: durationMilliseconds,
                 referenceStartMilliseconds: referenceStartMilliseconds,

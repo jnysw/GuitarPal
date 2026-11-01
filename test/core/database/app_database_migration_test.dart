@@ -626,6 +626,13 @@ void main() {
             'INSERT INTO practice_sessions VALUES (?, ?, ?)',
             ['legacy-session', timestamp + 3, timestamp + 4],
           );
+          rawDatabase.execute('''CREATE TABLE practice_recordings (
+            id TEXT NOT NULL PRIMARY KEY, source_id TEXT NOT NULL, segment_id TEXT NULL,
+            plan_id TEXT NULL, session_id TEXT NULL, kind TEXT NOT NULL,
+            file_path TEXT NOT NULL UNIQUE, duration_milliseconds INTEGER NOT NULL,
+            reference_start_milliseconds INTEGER NOT NULL, reference_end_milliseconds INTEGER NULL,
+            reference_speed REAL NOT NULL DEFAULT 1.0, title TEXT NOT NULL,
+            note TEXT NULL, recorded_at INTEGER NOT NULL)''');
           rawDatabase.execute('PRAGMA user_version = 8');
         },
       ),

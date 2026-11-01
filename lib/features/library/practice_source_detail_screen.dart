@@ -497,6 +497,17 @@ class _SourceDetailView extends ConsumerWidget {
                               icon: const Icon(Icons.headphones),
                               label: const Text('去演奏 · 准备伴奏'),
                             ),
+                            TextButton.icon(
+                              key: const Key('source_detail_performance_takes'),
+                              onPressed: () => context.push(
+                                Uri(
+                                  path: '/performance/takes',
+                                  queryParameters: {'sourceId': source.id},
+                                ).toString(),
+                              ),
+                              icon: const Icon(Icons.library_music_outlined),
+                              label: const Text('演奏录音'),
+                            ),
                           ],
                           const SizedBox(height: 10),
                           OutlinedButton.icon(

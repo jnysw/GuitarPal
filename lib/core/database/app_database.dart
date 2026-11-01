@@ -149,6 +149,8 @@ class PracticeRecordings extends Table {
 
   TextColumn get kind => text()();
 
+  TextColumn get performanceContextJson => text().nullable()();
+
   TextColumn get filePath => text().unique()();
 
   IntColumn get durationMilliseconds => integer()();
@@ -246,7 +248,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'guitar_pal'));
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -282,6 +284,12 @@ class AppDatabase extends _$AppDatabase {
       if (from < 9) {
         await migrator.createTable(syncOutboxEntries);
         await _backfillSyncOutbox();
+      }
+      if (from >= 8 && from < 14) {
+        await migrator.addColumn(
+          practiceRecordings,
+          practiceRecordings.performanceContextJson,
+        );
       }
       if (from < 10) {
         await migrator.createTable(algorithmTasks);

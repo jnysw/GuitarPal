@@ -277,6 +277,9 @@ void main() {
           raw.execute(
             'ALTER TABLE algorithm_tasks DROP COLUMN media_binding_json',
           );
+          raw.execute(
+            'ALTER TABLE practice_recordings DROP COLUMN performance_context_json',
+          );
           raw.execute('PRAGMA user_version = 10');
         },
       ),
@@ -355,6 +358,9 @@ void main() {
           file,
           setup: (raw) {
             raw.execute('DROP TABLE algorithm_tasks');
+            raw.execute(
+              'ALTER TABLE practice_recordings DROP COLUMN performance_context_json',
+            );
             raw.execute('PRAGMA user_version = 9');
           },
         ),

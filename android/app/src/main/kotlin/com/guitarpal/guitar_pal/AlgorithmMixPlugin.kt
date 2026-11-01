@@ -81,7 +81,7 @@ class AlgorithmMixPlugin(private val activity: Activity, messenger: BinaryMessen
                 "pause" -> { engine?.pause(); audio.abandonAudioFocus(focus); result.success(null) }
                 "seek" -> { requireNotNull(engine).seek(requireNotNull(call.argument<Number>("positionMs")).toLong()); result.success(null) }
                 "configure" -> { requireNotNull(engine).configure(call.arguments as Map<*, *>); result.success(null) }
-                "snapshot" -> result.success((engine?.snapshot() ?: mapOf("isLoaded" to false, "isPlaying" to false)) + mapOf("generation" to generation))
+                "snapshot" -> result.success((engine?.snapshot() ?: mapOf("isLoaded" to false, "isPlaying" to false)) + mapOf("generation" to generation, "elapsedRealtimeMs" to android.os.SystemClock.elapsedRealtime()))
                 "stop" -> { stop(); result.success(null) }
                 else -> result.notImplemented()
             }
