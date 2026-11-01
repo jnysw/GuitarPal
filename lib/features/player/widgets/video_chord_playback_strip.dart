@@ -130,7 +130,11 @@ class _VideoChordPlaybackStripState
                             style: const TextStyle(fontSize: 12),
                           ),
                           Text(
-                            data.calibrated ? '已人工校准' : '按分析区间起点显示 · 静音偏移待校准',
+                            data.manual
+                                ? '已人工校准'
+                                : data.automatic
+                                ? '自动对齐原音频'
+                                : '按分析区间起点显示 · 静音偏移待校准',
                             style: const TextStyle(fontSize: 11),
                           ),
                         ],

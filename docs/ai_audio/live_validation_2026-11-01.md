@@ -42,3 +42,16 @@ Native 完整链路初轮虽然录音／保存断言通过，仍捕获到语义�
 ## 普通安装包
 
 所有集成回归结束后，重新运行 `flutter build apk --debug --no-pub --dart-define-from-file=config/supabase.local.json` 生成普通应用入口的 Debug APK，安装到 `emulator-5554` 并启动 MainActivity；不交付测试入口。私网／Supabase 本地配置保持忽略，未写入仓库。实体手机未连接，本批不代替真机输入质量与耳机路由验收。
+
+
+## 第二十批：自动对齐与音响可见性
+
+Flutter 最终全量 **449 项通过**、静态分析无问题，新增 4 项采样映射／覆盖与回退测试、1 项恒定电平振膜持续运动测试。根目录 Python 契约 **5 项**及 OpenAPI／result 检查通过。正常 APK 在以下集成回归后重新构建，未把测试入口当交付包。
+
+- Android `local_video_analysis_workspace_test.dart` 以 AUTO_CHORD_TIMELINE=true **1 项通过**：隔离内存库、真实合成视频与提取 WAV，替身结果声明输入 8 秒、裁剪起点 1 秒、分析 7 秒。开始不提前显示 C；自动对齐、人工覆盖 0 秒再恢复、原视频 1.5 秒显示 C、3.25 秒 Am、滚动和弦／指法、A-B、保存片段和全屏往返与唯一计时通过。没有向 Windows 上传测试或用户媒体。
+- Android `performance_preparation_test.dart` **1 项通过**：实际多轨 AudioTrack 恒定正弦伴奏驱动音响，五次 35ms 采样的振膜缩放变化超过 0.01，来源文字可见；暂停和 master=0 归零，后续录音／回听／保存／返回链路保持。第一次组合运行因测试 APK 重装后缺麦克风授权停在权限检查，按既有模拟器授权 fixture 重跑后通过；没有跳过录音或读屏断言。
+- Dart 回归覆盖样本坐标与提取起点只相加一次、精确和弦边界／回跳、人工优先与清除、旧／坏／未知 metadata／输入时长不符的保守回退、毫秒 header 取整；持续非零电平保持振膜移动，静音和关闭动效后矩阵恒定。
+
+服务端在隔离 CPU 环境的 `server_tests` 与原 API schema 共 **43 项通过**（新时间轴 14、原适配器 12、schema 17）。信号由本机生成，真实 librosa trim 索引与前导静音平移、BTC 两种真实预测循环在 1／107／108／109／216 帧下均保留完整长度，实际 detector hop、尾部裁剪与 Pydantic 可选字段通过；模型权重输出为替身，没有下载模型、运行 CUDA 或认定和弦识别质量。Mac 缺系统 ffmpeg 时使用隔离测试包提供的可执行文件，未替换 Windows CUDA 环境。服务端 GitHub CI 通过，代码见提交 85c0269bb64ee3920eaf829492ea2d2383caba1e。
+
+本机对已配置私网 OpenAPI 的只读访问失败，不能证实 Windows 已更新。新协议对 Windows 更新后的新任务生效，旧缓存保留人工校准；更新指南已经随客户端与服务端提交。没有自动部署、重传旧任务或创建付费资源。自动坐标修复不代表原模型约 93ms 的边界分辨率或音乐识别质量已经达到商业产品水平。

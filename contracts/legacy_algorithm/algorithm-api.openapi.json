@@ -209,7 +209,7 @@
         ],
         "summary": "Fetch completed chord analysis",
         "operationId": "getChordResult",
-        "description": "Current output is on a silence-trimmed timeline; no beats field; confidence defaults to 1.0. See handoff document before playback synchronization.",
+        "description": "Segment seconds remain relative to trimmed input. New jobs include optional exact sample timeline mapping. Old cached results may omit it; do not guess or scale offsets.",
         "parameters": [
           {
             "name": "job_id",
@@ -1123,6 +1123,15 @@
             "type": "string",
             "format": "date-time",
             "description": "Despite the field name, this is completion time"
+          },
+          "timeline": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChordTimeline"
+              }
+            ],
+            "nullable": true,
+            "description": "Optional on new jobs. Missing/null on old cached results. Does not change v1 segment coordinates."
           }
         }
       },
@@ -1387,6 +1396,53 @@
             "description": "Optional measured server durations in milliseconds. queue_ms excludes worker_total_ms. This metadata is not upload/download progress and may be ignored by old clients."
           }
         }
+      },
+      "ChordTimeline": {
+        "type": "object",
+        "required": [
+          "version",
+          "coordinate_system",
+          "sample_rate_hz",
+          "input_sample_count",
+          "analysis_start_sample",
+          "analysis_sample_count",
+          "frame_hop_samples"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "coordinate_system": {
+            "type": "string",
+            "enum": [
+              "trimmed_input_seconds"
+            ]
+          },
+          "sample_rate_hz": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "input_sample_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "analysis_start_sample": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "analysis_sample_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "frame_hop_samples": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "description": "Exact mapping from v1 trimmed segment seconds to uploaded input samples; add analysis_start_sample/sample_rate_hz once."
       }
     }
   }

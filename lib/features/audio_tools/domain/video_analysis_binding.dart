@@ -35,7 +35,7 @@ class VideoAnalysisBinding {
   final int sourceBytes, modifiedMs, sourceDurationMs, startMs, durationMs;
   final List<double> waveform;
   final int? manualChordZeroMs;
-  VideoAnalysisBinding withChordZero(int zero) => VideoAnalysisBinding(
+  VideoAnalysisBinding withChordZero(int? zero) => VideoAnalysisBinding(
     sourceId: sourceId,
     path: path,
     sourceBytes: sourceBytes,

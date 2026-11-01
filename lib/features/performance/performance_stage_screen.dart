@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -523,6 +524,27 @@ class _PerformanceStageScreenState extends ConsumerState<PerformanceStageScreen>
                         textAlign: TextAlign.center,
                       ),
                     ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 2,
+                      ),
+                      child: Text(
+                        _capture.active && _capture.draft?.trial == true
+                            ? '音响跟随伴奏 · 麦克风试录不播放伴奏'
+                            : !_motion ||
+                                  MediaQuery.disableAnimationsOf(context)
+                            ? '音响跟随伴奏 · 动效已关闭'
+                            : _stage.systemMuted || _stage.master == 0
+                            ? '音响跟随伴奏 · 伴奏或系统音量已静音'
+                            : _stage.meterUnavailable
+                            ? '伴奏电平暂未收到，音响保持静止'
+                            : '音响跟随伴奏电平，不跟随麦克风录音',
+                        key: const Key('stage_speaker_source'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                     if (_stage.error != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -772,7 +794,7 @@ class PerformanceCharacterSlot extends StatelessWidget {
   }
 }
 
-class StageSpeaker extends StatelessWidget {
+class StageSpeaker extends StatefulWidget {
   const StageSpeaker({
     super.key,
     required this.level,
@@ -785,72 +807,125 @@ class StageSpeaker extends StatelessWidget {
   final bool enabled, compact;
   final String label;
   @override
+  State<StageSpeaker> createState() => _StageSpeakerState();
+}
+
+class _StageSpeakerState extends State<StageSpeaker>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _vibration;
+  @override
+  void initState() {
+    super.initState();
+    _vibration = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 140),
+    );
+    _update();
+  }
+
+  void _update() {
+    if (widget.enabled && widget.level > 0) {
+      if (!_vibration.isAnimating) _vibration.repeat();
+    } else {
+      _vibration.stop();
+      _vibration.value = 0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant StageSpeaker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _update();
+  }
+
+  @override
+  void dispose() {
+    _vibration.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final active = enabled ? level.clamp(0.0, 1.0).toDouble() : 0.0;
+    final v = widget.enabled ? widget.level.clamp(0.0, 1.0) : 0.0;
     return Semantics(
-      label: '$label，${enabled ? '跟随伴奏' : '静止'}',
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(end: active),
-        duration: enabled ? const Duration(milliseconds: 75) : Duration.zero,
-        builder: (context, v, _) => Container(
-          width: compact ? 52 : 70,
-          height: compact ? 84 : 128,
-          padding: const EdgeInsets.all(9),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: colors.surfaceContainerHighest,
-            boxShadow: enabled
-                ? [
-                    BoxShadow(
-                      color: colors.primary.withValues(alpha: v * .22),
-                      blurRadius: 12 + v * 12,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-              Transform.scale(
-                scale: 1 + v * .10,
-                child: Container(
-                  width: compact ? 28 : 45,
-                  height: compact ? 28 : 45,
+      label: '${widget.label}，${v > 0 ? '跟随伴奏' : '静止'}',
+      child: AnimatedBuilder(
+        animation: _vibration,
+        builder: (context, _) {
+          // A slow visual carrier simulates a moving cone; amplitude comes only from real PCM energy.
+          final wave = v > 0 ? math.sin(_vibration.value * 2 * math.pi) : 0.0;
+          return Container(
+            width: widget.compact ? 52 : 70,
+            height: widget.compact ? 84 : 128,
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: colors.surfaceContainerHighest,
+              boxShadow: v > 0
+                  ? [
+                      BoxShadow(
+                        color: colors.primary.withValues(alpha: v * .24),
+                        blurRadius: 12 + v * 18,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: colors.onSurfaceVariant.withValues(alpha: .85),
+                    color: colors.onSurfaceVariant,
                   ),
-                  child: Center(
+                ),
+                Transform.translate(
+                  offset: Offset(0, wave * v * 1.3),
+                  child: Transform.scale(
+                    key: ValueKey('${widget.label}_cone'),
+                    scale: 1 + wave * v * .12,
                     child: Container(
-                      width: compact ? 10 : 16,
-                      height: compact ? 10 : 16,
+                      width: widget.compact ? 28 : 45,
+                      height: widget.compact ? 28 : 45,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: colors.surfaceContainerHighest,
+                        color: colors.onSurfaceVariant.withValues(alpha: .85),
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: widget.compact ? 10 : 16,
+                          height: widget.compact ? 10 : 16,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: colors.surfaceContainerHighest,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              Container(
-                width: 18,
-                height: 3,
-                color: peak >= .99 && enabled
-                    ? colors.error
-                    : colors.primary.withValues(alpha: .2 + v * .6),
-              ),
-            ],
-          ),
-        ),
+                SizedBox(
+                  width: 32,
+                  height: 5,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      key: ValueKey('${widget.label}_meter'),
+                      value: v,
+                      backgroundColor: colors.primary.withValues(alpha: .12),
+                      color: widget.peak >= .99 && widget.enabled
+                          ? colors.error
+                          : colors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

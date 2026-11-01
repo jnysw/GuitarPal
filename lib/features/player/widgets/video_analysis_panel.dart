@@ -1000,13 +1000,13 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   }
 
   Widget _timeline(AlgorithmTaskRecord task, VideoAnalysisBinding binding) {
-    final zero = binding.manualChordZeroMs ?? binding.startMs;
     final chords = <VideoTimelineChord>[];
     if (task.operation == AlgorithmOperation.chords &&
         task.resultJson != null) {
       final result = LegacyChordResult.fromJson(
         algorithmObject(jsonDecode(task.resultJson!)),
       );
+      final zero = VideoChordPlayback(result, binding).zeroMs;
       if (zero + result.duration.inMilliseconds > binding.endMs + 20) {
         if (binding.manualChordZeroMs != null) {
           throw const FormatException('人工校准超出分析区间');
@@ -1052,11 +1052,15 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       builder: (_) => _AnalysisValueDialog(
         title: '校准和弦时间',
         label: '分析 0 秒对应的视频时间（秒）',
-        initial: binding.manualChordZeroMs == null
-            ? ''
-            : (binding.manualChordZeroMs! / 1000).toStringAsFixed(3),
-        description:
-            '服务裁剪了静音但未返回偏移。请对照视频确认位置；这是人工显示校准，不会改写算法结果。当前视频位置：${_time(widget.controller.position.inMilliseconds)}',
+        initial:
+            binding.manualChordZeroMs != null ||
+                VideoChordPlayback(result, binding).automaticAvailable
+            ? (VideoChordPlayback(result, binding).zeroMs / 1000)
+                  .toStringAsFixed(3)
+            : '',
+        description: VideoChordPlayback(result, binding).automaticAvailable
+            ? '服务已提供原音频采样映射。可在自动对齐基础上人工微调；不会改写和弦识别结果。当前视频位置：${_time(widget.controller.position.inMilliseconds)}'
+            : '此旧结果没有静音裁剪位置，需要人工校准；更新服务并重新分析后可自动对齐。当前视频位置：${_time(widget.controller.position.inMilliseconds)}',
         validate: (text) {
           if (!RegExp(r'^\d+(\.\d{1,3})?$').hasMatch(text)) {
             return '请输入秒数，最多三位小数';
@@ -1413,15 +1417,41 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     final next = playback.next(position);
     return [
       if (result.keyEstimate.isNotEmpty) Text('调性参考：${result.keyEstimate}'),
-      if (result.hasTailTimingDifference)
-        const Text('结尾时长有轻微差异，保留原始和弦时间；定位仍需人工校准。'),
+      if (result.hasTailTimingDifference && !playback.automatic)
+        const Text('结尾时长有轻微差异，保留原始和弦时间；可对照音频校准。'),
       Text(
-        '当前：${current?.displayLabel ?? '—'}   下一个：${next?.displayLabel ?? '—'} · ${binding.manualChordZeroMs == null ? '按区间起点显示，待校准' : '人工校准'}',
+        '当前：${current?.displayLabel ?? '—'}   下一个：${next?.displayLabel ?? '—'} · ${playback.alignmentLabel}',
       ),
       TextButton(
         onPressed: _busy || !widget.enabled ? null : () => _calibrate(task),
-        child: Text(binding.manualChordZeroMs == null ? '与视频时间校准' : '调整人工校准'),
+        child: Text(
+          playback.manual
+              ? '调整人工校准'
+              : playback.automatic
+              ? '微调和弦时间'
+              : '与视频时间校准',
+        ),
       ),
+      if (playback.manual && playback.automaticAvailable)
+        TextButton(
+          key: Key('video_restore_auto_alignment_${task.id}'),
+          onPressed: _busy || !widget.enabled
+              ? null
+              : () async {
+                  try {
+                    await _verify(binding);
+                    await ref
+                        .read(algorithmTaskRepositoryProvider)
+                        .updateMediaBinding(
+                          task.id,
+                          jsonEncode(binding.withChordZero(null).toJson()),
+                        );
+                  } on Object {
+                    _message('自动对齐恢复失败，请重试');
+                  }
+                },
+          child: const Text('恢复自动对齐'),
+        ),
       if (result.segments.isNotEmpty)
         TextButton(
           onPressed: _busy || !widget.enabled

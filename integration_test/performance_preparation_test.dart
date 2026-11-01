@@ -357,6 +357,22 @@ void main() {
                   .level >
               0,
         );
+        final coneScales = <double>[];
+        for (var i = 0; i < 5; i++) {
+          await tester.pump(const Duration(milliseconds: 35));
+          coneScales.add(
+            tester
+                .widget<Transform>(find.byKey(const ValueKey('左音响_cone')))
+                .transform
+                .entry(0, 0),
+          );
+        }
+        expect(
+          coneScales.reduce((a, b) => a > b ? a : b) -
+              coneScales.reduce((a, b) => a < b ? a : b),
+          greaterThan(.01),
+        );
+        expect(find.textContaining('音响跟随伴奏'), findsOneWidget);
         if (const bool.fromEnvironment('CAPTURE_STAGE_QA')) {
           debugPrint('STAGE_QA_READY');
           await Future<void>.delayed(const Duration(seconds: 10));

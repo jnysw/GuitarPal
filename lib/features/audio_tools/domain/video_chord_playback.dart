@@ -6,8 +6,28 @@ class VideoChordPlayback {
   const VideoChordPlayback(this.result, this.binding);
   final LegacyChordResult result;
   final VideoAnalysisBinding binding;
-  int get zeroMs => binding.manualChordZeroMs ?? binding.startMs;
-  bool get calibrated => binding.manualChordZeroMs != null;
+  bool get automaticAvailable {
+    final t = result.timeline;
+    return t != null &&
+        (t.inputDuration.inMicroseconds - binding.durationMs * 1000).abs() <=
+            20000 &&
+        t.offset.inMicroseconds + t.analysisDuration.inMicroseconds <=
+            binding.durationMs * 1000 + 20000;
+  }
+
+  bool get manual => binding.manualChordZeroMs != null;
+  bool get automatic => !manual && automaticAvailable;
+  int get zeroMs =>
+      binding.manualChordZeroMs ??
+      (automaticAvailable
+          ? binding.startMs + result.timeline!.offsetMs
+          : binding.startMs);
+  bool get calibrated => manual || automatic;
+  String get alignmentLabel => manual
+      ? '人工校准'
+      : automatic
+      ? '自动对齐原音频'
+      : '静音偏移待校准';
   int? currentIndex(int sourceMs) {
     if (sourceMs < binding.startMs || sourceMs >= binding.endMs) return null;
     final position = sourceMs - zeroMs;

@@ -1,7 +1,8 @@
 import 'separation_processing_info.dart';
+import 'chord_timeline.dart';
 
 /// The Windows handoff API is deliberately isolated from GuitarPal /v1.
-/// Its chord coordinates are relative to silence-trimmed audio, not the source.
+/// Segment coordinates stay relative to trimmed input; optional sample metadata maps them back.
 enum AlgorithmOperation { chords, separation }
 
 enum LegacyJobState { queued, processing, completed, failed }
@@ -185,14 +186,35 @@ class LegacyChordResult {
     if (json['status'] != 'completed' || declaredDuration <= Duration.zero) {
       throw const FormatException('和弦结果尚未完成或时长无效');
     }
+    final rawTimeline = json['timeline'];
+    ChordTimeline? mapping;
+    if (rawTimeline != null) {
+      try {
+        final t = ChordTimeline.fromJson(algorithmObject(rawTimeline));
+        if ((t.analysisDuration - declaredDuration).abs() >
+            const Duration(milliseconds: 10)) {
+          throw const FormatException('和弦分析时长与采样映射不符');
+        }
+        if (segments.any(
+          (s) => s.end > t.analysisDuration + const Duration(milliseconds: 1),
+        )) {
+          throw const FormatException('和弦片段超出采样映射');
+        }
+        mapping = t;
+      } on FormatException {
+        /* Keep usable legacy labels, but never apply a guessed offset. */
+      }
+    }
+    timeline = mapping;
+    final bound = timeline?.analysisDuration ?? declaredDuration;
     var end = Duration.zero;
     for (final segment in segments) {
       // Measured v1 output may end one/two analysis frames past its duration
       // header (7.850s vs 7.895s). Preserve both the header and raw intervals;
       // allow only a bounded tail difference, never overlaps or reordered data.
       if (segment.start < end ||
-          segment.start >= declaredDuration ||
-          segment.end > declaredDuration + const Duration(milliseconds: 50)) {
+          segment.start >= bound ||
+          segment.end > bound + const Duration(milliseconds: 50)) {
         throw const FormatException('和弦结果区间乱序、重叠或越界');
       }
       end = segment.end;
@@ -207,7 +229,8 @@ class LegacyChordResult {
   final String keyEstimate;
   final String progression;
   final List<LegacyChordSegment> segments;
-  bool get canSyncWithOriginal => false;
+  late final ChordTimeline? timeline;
+  bool get canSyncWithOriginal => timeline != null;
 }
 
 class LegacyStemFile {

@@ -66,6 +66,9 @@ class PerformanceStageController extends ChangeNotifier {
       _acceptLevels = false;
   int? _generation;
   int _epoch = 0;
+  final _meterClock = Stopwatch()..start();
+  int _lastMeterTick = 0;
+  bool systemMuted = false;
   Future<void>? _leaving;
   void _quiet() {
     left = right = leftPeak = rightPeak = 0;
@@ -93,6 +96,7 @@ class PerformanceStageController extends ChangeNotifier {
     _epoch = epoch.toInt();
     _acceptLevels = true;
     meterUnavailable = false;
+    _lastMeterTick = _meterClock.elapsedMilliseconds;
   }
 
   Future<void> _loadAt(int position) async {
@@ -150,6 +154,10 @@ class PerformanceStageController extends ChangeNotifier {
         _quiet();
       }
     }
+    if (playing && _meterClock.elapsedMilliseconds - _lastMeterTick > 1500) {
+      meterUnavailable = true;
+      _quiet();
+    }
     recorder.observe(isPlaying: playing, completedLoops: 0);
     _notify();
   }
@@ -169,7 +177,10 @@ class PerformanceStageController extends ChangeNotifier {
       return v is num && v.isFinite ? v.toDouble().clamp(0, 1) : 0;
     }
 
+    _lastMeterTick = _meterClock.elapsedMilliseconds;
+    meterUnavailable = false;
     final volume = value('systemVolume');
+    systemMuted = volume == 0;
     if (data['isPlaying'] != true || volume == 0 || master == 0) {
       _quiet();
       _notify();
@@ -314,6 +325,10 @@ class PerformanceStageController extends ChangeNotifier {
     super.dispose();
   }
 
-  double get leftMotion => math.sqrt(left.clamp(0, 1)).clamp(0, 1);
-  double get rightMotion => math.sqrt(right.clamp(0, 1)).clamp(0, 1);
+  // Display -60..0 dBFS. Quiet music must be visible without inventing energy.
+  double _motion(double rms) => rms <= .001
+      ? 0
+      : ((20 * math.log(rms) / math.ln10 + 60) / 60).clamp(0, 1);
+  double get leftMotion => _motion(left);
+  double get rightMotion => _motion(right);
 }

@@ -133,7 +133,12 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 350));
         await tester.tap(find.byKey(const Key('video_analysis_confirm')));
-        await _spin(tester, () => find.text('与视频时间校准').evaluate().isNotEmpty);
+        const automatic = bool.fromEnvironment('AUTO_CHORD_TIMELINE');
+        await _spin(
+          tester,
+          () =>
+              find.text(automatic ? '微调和弦时间' : '与视频时间校准').evaluate().isNotEmpty,
+        );
         expect(api.uploads, 1);
         expect(api.audioBytes, greaterThan(100000));
         final task =
@@ -141,13 +146,30 @@ void main() {
         expect(task.linkedSourceId, source.id);
         expect(jsonDecode(task.mediaBindingJson!)['startMs'], 0);
         expect(find.text('关联曲目／计划'), findsNothing);
-        expect(find.text('当前和弦 C'), findsOneWidget);
-        expect(find.textContaining('静音偏移待校准'), findsOneWidget);
-        await _tapVisible(tester, find.text('与视频时间校准'));
+        if (automatic) {
+          expect(find.text('当前和弦 —'), findsOneWidget);
+          expect(find.text('自动对齐原音频'), findsOneWidget);
+        } else {
+          expect(find.text('当前和弦 C'), findsOneWidget);
+          expect(find.textContaining('静音偏移待校准'), findsOneWidget);
+        }
+        await _tapVisible(tester, find.text(automatic ? '微调和弦时间' : '与视频时间校准'));
         await tester.pump(const Duration(milliseconds: 350));
         await tester.enterText(find.byType(TextFormField), '0');
         await tester.tap(find.text('确认'));
         await _spin(tester, () => find.text('调整人工校准').evaluate().isNotEmpty);
+        if (automatic) {
+          await _tapVisible(
+            tester,
+            find.byKey(Key('video_restore_auto_alignment_${task.id}')),
+          );
+          await _spin(tester, () => find.text('微调和弦时间').evaluate().isNotEmpty);
+          final c = tester
+              .widget<VideoAnalysisPanel>(find.byType(VideoAnalysisPanel))
+              .controller;
+          await c.seek(const Duration(milliseconds: 1500));
+          await _spin(tester, () => find.text('当前和弦 C').evaluate().isNotEmpty);
+        }
         await _tapVisible(
           tester,
           find.byKey(const Key('video_analysis_chord_3250')),
@@ -321,7 +343,7 @@ void main() {
         await tester.binding.handlePopRoute();
         await _spin(tester, () => fullscreen.evaluate().isEmpty);
         await tester.pump(const Duration(milliseconds: 600));
-        expect(find.text('调整人工校准'), findsOneWidget);
+        expect(find.text(automatic ? '微调和弦时间' : '调整人工校准'), findsOneWidget);
         await controller.play();
         await _spin(tester, () => controller.isPlaying);
         await Future<void>.delayed(const Duration(milliseconds: 1300));
@@ -431,12 +453,36 @@ class _WorkspaceApi implements AlgorithmApi {
   ) async => {
     'job_id': id,
     'status': 'completed',
-    'duration_seconds': 8.0,
+    'duration_seconds': const bool.fromEnvironment('AUTO_CHORD_TIMELINE')
+        ? 7.0
+        : 8.0,
+    if (const bool.fromEnvironment('AUTO_CHORD_TIMELINE'))
+      'timeline': {
+        'version': 1,
+        'coordinate_system': 'trimmed_input_seconds',
+        'sample_rate_hz': 22050,
+        'input_sample_count': 176400,
+        'analysis_start_sample': 22050,
+        'analysis_sample_count': 154350,
+        'frame_hop_samples': 2048,
+      },
     'key': 'C major',
     'progression': 'C–Am',
     'segments': [
-      {'chord': 'C', 'roman': 'I', 'start': 0.0, 'end': 3.25},
-      {'chord': 'Am', 'roman': 'vi', 'start': 3.25, 'end': 8.0},
+      {
+        'chord': 'C',
+        'roman': 'I',
+        'start': 0.0,
+        'end': const bool.fromEnvironment('AUTO_CHORD_TIMELINE') ? 2.25 : 3.25,
+      },
+      {
+        'chord': 'Am',
+        'roman': 'vi',
+        'start': const bool.fromEnvironment('AUTO_CHORD_TIMELINE')
+            ? 2.25
+            : 3.25,
+        'end': const bool.fromEnvironment('AUTO_CHORD_TIMELINE') ? 7.0 : 8.0,
+      },
     ],
   };
 }
