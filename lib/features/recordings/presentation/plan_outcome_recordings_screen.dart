@@ -35,6 +35,7 @@ class _PlanOutcomeRecordingsScreenState
   Duration _duration = Duration.zero;
   bool _isPlaying = false;
   bool _polling = false;
+  bool _opening = false;
 
   @override
   void initState() {
@@ -77,6 +78,7 @@ class _PlanOutcomeRecordingsScreenState
     Duration? position,
     bool preserveSequence = false,
   }) async {
+    if (_opening) return;
     final requested =
         position ??
         (_activeRecordingId == recording.id ? _position : Duration.zero);
@@ -84,7 +86,7 @@ class _PlanOutcomeRecordingsScreenState
     if (!preserveSequence) _sequenceNextId = null;
     try {
       await _recorder.playRecording(recording.filePath, position: target);
-      if (!mounted) return;
+      if (!mounted || _opening) return;
       setState(() {
         _activeRecordingId = recording.id;
         _position = target;
@@ -119,11 +121,11 @@ class _PlanOutcomeRecordingsScreenState
   }
 
   Future<void> _poll() async {
-    if (_polling || _activeRecordingId == null || !mounted) return;
+    if (_polling || _activeRecordingId == null || !mounted || _opening) return;
     _polling = true;
     try {
       final snapshot = await _recorder.playbackSnapshot();
-      if (!mounted) return;
+      if (!mounted || _opening) return;
       final completed =
           snapshot.isLoaded &&
           !snapshot.isPlaying &&
@@ -250,6 +252,28 @@ class _PlanOutcomeRecordingsScreenState
     await showPracticeAudioAnalysis(context, recording);
   }
 
+  Future<void> _openRoute(String route) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      await _pause();
+      _ticker?.cancel();
+      _ticker = null;
+      await _recorder.stopPlayback();
+      if (!mounted) return;
+      setState(() {
+        _activeRecordingId = null;
+        _position = Duration.zero;
+        _duration = Duration.zero;
+      });
+      await context.push(route);
+    } on Object {
+      if (mounted) _showMessage('暂时无法打开，请重试');
+    } finally {
+      _opening = false;
+    }
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -284,12 +308,18 @@ class _PlanOutcomeRecordingsScreenState
       data: (items) {
         final outcomes =
             items
-                .where((item) => item.kind == PracticeRecordingKind.planOutcome)
+                .where(
+                  (item) =>
+                      item.kind == PracticeRecordingKind.planOutcome ||
+                      item.kind == PracticeRecordingKind.performanceTake,
+                )
                 .toList(growable: false)
               ..sort(
                 (left, right) => right.recordedAt.compareTo(left.recordedAt),
               );
-        _outcomes = outcomes;
+        _outcomes = outcomes
+            .where((r) => r.kind == PracticeRecordingKind.planOutcome)
+            .toList();
         final comparison = outcomes
             .where((item) => _comparisonIds.contains(item.id))
             .toList(growable: false);
@@ -302,6 +332,18 @@ class _PlanOutcomeRecordingsScreenState
               outcomeCount: outcomes.length,
               canRecord: sourceExists,
               onRecord: () => _startPractice(context, plan),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: const Key('plan_outcomes_stage_history'),
+              onPressed: () => _openRoute(
+                Uri(
+                  path: '/performance/takes',
+                  queryParameters: {'sourceId': plan.sourceId},
+                ).toString(),
+              ),
+              icon: const Icon(Icons.stadium_outlined),
+              label: const Text('同曲舞台演奏录音'),
             ),
             if (comparison.length == 2) ...[
               const SizedBox(height: 16),
@@ -337,20 +379,23 @@ class _PlanOutcomeRecordingsScreenState
               )
             else
               for (final recording in outcomes) ...[
-                _OutcomeTimelineCard(
-                  recording: recording,
-                  selected: _comparisonIds.contains(recording.id),
-                  isActive: _activeRecordingId == recording.id,
-                  isPlaying: _activeRecordingId == recording.id && _isPlaying,
-                  position: _activeRecordingId == recording.id
-                      ? _position
-                      : Duration.zero,
-                  onSelect: () => _toggleComparisonSelection(recording),
-                  onPlayPause: () => _toggle(recording),
-                  onSeek: _activeRecordingId == recording.id ? _seek : null,
-                  onAnalyze: () => _analyze(recording),
-                  onDelete: () => _delete(recording),
-                ),
+                if (recording.kind == PracticeRecordingKind.performanceTake)
+                  _stageOutcomeCard(recording)
+                else
+                  _OutcomeTimelineCard(
+                    recording: recording,
+                    selected: _comparisonIds.contains(recording.id),
+                    isActive: _activeRecordingId == recording.id,
+                    isPlaying: _activeRecordingId == recording.id && _isPlaying,
+                    position: _activeRecordingId == recording.id
+                        ? _position
+                        : Duration.zero,
+                    onSelect: () => _toggleComparisonSelection(recording),
+                    onPlayPause: () => _toggle(recording),
+                    onSeek: _activeRecordingId == recording.id ? _seek : null,
+                    onAnalyze: () => _analyze(recording),
+                    onDelete: () => _delete(recording),
+                  ),
                 const SizedBox(height: 10),
               ],
           ],
@@ -359,14 +404,62 @@ class _PlanOutcomeRecordingsScreenState
     );
   }
 
-  void _startPractice(BuildContext context, PracticePlan plan) {
+  Widget _stageOutcomeCard(PracticeRecording recording) => Card(
+    key: ValueKey('plan_performance_${recording.id}'),
+    margin: EdgeInsets.zero,
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(recording.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          Text(
+            '舞台演奏 · ${_formatDateTime(recording.recordedAt)} · ${recording.referenceSpeed.toStringAsFixed(2)}×',
+          ),
+          Text(_formatReferenceRange(recording)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                key: ValueKey('review_plan_performance_${recording.id}'),
+                onPressed: () => _openRoute(
+                  Uri(
+                    path: '/performance/review',
+                    queryParameters: {'takeId': recording.id},
+                  ).toString(),
+                ),
+                icon: const Icon(Icons.headphones),
+                label: const Text('回听与伴奏'),
+              ),
+              TextButton(
+                key: ValueKey('manage_plan_performance_${recording.id}'),
+                onPressed: () => _openRoute(
+                  Uri(
+                    path: '/performance/plan',
+                    queryParameters: {'takeId': recording.id},
+                  ).toString(),
+                ),
+                child: const Text('管理计划关联'),
+              ),
+            ],
+          ),
+          const Text('复用原演奏录音，关联不会自动完成计划。'),
+        ],
+      ),
+    ),
+  );
+
+  Future<void> _startPractice(BuildContext context, PracticePlan plan) async {
     final sourceId = Uri.encodeComponent(plan.sourceId);
     final planId = Uri.encodeQueryComponent(plan.id);
     final segmentId = plan.segmentId;
     final query = segmentId == null
         ? 'planId=$planId'
         : 'planId=$planId&segmentId=${Uri.encodeQueryComponent(segmentId)}';
-    context.push('/practice/$sourceId?$query');
+    await _openRoute('/practice/$sourceId?$query');
   }
 }
 

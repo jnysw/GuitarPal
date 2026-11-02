@@ -40,23 +40,34 @@ class PerformanceTakeService {
       throw const FormatException('试录不作为演奏成果保存');
     }
     await audio.resolveAbsolutePath(take.filePath);
-    await recordings.save(
-      PracticeRecording(
-        id: take.id,
-        sourceId: take.sourceId,
-        kind: PracticeRecordingKind.performanceTake,
-        filePath: take.filePath,
-        duration: Duration(milliseconds: take.durationMs),
-        referenceStart: Duration(milliseconds: take.preset.startMs),
-        referenceEnd: take.endSourceMs > take.preset.startMs
-            ? Duration(milliseconds: take.endSourceMs)
-            : null,
-        referenceSpeed: take.preset.speed,
-        title: title.trim(),
-        recordedAt: take.createdAt,
-        performanceContextJson: jsonEncode(take.toJson()),
-      ),
+    final recording = PracticeRecording(
+      id: take.id,
+      sourceId: take.sourceId,
+      kind: PracticeRecordingKind.performanceTake,
+      filePath: take.filePath,
+      duration: Duration(milliseconds: take.durationMs),
+      referenceStart: Duration(milliseconds: take.preset.startMs),
+      referenceEnd: take.endSourceMs > take.preset.startMs
+          ? Duration(milliseconds: take.endSourceMs)
+          : null,
+      referenceSpeed: take.preset.speed,
+      title: title.trim(),
+      recordedAt: take.createdAt,
+      performanceContextJson: jsonEncode(take.toJson()),
     );
+    if (recordings case final PerformanceTakeRecordingWriter writer) {
+      await writer.savePerformanceTake(recording);
+    } else {
+      final existing = await recordings.getById(take.id);
+      await recordings.save(
+        existing == null
+            ? recording
+            : existing.copyWith(
+                title: recording.title,
+                performanceContextJson: recording.performanceContextJson,
+              ),
+      );
+    }
     // A failed journal cleanup cannot undo a committed recording. Reopening checks DB first.
     try {
       await store.delete(take.id);

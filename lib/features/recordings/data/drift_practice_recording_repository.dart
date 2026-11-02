@@ -4,7 +4,8 @@ import '../../../core/database/app_database.dart' as db;
 import '../../../domain/practice_recording/practice_recording.dart' as domain;
 import '../../../domain/practice_recording/practice_recording_repository.dart';
 
-class DriftPracticeRecordingRepository implements PracticeRecordingRepository {
+class DriftPracticeRecordingRepository
+    implements PracticeRecordingRepository, PerformanceTakeRecordingWriter {
   const DriftPracticeRecordingRepository(this._database);
 
   final db.AppDatabase _database;
@@ -68,6 +69,32 @@ class DriftPracticeRecordingRepository implements PracticeRecordingRepository {
           ),
         );
   }
+
+  @override
+  Future<void> savePerformanceTake(domain.PracticeRecording recording) =>
+      _database.transaction(() async {
+        final existing = await getById(recording.id);
+        if (recording.kind != domain.PracticeRecordingKind.performanceTake ||
+            (existing != null &&
+                (existing.kind != recording.kind ||
+                    existing.filePath != recording.filePath ||
+                    existing.sourceId != recording.sourceId ||
+                    existing.duration != recording.duration))) {
+          throw const FormatException('演奏录音信息已变化，请重新打开');
+        }
+        if (existing == null) {
+          await save(recording);
+        } else {
+          await (_database.update(
+            _database.practiceRecordings,
+          )..where((row) => row.id.equals(recording.id))).write(
+            db.PracticeRecordingsCompanion(
+              title: Value(recording.title.trim()),
+              performanceContextJson: Value(recording.performanceContextJson),
+            ),
+          );
+        }
+      });
 
   @override
   Future<void> delete(String id) async {

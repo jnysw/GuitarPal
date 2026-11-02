@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../domain/practice_recording/practice_recording.dart';
 import '../audio_tools/algorithm_providers.dart';
@@ -150,6 +151,25 @@ class _PerformanceReviewScreenState
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _linkPlan() async {
+    if (_saving || !_saved) return;
+    await _review.pause();
+    if (!mounted) return;
+    if (_savedSignature != _signature) {
+      setState(() => _message = '请先保存本次回听调整，再关联计划');
+      return;
+    }
+    final changed = await context.push<bool>(
+      Uri(
+        path: '/performance/plan',
+        queryParameters: {'takeId': widget.take.id},
+      ).toString(),
+    );
+    if (mounted && changed == true) {
+      setState(() => _message = '计划关联已更新，可从计划的成果录音回听');
     }
   }
 
@@ -397,6 +417,13 @@ class _PerformanceReviewScreenState
                         : '保存这次演奏',
                   ),
                 ),
+                if (_saved)
+                  OutlinedButton.icon(
+                    key: const Key('performance_take_link_plan'),
+                    onPressed: _saving ? null : _linkPlan,
+                    icon: const Icon(Icons.link),
+                    label: const Text('关联／管理练习计划'),
+                  ),
               ],
               if (!_saved)
                 TextButton(
