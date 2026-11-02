@@ -13,9 +13,35 @@ final performanceDraftsProvider = FutureProvider.autoDispose
       (ref, sourceId) => ref.watch(performanceTakeStoreProvider).list(sourceId),
     );
 
-class PerformanceTakesScreen extends ConsumerWidget {
+class PerformanceTakesScreen extends ConsumerStatefulWidget {
   const PerformanceTakesScreen({super.key, required this.sourceId});
   final String sourceId;
+  @override
+  ConsumerState<PerformanceTakesScreen> createState() =>
+      _PerformanceTakesState();
+}
+
+class _PerformanceTakesState extends ConsumerState<PerformanceTakesScreen> {
+  String get sourceId => widget.sourceId;
+  bool _selecting = false;
+  final _selected = <String>{};
+
+  Future<void> _compare(List<PracticeRecording> items) async {
+    final chosen = items.where((r) => _selected.contains(r.id)).toList()
+      ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+    if (chosen.length != 2) return;
+    await context.push(
+      Uri(
+        path: '/performance/compare',
+        queryParameters: {
+          'sourceId': sourceId,
+          'firstId': chosen[0].id,
+          'secondId': chosen[1].id,
+        },
+      ).toString(),
+    );
+  }
+
   Future<void> _open(BuildContext context, WidgetRef ref, String id) async {
     await context.push(
       Uri(
@@ -71,7 +97,7 @@ class PerformanceTakesScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final saved = ref.watch(practiceRecordingsForSourceProvider(sourceId));
     final drafts = ref.watch(performanceDraftsProvider(sourceId));
     final items =
@@ -97,6 +123,29 @@ class PerformanceTakesScreen extends ConsumerWidget {
             const Text('同一首歌，不同时间的你', style: TextStyle(fontSize: 22)),
             const SizedBox(height: 8),
             const Text('把以前与现在的演奏轮流听一遍，听见自己的变化。'),
+            if (items.length >= 2 || _selecting) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: const Key('performance_compare_select'),
+                onPressed: () => setState(() {
+                  _selecting = !_selecting;
+                  _selected.clear();
+                }),
+                icon: Icon(_selecting ? Icons.close : Icons.compare_arrows),
+                label: Text(_selecting ? '取消选择' : '对比两次演奏'),
+              ),
+              if (_selecting)
+                FilledButton(
+                  key: const Key('performance_compare_open'),
+                  onPressed:
+                      items.where((r) => _selected.contains(r.id)).length == 2
+                      ? () => _compare(items)
+                      : null,
+                  child: Text(
+                    '开始对比（${items.where((r) => _selected.contains(r.id)).length}/2）',
+                  ),
+                ),
+            ],
             if (saved.isLoading || drafts.isLoading)
               const LinearProgressIndicator(),
             if (saved.hasError || drafts.hasError)
@@ -124,19 +173,36 @@ class PerformanceTakesScreen extends ConsumerWidget {
                 ),
               ),
             for (final r in items)
-              ListTile(
-                leading: const Icon(Icons.mic),
-                title: Text(r.title),
-                subtitle: Text(
-                  '${_date(r.recordedAt)} · ${r.duration.inSeconds} 秒 · ${r.referenceSpeed.toStringAsFixed(2)}×',
+              if (_selecting)
+                CheckboxListTile(
+                  key: Key('performance_select_${r.id}'),
+                  title: Text(r.title),
+                  subtitle: Text(
+                    '${_date(r.recordedAt)} · ${r.referenceSpeed.toStringAsFixed(2)}×',
+                  ),
+                  value: _selected.contains(r.id),
+                  onChanged: (v) => setState(() {
+                    if (v == true && _selected.length < 2) {
+                      _selected.add(r.id);
+                    } else {
+                      _selected.remove(r.id);
+                    }
+                  }),
+                )
+              else
+                ListTile(
+                  leading: const Icon(Icons.mic),
+                  title: Text(r.title),
+                  subtitle: Text(
+                    '${_date(r.recordedAt)} · ${r.duration.inSeconds} 秒 · ${r.referenceSpeed.toStringAsFixed(2)}×',
+                  ),
+                  onTap: () => _open(context, ref, r.id),
+                  trailing: IconButton(
+                    tooltip: '删除演奏录音',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _delete(context, ref, r.id, saved: r),
+                  ),
                 ),
-                onTap: () => _open(context, ref, r.id),
-                trailing: IconButton(
-                  tooltip: '删除演奏录音',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _delete(context, ref, r.id, saved: r),
-                ),
-              ),
           ],
         ),
       ),

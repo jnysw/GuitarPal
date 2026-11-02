@@ -6,6 +6,7 @@ import '../features/performance/performance_prepare_screen.dart';
 import '../features/performance/performance_stage_screen.dart';
 import '../features/performance/performance_review_screen.dart';
 import '../features/performance/performance_takes_screen.dart';
+import '../features/performance/performance_comparison_screen.dart';
 import '../features/performance/performance_route_observer.dart';
 import '../features/audio_tools/algorithm_tools_screen.dart';
 import '../features/create/local_video_draft_screen.dart';
@@ -52,6 +53,16 @@ final GoRouter appRouter = GoRouter(
       path: '/performance/review',
       builder: (context, state) => PerformanceReviewRouteScreen(
         takeId: state.uri.queryParameters['takeId'] ?? '',
+      ),
+    ),
+    GoRoute(
+      path: '/performance/compare',
+      builder: (context, state) => PerformanceComparisonRouteScreen(
+        ids: (
+          sourceId: state.uri.queryParameters['sourceId'] ?? '',
+          firstId: state.uri.queryParameters['firstId'] ?? '',
+          secondId: state.uri.queryParameters['secondId'] ?? '',
+        ),
       ),
     ),
     GoRoute(
