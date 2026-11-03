@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:guitar_pal/features/audio_tools/data/algorithm_access.dart';
 import 'package:guitar_pal/features/audio_tools/data/algorithm_service_configuration.dart';
 import 'package:guitar_pal/features/audio_tools/data/algorithm_stem_store.dart';
 import 'package:guitar_pal/features/audio_tools/data/algorithm_audio_import.dart';
@@ -28,6 +30,22 @@ void main() {
         isNotEmpty,
         reason: 'Local deployment configuration must be present for this live health check',
       );
+      if (isMelpalAlgorithm(Uri.parse(origin))) {
+        final client = http.Client();
+        try {
+          final response = await client
+              .get(Uri.parse(origin).resolve('/health'))
+              .timeout(const Duration(seconds: 15));
+          expect(response.statusCode, 200);
+          expect(jsonDecode(response.body), {
+            'status': 'ok',
+            'service': 'melpal-algorithm-api',
+          });
+        } finally {
+          client.close();
+        }
+        return; // Personal credential checks live in melpal_public_access_test.
+      }
       final api = LegacyAlgorithmApi(
         AlgorithmEndpoint(origin, allowLocalHttp: true),
       );

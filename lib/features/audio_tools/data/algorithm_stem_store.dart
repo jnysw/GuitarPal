@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../domain/legacy_algorithm_models.dart';
 import '../domain/video_stem_choice.dart';
 import 'resumable_stem_transfer.dart';
+import 'algorithm_access.dart';
 export 'resumable_stem_transfer.dart'
     show StemDownloadCancellation, StemDownloadPaused, StemDownloadProgress;
 
@@ -31,12 +32,16 @@ class AlgorithmStemStore {
   AlgorithmStemStore(
     this.root, {
     http.Client Function()? clientFactory,
+    AlgorithmAccess? access,
     Duration timeout = const Duration(seconds: 30),
     int maxAttempts = 3,
     Duration retryDelay = const Duration(milliseconds: 500),
   }) : _transfer = ResumableStemTransfer(
          root,
-         clientFactory: clientFactory ?? http.Client.new,
+         clientFactory: () => MelpalHttpClient(
+           (clientFactory ?? http.Client.new)(),
+           access: access ?? const AlgorithmAccess(),
+         ),
          timeout: timeout,
          maxAttempts: maxAttempts,
          retryDelay: retryDelay,

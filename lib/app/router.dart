@@ -10,6 +10,7 @@ import '../features/performance/performance_comparison_screen.dart';
 import '../features/performance/performance_plan_link_screen.dart';
 import '../features/performance/performance_route_observer.dart';
 import '../features/audio_tools/algorithm_tools_screen.dart';
+import '../features/audio_tools/algorithm_access_screen.dart';
 import '../features/create/local_video_draft_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/inbox/domain/shared_item.dart';
@@ -34,6 +35,10 @@ final GoRouter appRouter = GoRouter(
   observers: [performanceRouteObserver],
   initialLocation: '/today',
   routes: [
+    GoRoute(
+      path: '/profile/algorithm',
+      builder: (context, state) => const AlgorithmAccessScreen(),
+    ),
     GoRoute(
       path: '/audio-tools',
       builder: (context, state) => const AlgorithmToolsScreen(),

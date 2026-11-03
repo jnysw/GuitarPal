@@ -1,6 +1,6 @@
 # AI 音频阶段进度
 
-更新日期：2026-11-02。完整范围见 [原始开发规划](development_plan.md)，源码审计见 [current_state.md](current_state.md)。每批在 GitHub 开发分支提交代码、验证结果及本文件，完成后经 PR 评审。
+更新日期：2026-11-03。完整范围见 [原始开发规划](development_plan.md)，源码审计见 [current_state.md](current_state.md)。每批在 GitHub 开发分支提交代码、验证结果及本文件，完成后经 PR 评审。
 
 ## 当前范围：本地视频 AI 练习闭环与协议基础
 
@@ -9,7 +9,7 @@
 | GP-AI-001 仓库审计 | 已完成 | Flutter/Kotlin、Drift v9、播放器 200ms、循环容差、身份与解码复用点已核对；与新规划差异已登记 |
 | GP-AI-002 可复现实验 | 已取得源码及 Windows 运行记录；质量基准待完成 | 已核对服务源码、环境／指纹交付与线上 GPU 就绪；Mac 自生成样本完成真实推理，独立模型复现及乐器质量验收仍待完成，生产 profile 保持关闭 |
 | GP-AI-003 协议与状态 | 进行中 | 已有结果 schema、OpenAPI 草案、Python 归一化/状态约束、Dart 解析/时间查找和共享 fixture；用量、任务列表分页、失败分支重试、下载与删除端点仍待细化 |
-| GP-AI-004/005 持久任务、上传 | 未开始 | PostgreSQL 状态版本/lease/事务 outbox、Celery/Redis、不可变对象、鉴权/配额与删除竞态 |
+| GP-AI-004/005 持久任务、上传 | 生产方案未开始；公网内测已有 SQLite 归属与配额 | PostgreSQL 状态版本/lease/事务 outbox、Celery/Redis、不可变对象、鉴权/配额与删除竞态 |
 | GP-AI-006 Android 输入与任务中心 | 进行中 | 本地视频整段/A-B 提取、确认上传、自动绑定来源/计划、页内恢复任务；Drift v14。元信息校验已接，完整内容哈希修订与生产任务仍待完成 |
 | GP-AI-007/008 和弦闭环 | 原播放器时间轴与采样自动映射已接 | 真实 API 已跑通；时间轴／滚动和弦、人工覆盖与自动映射已接。Windows 已更新，HTTPS 运行协议及 CUDA 就绪已核对；真实歌曲识别质量基准仍待完成 |
 | GP-AI-009 指法库 | 标准定弦多指法首版 | 固定版本离线库 1,693 个指法／433 个和弦键，显示开关／左右手／常用指法持久化及 MIT 署名已接；扩展质量、简化参考与非标准定弦仍待后续 |
@@ -19,6 +19,14 @@
 M0 整阶段尚未退出：已取得 Windows 运行记录与指纹，仍缺授权模型包的独立复现和乐器质量基准。此时先完成不依赖权重的契约基础，不将 M1 草案称为可用模型服务。
 
 用户 Windows 主机：RTX 5070 Ti 16GB、AMD 9600X、DDR5 32GB；月预算低于人民币 100 元。最初按 [API 交接说明](FLUTTER_ALGORITHM_API.md) 先完成客户端。2026-10-28 用户提供 Tailscale HTTPS 配置并授权继续，现已读取部署 OpenAPI 并跑通真实和弦/分轨；原交接资料保留历史标记。checkpoint/config/hash 与质量基准仍待复核。部署路径与价格假设见 [Windows 联调与成本估算](deployment_and_costs.md)，尚未创建付费资源。
+
+## 第二十三批：MelPal 公网个人认证
+
+- 核对算法仓库 `codex/melpal-public-api` 的个人令牌、任务归属和配额契约。Android 默认新任务改为 `https://api.melpal.com.cn`；普通构建不要求用户填写地址，旧任务保留原 endpoint，完整缓存不受迁移影响。
+- 「我的 → 算法服务」管理独立于 Supabase 的个人内测凭据，系统安全存储，不写 APK 常量、任务或缓存。上传、轮询、结果和 Range 下载仅对精确 HTTPS origin 附加 Bearer，禁止重定向；公网预检使用健康与只读认证 GET，不探测隐藏模型诊断。
+- 401 暂停轮询并保留任务编号，更新后手动 GET 恢复；下载保留部分并可续传。429 沿用 Retry-After，submission_unavailable 保持接收未知，绝不自动重发 POST。旧私网任务不擅自改成公网归属。
+- Flutter 全量 **472 项通过**，静态分析无问题；Android 公网 HTTPS／真实安全存储／401 拦截与既有本地视频提取／自动时间轴／A-B／全屏工作区共 **2 项通过**。本轮尚无有效个人令牌，没有真实上传或新推理。说明与证据见 [公网接入](melpal_public_access.md)、[本日验证](live_validation_2026-11-03.md)。
+- 公网认证为新域名带来的必要接入增量，本轮优先交付；数字混音导出尚未开放，下一项按 [实施约定](../performance_space/digital_export_plan.md) 处理保音高、时间映射、峰值与原子发布。没有服务端修改或付费资源。
 
 ## 第二十二批：演奏成果关联计划
 

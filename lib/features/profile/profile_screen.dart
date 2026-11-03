@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -84,6 +85,17 @@ class ProfileScreen extends ConsumerWidget {
                           available: true,
                         ),
                         const Divider(height: 1, indent: 64),
+                        if (kDebugMode)
+                          _StatusTile(
+                            key: const Key('profile_algorithm_access'),
+                            icon: Icons.graphic_eq,
+                            title: '算法服务',
+                            subtitle: '管理个人内测凭据与公网连接',
+                            status: '内测',
+                            available: true,
+                            onTap: () => context.push('/profile/algorithm'),
+                          ),
+                        if (kDebugMode) const Divider(height: 1, indent: 64),
                         _StatusTile(
                           key: const Key('profile_reminders_entry'),
                           icon: Icons.notifications_none_rounded,

@@ -550,6 +550,7 @@ String _taskLabel(AlgorithmTaskState state) => switch (state) {
   AlgorithmTaskState.unavailable => '等待恢复连接',
   AlgorithmTaskState.lost => '服务器任务已失效',
   AlgorithmTaskState.invalidResult => '响应待修复',
+  AlgorithmTaskState.authorizationRequired => '请更新内测凭据',
 };
 
 class _ChordResultScreen extends StatelessWidget {

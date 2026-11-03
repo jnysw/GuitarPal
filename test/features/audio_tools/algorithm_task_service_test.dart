@@ -45,6 +45,43 @@ void main() {
         expect(api.uploadCalls, 0);
       },
     );
+    test('401 pauses polling and preserves job ID; renewed access resumes with GET only', () async {
+      await service.submit(_task('auth-resume'));
+      api.error = const AlgorithmApiError(
+        'unauthorized',
+        '请更新内测凭据',
+        httpStatus: 401,
+      );
+      await service.refresh('auth-resume', force: true);
+      final paused = (await repository.get('auth-resume'))!;
+      expect(paused.state, AlgorithmTaskState.authorizationRequired);
+      expect(paused.shouldPoll, isFalse);
+      expect(paused.remoteJobId, 'contract_job_1');
+      final count = api.statusCalls;
+      await service.refresh('auth-resume');
+      expect(api.statusCalls, count);
+      api.error = null;
+      api.state = LegacyJobState.completed;
+      await service.refresh('auth-resume', force: true);
+      expect(
+        (await repository.get('auth-resume'))!.state,
+        AlgorithmTaskState.completed,
+      );
+      expect(api.uploadCalls, 1);
+    });
+    test('public submission_unavailable receipt remains unknown and never automatically retries POST', () async {
+      api.uploadError = const AlgorithmApiError(
+        'submission_unavailable',
+        '状态不确定',
+        httpStatus: 503,
+      );
+      await service.submit(_task('public-uncertain'));
+      final task = (await repository.get('public-uncertain'))!;
+      expect(task.state, AlgorithmTaskState.submissionUnknown);
+      expect(task.shouldPoll, isFalse);
+      await service.refresh(task.id, force: true);
+      expect(api.uploadCalls, 1);
+    });
     test('explicit model-unavailable rejection is retryable input failure, not unknown receipt', () async {
       api.uploadError = const AlgorithmApiError(
         'model_unavailable',

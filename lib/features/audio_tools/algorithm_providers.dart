@@ -13,6 +13,16 @@ import 'data/stem_practice_target_repository.dart';
 import 'data/video_audio_extractor.dart';
 import 'data/video_mix_preferences.dart';
 import 'data/algorithm_service_configuration.dart';
+import 'data/algorithm_access.dart';
+import 'data/legacy_algorithm_api.dart';
+
+final algorithmAccessProvider = Provider<AlgorithmAccess>(
+  (ref) => const AlgorithmAccess(),
+);
+final algorithmApiFactoryProvider = Provider<AlgorithmApiFactory>((ref) {
+  final access = ref.watch(algorithmAccessProvider);
+  return (endpoint) => LegacyAlgorithmApi(endpoint, access: access);
+});
 
 final algorithmAudioImportProvider = Provider<AlgorithmAudioImport>(
   (ref) => const MethodChannelAlgorithmAudioImport(),
@@ -34,6 +44,7 @@ final algorithmTaskServiceProvider = Provider<AlgorithmTaskService>(
   (ref) => AlgorithmTaskService(
     ref.watch(algorithmTaskRepositoryProvider),
     allowLocalHttp: kDebugMode,
+    apiFactory: ref.watch(algorithmApiFactoryProvider),
   ),
 );
 final algorithmTasksProvider = StreamProvider<List<AlgorithmTaskRecord>>(
@@ -43,8 +54,10 @@ final algorithmStemPlatformProvider = Provider<AlgorithmStemPlatform>(
   (ref) => const AlgorithmStemPlatform(),
 );
 final algorithmStemStoreProvider = Provider<AlgorithmStemStore>(
-  (ref) =>
-      AlgorithmStemStore(ref.watch(algorithmStemPlatformProvider).directory),
+  (ref) => AlgorithmStemStore(
+    ref.watch(algorithmStemPlatformProvider).directory,
+    access: ref.watch(algorithmAccessProvider),
+  ),
 );
 final algorithmMixPlatformProvider = Provider<AlgorithmMixPlatform>(
   (ref) => const AlgorithmMixPlatform(),

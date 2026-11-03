@@ -82,6 +82,8 @@ class AlgorithmTaskService {
             'invalid_file_size',
             'unsupported_format',
             'upload_not_sent',
+            'authorization_required',
+            'credential_storage_unavailable',
           }.contains(error.code) ||
           (error.code == 'model_unavailable' && error.httpStatus == 503) ||
           (error.httpStatus != null &&
@@ -183,11 +185,21 @@ class AlgorithmTaskService {
         }
       } on AlgorithmApiError catch (error) {
         final failures = task.failures + 1;
-        if (error.httpStatus == 404 || error.httpStatus == 410) {
+        if (error.httpStatus == 401 ||
+            {
+              'authorization_required',
+              'credential_storage_unavailable',
+            }.contains(error.code)) {
+          await repository.update(
+            id,
+            AlgorithmTaskState.authorizationRequired,
+            message: error.message,
+          );
+        } else if (error.httpStatus == 404 || error.httpStatus == 410) {
           await repository.update(
             id,
             AlgorithmTaskState.lost,
-            message: '服务器任务不存在或已过期；可能因重启丢失。本机已有结果仍会保留',
+            message: '服务器任务不存在、已过期或不属于当前测试账号。本机已有结果仍会保留；不会迁移旧地址任务',
           );
         } else if (error.httpStatus == 409 || error.isTemporary) {
           final seconds = (2 * (1 << failures.clamp(0, 4))).clamp(2, 30);

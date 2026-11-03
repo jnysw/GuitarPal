@@ -10,6 +10,7 @@ enum AlgorithmTaskState {
   unavailable,
   lost,
   invalidResult,
+  authorizationRequired,
 }
 
 class AlgorithmTaskRecord {

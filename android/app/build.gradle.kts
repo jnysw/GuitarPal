@@ -15,7 +15,7 @@ val localAlgorithmOrigin = if (algorithmConfig.isFile) {
     (values["API_BASE_URL"] ?: values["ALGORITHM_BASE_URL"] ?: "").toString().trim()
 } else ""
 val algorithmOrigin = providers.environmentVariable("API_BASE_URL").orNull?.trim()
-    ?.takeIf { it.isNotEmpty() } ?: localAlgorithmOrigin
+    ?.takeIf { it.isNotEmpty() } ?: localAlgorithmOrigin.ifEmpty { "https://api.melpal.com.cn" }
 
 android {
     namespace = "com.guitarpal.guitar_pal"

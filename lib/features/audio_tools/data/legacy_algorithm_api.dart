@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../domain/legacy_algorithm_models.dart';
+import 'algorithm_access.dart';
 
 abstract interface class AlgorithmApi {
   Future<void> ping({AlgorithmOperation operation = AlgorithmOperation.chords});
@@ -29,13 +30,19 @@ class LegacyAlgorithmApi implements AlgorithmApi {
   LegacyAlgorithmApi(
     this.endpoint, {
     http.Client? client,
+    AlgorithmAccess? access,
     this.requestTimeout = const Duration(seconds: 90),
     this.healthTimeout = const Duration(seconds: 8),
     this.uploadTimeout = const Duration(minutes: 10),
-  }) : _client = client ?? http.Client();
+  }) : access = access ?? const AlgorithmAccess(),
+       _client = MelpalHttpClient(
+         client ?? http.Client(),
+         access: access ?? const AlgorithmAccess(),
+       );
 
   final AlgorithmEndpoint endpoint;
   final http.Client _client;
+  final AlgorithmAccess access;
   final Duration requestTimeout;
   final Duration healthTimeout;
   final Duration uploadTimeout;
@@ -49,6 +56,22 @@ class LegacyAlgorithmApi implements AlgorithmApi {
   Future<void> ping({
     AlgorithmOperation operation = AlgorithmOperation.chords,
   }) async {
+    if (isMelpalAlgorithm(endpoint.origin)) {
+      await access.requireToken();
+      final health = await _get('/health', timeout: healthTimeout);
+      if (health['status'] != 'ok' ||
+          health['service'] != 'melpal-algorithm-api') {
+        throw const FormatException('存活检查响应无效');
+      }
+      // A fixed nonexistent ID exercises authentication without a POST, upload
+      // or inference. Gateway ownership checks intentionally return 404.
+      try {
+        await _get('/api/v1/jobs/${'0' * 32}/status', timeout: healthTimeout);
+      } on AlgorithmApiError catch (e) {
+        if (e.httpStatus != 404) rethrow;
+      }
+      return; // Public gateway deliberately does not expose model diagnostics.
+    }
     final data = await _get(
       '/api/v1/health/ping',
       timeout: healthTimeout < requestTimeout ? healthTimeout : requestTimeout,
@@ -225,7 +248,8 @@ class LegacyAlgorithmApi implements AlgorithmApi {
         if (response.statusCode != expected) {
           throw AlgorithmApiError(
             'http_${response.statusCode}',
-            '算法服务返回 HTTP ${response.statusCode}',
+            algorithmAuthorizationMessage(response.statusCode) ??
+                '算法服务返回 HTTP ${response.statusCode}',
             httpStatus: response.statusCode,
           );
         }
@@ -237,7 +261,10 @@ class LegacyAlgorithmApi implements AlgorithmApi {
           data['error'] is String
               ? data['error'] as String
               : 'http_${response.statusCode}',
-          data['detail'] is String ? data['detail'] as String : '算法服务请求失败',
+          algorithmAuthorizationMessage(response.statusCode) ??
+              (data['detail'] is String
+                  ? data['detail'] as String
+                  : '算法服务请求失败'),
           httpStatus: response.statusCode,
           retryAfter: delay != null && delay > 0
               ? Duration(seconds: delay)

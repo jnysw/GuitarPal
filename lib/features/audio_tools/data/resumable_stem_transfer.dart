@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../domain/legacy_algorithm_models.dart';
 import 'stem_audio_validation.dart';
+import 'algorithm_access.dart';
 
 class StemDownloadPaused implements Exception {
   const StemDownloadPaused();
@@ -320,9 +321,10 @@ class ResumableStemTransfer {
         if (!abort.isCompleted) abort.complete();
         throw AlgorithmApiError(
           'download_http_${response.statusCode}',
-          response.statusCode == 404 || response.statusCode == 410
-              ? '服务器音轨已过期或不存在；本机已完成音轨保留，无需删除或重复下载'
-              : '音轨下载失败（HTTP ${response.statusCode}），已保留进度',
+          algorithmAuthorizationMessage(response.statusCode) ??
+              (response.statusCode == 404 || response.statusCode == 410
+                  ? '服务器音轨已过期或不存在；本机已完成音轨保留，无需删除或重复下载'
+                  : '音轨下载失败（HTTP ${response.statusCode}），已保留进度'),
           httpStatus: response.statusCode,
           retryAfter: _retryAfter(response.headers['retry-after']),
         );
