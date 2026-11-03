@@ -22,6 +22,44 @@ void main() {
   final secret = 'mp_${'a' * 43}';
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
+  test('non-JSON public 530 reports temporary offline state without POST or an invalid-credential message', () async {
+    await access.save(secret);
+    final methods = <String>[];
+    final api = LegacyAlgorithmApi(
+      endpoint,
+      client: MockClient((r) async {
+        methods.add(r.method);
+        return http.Response(
+          '<html>Error 1033: Cloudflare Tunnel error</html>',
+          530,
+          headers: {'content-type': 'text/html'},
+        );
+      }),
+    );
+    try {
+      await expectLater(
+        api.ping(),
+        throwsA(
+          isA<AlgorithmApiError>()
+              .having((e) => e.httpStatus, 'status', 530)
+              .having((e) => e.isTemporary, 'temporary', isTrue)
+              .having(
+                (e) => e.message,
+                'message',
+                allOf(
+                  contains('暂时离线'),
+                  isNot(contains('凭据已过期')),
+                  isNot(contains('<html>')),
+                ),
+              ),
+        ),
+      );
+      expect(methods, ['GET']);
+    } finally {
+      api.close();
+    }
+  });
+
   test('private storage accepts scoped JSON, refuses wrong origin and header injection, clears without echo', () async {
     await access.save(
       jsonEncode({'base_url': melpalAlgorithmOrigin, 'access_token': secret}),

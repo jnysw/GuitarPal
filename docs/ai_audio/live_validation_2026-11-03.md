@@ -1,5 +1,15 @@
 # 2026-11-03：MelPal 公网认证接入
 
+## 个人凭据后续验证：认证通过，Tunnel 中断
+
+收到个人凭据后，仅在运行时内存中使用，不写仓库、APK、Dart define 或本机普通配置。Mac 初次 HTTPS health=200，携带该凭据查询固定不存在的任务 ID 得到 404，符合已认证后的归属查询契约。
+
+新增默认跳过的 `melpal_live_algorithm_test.dart`，显式启用后才运行：真实视频音频提取、每算法最多一次 POST、采样映射验证、实际清单下载、1024 字节受控中断与 Range 续传、SHA-256／容器校验及静音的原生混音时钟。支持显式指定已有 job ID，仅以 GET 继续，不自动重发 POST。用 adb stdin 将一次性测试凭据送至应用私有 0600 文件，读取后立即删除再存入安全存储，测试结束恢复原凭据；日志不含 Authorization 或请求体。
+
+本次 Android 在 `api.ping()` 的 `/health` 得到 HTTP 530，停止于提取／上传前，**POST 数为 0**，该真实推理链路尚未通过。Mac 随后多次复查同样为 530，HTML 包含 Error 1033。依据 [Cloudflare 官方说明](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1033/)，当前需恢复健康的 cloudflared 连接。操作见 [Windows 排查](MELPAL_TUNNEL_RECOVERY.md)。不能把网络中断当作模型识别或凭据失效。
+
+客户端新增对非 JSON 530 的离线提示，保留临时错误／退避语义，不展示 HTML，不新建或重复上传。新增对应单元回归，Flutter 最终全量 **473 项通过**，静态分析无问题。前一批 472 项及两个 Android 用例为当时服务可达下的验收记录，未用它们替代本次未完成的推理链路。新离线提示的普通 Debug APK 已重新构建、安装模拟器并启动普通入口；仓库及未忽略源码扫描未发现真实令牌。
+
 ## 服务器依据与只读实测
 
 读取算法仓库 `codex/melpal-public-api`，提交 `b91a300dc77485e7a2b877b8fbfa405c2981e63f`。`MELPAL_PUBLIC_API.md` 定义个人 Bearer、归属、配额、受保护 Range 下载以及 401／429／503；公网只开放通用 `/health`，不公开内部模型健康及 Swagger。服务端记录报告 Windows 112 项和真实 GPU 和弦／分轨验证通过；本轮未重新执行这些测试，也未修改 Windows 或 Cloudflare。

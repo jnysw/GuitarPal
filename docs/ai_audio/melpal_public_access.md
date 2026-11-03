@@ -31,4 +31,4 @@
 
 ## 本轮验证边界
 
-Flutter 全量 472 项与 Android 公网凭据链路已验证，详见 [本日记录](live_validation_2026-11-03.md)。本轮尚未取得个人有效令牌，真实带认证上传／推理待安全配置后联调；未上传用户歌曲。服务器仓库报告的 112 项与真实 GPU 请求是 Windows 端证据，不冒充本轮 Mac 或手机测试。
+前一批 Flutter 全量 472 项与 Android 公网凭据链路已验证，详见 [本日记录](live_validation_2026-11-03.md)。随后个人有效凭据已在 Mac 通过只读认证检查；Android 真实推理联调因公网 HTTP 530 / Cloudflare 1033 停在 health，尚未上传音频。恢复步骤见 [Windows 排查](MELPAL_TUNNEL_RECOVERY.md)。服务器仓库报告的 112 项与真实 GPU 请求是 Windows 端证据，不冒充本轮 Mac 或手机推理验收。

@@ -20,6 +20,14 @@ M0 整阶段尚未退出：已取得 Windows 运行记录与指纹，仍缺授�
 
 用户 Windows 主机：RTX 5070 Ti 16GB、AMD 9600X、DDR5 32GB；月预算低于人民币 100 元。最初按 [API 交接说明](FLUTTER_ALGORITHM_API.md) 先完成客户端。2026-10-28 用户提供 Tailscale HTTPS 配置并授权继续，现已读取部署 OpenAPI 并跑通真实和弦/分轨；原交接资料保留历史标记。checkpoint/config/hash 与质量基准仍待复核。部署路径与价格假设见 [Windows 联调与成本估算](deployment_and_costs.md)，尚未创建付费资源。
 
+## 第二十四批：个人凭据只读验收与 Tunnel 离线处理
+
+- 个人凭据已在 Mac 通过只读检查：health=200、认证后固定不存在任务查询=404。没有将真实令牌写入仓库、APK、普通配置或日志。
+- 随后 Android 真实联调在 health 收到 HTTP 530，Mac 复查为 Cloudflare 1033，流程停在提取／上传前，本次 POST 数为 0。待 Windows 的 cloudflared 连接恢复后继续，不把此结果当作已通过推理验收。
+- 补充默认跳过、显式启用的合成视频双任务／采样映射／实际分轨校验／受控中断续传／原生播放验收脚本；复跑可指定已取得的任务编号，避免重复提交。一次性凭据桥在应用私有目录短暂存在，读取立即删除，再由系统安全存储持有，结束恢复此前凭据。
+- 客户端将非 JSON 530 显示为暂时离线，并保留临时错误及 GET 退避语义。Flutter 全量 **473 项通过**，静态分析无问题；新增 530 回归不展示 HTML、不误报凭据失效、仅 GET。
+- 实际网络记录见 [本日验证](live_validation_2026-11-03.md)，Windows 操作见 [Tunnel 排查](MELPAL_TUNNEL_RECOVERY.md)。本批未改变 Windows、Cloudflare、模型或付费资源，真实带认证推理仍待入口恢复。
+
 ## 第二十三批：MelPal 公网个人认证
 
 - 核对算法仓库 `codex/melpal-public-api` 的个人令牌、任务归属和配额契约。Android 默认新任务改为 `https://api.melpal.com.cn`；普通构建不要求用户填写地址，旧任务保留原 endpoint，完整缓存不受迁移影响。

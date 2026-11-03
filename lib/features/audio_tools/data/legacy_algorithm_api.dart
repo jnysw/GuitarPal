@@ -248,7 +248,7 @@ class LegacyAlgorithmApi implements AlgorithmApi {
         if (response.statusCode != expected) {
           throw AlgorithmApiError(
             'http_${response.statusCode}',
-            algorithmAuthorizationMessage(response.statusCode) ??
+            algorithmHttpMessage(response.statusCode) ??
                 '算法服务返回 HTTP ${response.statusCode}',
             httpStatus: response.statusCode,
           );
@@ -261,7 +261,7 @@ class LegacyAlgorithmApi implements AlgorithmApi {
           data['error'] is String
               ? data['error'] as String
               : 'http_${response.statusCode}',
-          algorithmAuthorizationMessage(response.statusCode) ??
+          algorithmHttpMessage(response.statusCode) ??
               (data['detail'] is String
                   ? data['detail'] as String
                   : '算法服务请求失败'),

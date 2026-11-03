@@ -110,5 +110,8 @@ class MelpalHttpClient extends http.BaseClient {
   void close() => inner.close();
 }
 
-String? algorithmAuthorizationMessage(int? status) =>
-    status == 401 ? '内测凭据已过期、被撤销或无效，请到「我的 → 算法服务」更新后重新查询；不会重复上传' : null;
+String? algorithmHttpMessage(int? status) => switch (status) {
+  401 => '内测凭据已过期、被撤销或无效，请到「我的 → 算法服务」更新后重新查询；不会重复上传',
+  530 => '分析服务暂时离线，请稍后重试；本地练习和已下载内容仍可使用',
+  _ => null,
+};

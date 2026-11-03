@@ -321,7 +321,7 @@ class ResumableStemTransfer {
         if (!abort.isCompleted) abort.complete();
         throw AlgorithmApiError(
           'download_http_${response.statusCode}',
-          algorithmAuthorizationMessage(response.statusCode) ??
+          algorithmHttpMessage(response.statusCode) ??
               (response.statusCode == 404 || response.statusCode == 410
                   ? '服务器音轨已过期或不存在；本机已完成音轨保留，无需删除或重复下载'
                   : '音轨下载失败（HTTP ${response.statusCode}），已保留进度'),
