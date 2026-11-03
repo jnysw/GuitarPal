@@ -31,4 +31,4 @@
 
 ## 本轮验证边界
 
-前一批 Flutter 全量 472 项与 Android 公网凭据链路已验证，详见 [本日记录](live_validation_2026-11-03.md)。随后个人有效凭据已在 Mac 通过只读认证检查；Android 真实推理联调因公网 HTTP 530 / Cloudflare 1033 停在 health，尚未上传音频。恢复步骤见 [Windows 排查](MELPAL_TUNNEL_RECOVERY.md)。服务器仓库报告的 112 项与真实 GPU 请求是 Windows 端证据，不冒充本轮 Mac 或手机推理验收。
+Flutter 全量 473 项与静态分析通过。最初个人凭据通过只读认证，随后因 530／1033 暂停；Tunnel 恢复后，Android 已完成 8 秒合成视频的真实认证和弦／分轨（各一次 POST）、自动采样映射、实际七轨摘要校验、受控中断续传、离线重开和原生混音时钟验收。未使用用户歌曲，不据此宣称实际乐器质量。证据见 [本日记录](live_validation_2026-11-03.md)，复发排查见 [Windows 指南](MELPAL_TUNNEL_RECOVERY.md)。个人真实令牌不编译入 APK，新设备仍需在应用内保存自己的凭据。
