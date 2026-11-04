@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:guitar_pal/features/performance/data/performance_export_platform.dart';
@@ -18,6 +19,7 @@ import 'performance_stage_controller_test.dart' show StageStore;
 class _Platform extends PerformanceExportPlatform {
   int renders = 0, cancels = 0, saves = 0, shares = 0;
   Completer<PerformanceExportResult>? pending;
+  bool cancelCompletes = false;
   @override
   Future<PerformanceExportResult> render(Map<String, Object?> m) async {
     renders++;
@@ -40,8 +42,15 @@ class _Platform extends PerformanceExportPlatform {
   @override
   Future<void> stop() async {}
   @override
+  Future<void> discard(String id) async {}
+  @override
   Future<void> cancel() async {
     cancels++;
+    if (cancelCompletes && pending != null && !pending!.isCompleted) {
+      pending!.completeError(
+        PlatformException(code: 'cancelled', message: '导出已取消'),
+      );
+    }
   }
 
   @override
@@ -125,6 +134,82 @@ void main() {
         await tester.tap(find.byKey(const Key('performance_export_share')));
         await tester.pumpAndSettle();
         expect(platform.shares, 1);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        root.deleteSync(recursive: true);
+      }
+    },
+  );
+  testWidgets(
+    'back during generation allows continuing or explicitly stopping before leaving',
+    (tester) async {
+      final root = Directory.systemTemp.createTempSync('gp_export_leave_');
+      final c = fixtureCandidate(root);
+      final take = PerformanceTake.begin(
+        'take',
+        c,
+        BackingPreset.forCandidate(c, {'bass'}),
+        trial: false,
+      ).update({'durationMs': 1000, 'endSourceMs': 3000});
+      final mic = FakePerformanceMic()..files.add(take.filePath);
+      final platform = _Platform()
+        ..pending = Completer()
+        ..cancelCompletes = true;
+      try {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              performanceExportPlatformProvider.overrideWithValue(platform),
+              performanceExportServiceProvider.overrideWithValue(
+                PerformanceExportService(
+                  mic,
+                  StageStore(root),
+                  TakeResolver(c),
+                  platform,
+                ),
+              ),
+            ],
+            child: MaterialApp(
+              home: Builder(
+                builder: (context) => Scaffold(
+                  body: TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            PerformanceExportScreen(take: take, title: '返回验证'),
+                      ),
+                    ),
+                    child: const Text('打开导出'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('打开导出'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('performance_export_render')));
+        await tester.pump();
+        await tester.binding.handlePopRoute();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(find.text('停止生成并返回？'), findsOneWidget);
+        await tester.tap(find.text('继续生成'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(platform.cancels, 0);
+        await tester.binding.handlePopRoute();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.tap(find.text('停止并返回'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pumpAndSettle();
+        expect(find.text('打开导出'), findsOneWidget);
+        expect(platform.cancels, greaterThan(0));
+        await tester.pump();
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox());

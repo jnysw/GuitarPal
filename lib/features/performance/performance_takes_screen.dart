@@ -25,6 +25,18 @@ class _PerformanceTakesState extends ConsumerState<PerformanceTakesScreen> {
   String get sourceId => widget.sourceId;
   bool _selecting = false;
   final _selected = <String>{};
+  final _deleting = <String>{};
+
+  Future<void> _refresh() async {
+    try {
+      await Future.wait<Object?>([
+        ref.refresh(performanceDraftsProvider(sourceId).future),
+        ref.refresh(practiceRecordingsForSourceProvider(sourceId).future),
+      ]);
+    } on Object {
+      // Async provider errors remain visible with an explicit retry action.
+    }
+  }
 
   Future<void> _compare(List<PracticeRecording> items) async {
     final chosen = items.where((r) => _selected.contains(r.id)).toList()
@@ -59,40 +71,48 @@ class _PerformanceTakesState extends ConsumerState<PerformanceTakesScreen> {
     PerformanceTake? draft,
     PracticeRecording? saved,
   }) async {
-    final yes = await showPerformanceDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('删除这条演奏录音？'),
-        content: const Text('将删除本地原始录音及其信息，不影响伴奏或其它演奏。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (yes != true || !context.mounted) return;
-    final service = ref.read(performanceTakeServiceProvider);
-    final audio = ref.read(practiceAudioRecorderProvider);
-    final repository = ref.read(practiceRecordingRepositoryProvider);
+    if (!_deleting.add(id)) return;
     try {
-      if (draft != null) {
-        await service.discard(draft);
-      } else if (saved != null) {
-        await audio.deleteRecording(saved.filePath);
-        await repository.delete(id);
+      final yes = await showPerformanceDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('删除这条演奏录音？'),
+          content: const Text('将删除本地原始录音及其信息，不影响伴奏或其它演奏。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('删除'),
+            ),
+          ],
+        ),
+      );
+      if (yes != true || !context.mounted) return;
+      final service = ref.read(performanceTakeServiceProvider);
+      final audio = ref.read(practiceAudioRecorderProvider);
+      final repository = ref.read(practiceRecordingRepositoryProvider);
+      try {
+        if (draft != null) {
+          await service.discard(draft);
+        } else if (saved != null) {
+          await audio.deleteRecording(saved.filePath);
+          await repository.delete(id);
+        }
+        if (context.mounted) {
+          ref.invalidate(performanceDraftsProvider(sourceId));
+        }
+      } on Object {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('删除未完成，请重试')));
+        }
       }
-      if (context.mounted) ref.invalidate(performanceDraftsProvider(sourceId));
-    } on Object {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('删除未完成，请重试')));
-      }
+    } finally {
+      _deleting.remove(id);
+      if (mounted) setState(() {});
     }
   }
 
@@ -106,18 +126,16 @@ class _PerformanceTakesState extends ConsumerState<PerformanceTakesScreen> {
             .toList() ??
         [];
     final pending =
-        drafts.asData?.value
-            .where((t) => !items.any((r) => r.id == t.id))
+        (saved.asData != null ? drafts.asData?.value : null)
+            ?.where((t) => !items.any((r) => r.id == t.id))
             .toList() ??
         [];
     return Scaffold(
       appBar: AppBar(title: const Text('演奏录音')),
       body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(performanceDraftsProvider(sourceId));
-          ref.invalidate(practiceRecordingsForSourceProvider(sourceId));
-        },
+        onRefresh: _refresh,
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
             const Text('同一首歌，不同时间的你', style: TextStyle(fontSize: 22)),
@@ -149,15 +167,61 @@ class _PerformanceTakesState extends ConsumerState<PerformanceTakesScreen> {
             if (saved.isLoading || drafts.isLoading)
               const LinearProgressIndicator(),
             if (saved.hasError || drafts.hasError)
-              const Text('部分录音信息读取失败，请下拉重试。'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('部分录音暂时无法读取'),
+                      const Text('当前列表可能不完整，请重试后再管理录音。'),
+                      TextButton.icon(
+                        key: const Key('performance_takes_retry'),
+                        onPressed: _refresh,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('重新加载'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             if (!saved.isLoading &&
                 !drafts.isLoading &&
+                !saved.hasError &&
+                !drafts.hasError &&
                 items.isEmpty &&
                 pending.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Text('还没有演奏录音，可从舞台开始试录或录一遍。'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Column(
+                  children: [
+                    const Icon(Icons.mic_none, size: 48),
+                    const SizedBox(height: 12),
+                    const Text('还没有演奏录音'),
+                    const Text('准备好伴奏，到舞台录下第一遍演奏。'),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      key: const Key('performance_takes_prepare'),
+                      onPressed: () => context.push(
+                        Uri(
+                          path: '/performance/prepare',
+                          queryParameters: {'sourceId': sourceId},
+                        ).toString(),
+                      ),
+                      icon: const Icon(Icons.headphones),
+                      label: const Text('去准备伴奏'),
+                    ),
+                  ],
+                ),
               ),
+            if (pending.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                '待整理草稿 · ${pending.length}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const Text('回听后可保存为成果，或删除不需要的试录。'),
+            ],
             for (final t in pending)
               ListTile(
                 leading: const Icon(Icons.restore),
@@ -172,6 +236,14 @@ class _PerformanceTakesState extends ConsumerState<PerformanceTakesScreen> {
                   onPressed: () => _delete(context, ref, t.id, draft: t),
                 ),
               ),
+            if (items.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                '已保存演奏 · ${items.length}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (_selecting) const Text('选择两条录音，按共同曲目位置对比回听。'),
+            ],
             for (final r in items)
               if (_selecting)
                 CheckboxListTile(
@@ -181,13 +253,21 @@ class _PerformanceTakesState extends ConsumerState<PerformanceTakesScreen> {
                     '${_date(r.recordedAt)} · ${r.referenceSpeed.toStringAsFixed(2)}×',
                   ),
                   value: _selected.contains(r.id),
-                  onChanged: (v) => setState(() {
-                    if (v == true && _selected.length < 2) {
-                      _selected.add(r.id);
-                    } else {
-                      _selected.remove(r.id);
-                    }
-                  }),
+                  onChanged:
+                      !_selected.contains(r.id) &&
+                          items.where((r) => _selected.contains(r.id)).length >=
+                              2
+                      ? null
+                      : (v) => setState(() {
+                          _selected.removeWhere(
+                            (id) => !items.any((r) => r.id == id),
+                          );
+                          if (v == true && _selected.length < 2) {
+                            _selected.add(r.id);
+                          } else {
+                            _selected.remove(r.id);
+                          }
+                        }),
                 )
               else
                 ListTile(

@@ -143,6 +143,15 @@ void main() {
         await _tap(tester, const ValueKey('performance_link_plan_whole-plan'));
         await _tap(tester, const Key('performance_link_save'));
         await _until(tester, () => find.text('演奏回听').evaluate().isNotEmpty);
+        await tester.scrollUntilVisible(
+          find.byType(TextField),
+          -150,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), '阶段演奏 · 更新回听标题');
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pumpAndSettle();
         await _tap(tester, const Key('performance_take_save'));
         await _until(
           tester,

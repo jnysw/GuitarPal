@@ -62,6 +62,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('新建练习'), findsOneWidget);
+    await tester.tap(find.text('分享链接'));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('create_share_text_field')),
       '教程 https://www.bilibili.com/video/BV1create123',
@@ -262,6 +264,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('保存后会返回新建计划，并自动选中这项练习。'), findsOneWidget);
+      await tester.tap(find.text('分享链接'));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('create_share_text_field')),
         'https://www.bilibili.com/video/BV1planreturn',

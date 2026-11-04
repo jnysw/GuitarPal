@@ -80,6 +80,59 @@ void main() {
     },
   );
   testWidgets(
+    'export can save current edits and continue, but a failed save stays in review',
+    (tester) async {
+      final f = (await tester.runAsync(() => _Fixture.create()))!;
+      Future<void> tapKey(String key) async {
+        await tester.scrollUntilVisible(
+          find.byKey(Key(key)),
+          140,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(Key(key)));
+        await tester.pumpAndSettle();
+      }
+
+      try {
+        await tester.pumpWidget(f.app());
+        await tester.tap(find.text('打开回听'));
+        await tester.pumpAndSettle();
+        await tapKey('performance_take_save');
+        await _until(
+          tester,
+          () => find.text('演奏已保存，可以从同曲演奏录音再次回听').evaluate().isNotEmpty,
+        );
+        await tester.enterText(find.byType(TextField), '更新后的演奏');
+        f.repo.fail = true;
+        await tapKey('performance_take_export');
+        expect(find.text('保存调整并继续？'), findsOneWidget);
+        await tester.tap(find.text('保存并继续'));
+        await tester.pumpAndSettle();
+        await _until(
+          tester,
+          () => find.text('保存未完成，草稿与原始录音仍保留，请重试').evaluate().isNotEmpty,
+        );
+        expect(
+          find.byKey(const Key('performance_export_render')),
+          findsNothing,
+        );
+        f.repo.fail = false;
+        await tapKey('performance_take_export');
+        await tester.tap(find.text('保存并继续'));
+        await tester.pumpAndSettle();
+        await _until(tester, () => find.text('导出演奏音频').evaluate().isNotEmpty);
+        expect(f.repo.rows.length, 1);
+        expect(f.repo.rows.values.single.title, '更新后的演奏');
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        await tester.runAsync(f.close);
+      }
+    },
+  );
+  testWidgets(
     'unsaved exit is explicit and trial can be discarded without becoming a performance',
     (tester) async {
       final f = (await tester.runAsync(() => _Fixture.create(trial: true)))!;

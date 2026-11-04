@@ -23,6 +23,8 @@ class _CreatePracticeScreenState extends ConsumerState<CreatePracticeScreen> {
   final _shareTextController = TextEditingController();
   String? _validationMessage;
   bool _isPickingLocalVideo = false;
+  bool _useLink = false;
+  bool _continuing = false;
 
   @override
   void dispose() {
@@ -48,6 +50,7 @@ class _CreatePracticeScreenState extends ConsumerState<CreatePracticeScreen> {
   }
 
   void _continueWithLink() {
+    if (_continuing || _isPickingLocalVideo) return;
     final rawText = _shareTextController.text.trim();
     if (rawText.isEmpty) {
       setState(() => _validationMessage = '请粘贴分享文字或输入视频链接');
@@ -67,6 +70,8 @@ class _CreatePracticeScreenState extends ConsumerState<CreatePracticeScreen> {
         if (widget.returnToPlan) 'returnTo': 'plan',
       },
     ).toString();
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _continuing = true);
     context.pushReplacement(inboxLocation, extra: item);
   }
 
@@ -126,6 +131,7 @@ class _CreatePracticeScreenState extends ConsumerState<CreatePracticeScreen> {
       appBar: AppBar(title: const Text('新建练习')),
       body: SafeArea(
         child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           child: Center(
             child: ConstrainedBox(
@@ -134,122 +140,119 @@ class _CreatePracticeScreenState extends ConsumerState<CreatePracticeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    '从哪里开始？',
-                    style: Theme.of(context).textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                    '选择练习内容',
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     widget.returnToPlan
                         ? '保存后会返回新建计划，并自动选中这项练习。'
-                        : '先把教程加入练习库，再设置倍速、A-B 循环和练习片段。',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: colors.onSurfaceVariant,
-                      height: 1.45,
-                    ),
+                        : '添加歌曲或教程，保存后即可开始练习。',
                   ),
-                  const SizedBox(height: 24),
-                  Card(
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.link_rounded, color: colors.primary),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  '从链接添加',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '支持 B站、抖音、小红书、YouTube 及普通网页链接，也可以粘贴含链接的完整分享文案。',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: colors.onSurfaceVariant,
-                                  height: 1.45,
-                                ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            key: const Key('create_share_text_field'),
-                            controller: _shareTextController,
-                            minLines: 3,
-                            maxLines: 6,
-                            keyboardType: TextInputType.url,
-                            textInputAction: TextInputAction.done,
-                            onChanged: (_) {
-                              if (_validationMessage != null) {
-                                setState(() => _validationMessage = null);
-                              }
-                            },
-                            onSubmitted: (_) => _continueWithLink(),
-                            decoration: InputDecoration(
-                              labelText: '分享文字或链接',
-                              hintText: '例如：https://www.bilibili.com/video/BV…',
-                              errorText: _validationMessage,
-                              alignLabelWithHint: true,
-                              border: const OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  key: const Key('create_paste_button'),
-                                  onPressed: _pasteFromClipboard,
-                                  icon: const Icon(Icons.content_paste_rounded),
-                                  label: const Text('从剪贴板粘贴'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FilledButton.icon(
-                                  key: const Key('create_continue_button'),
-                                  onPressed: _continueWithLink,
-                                  icon: const Icon(Icons.arrow_forward_rounded),
-                                  label: const Text('识别并继续'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                  const SizedBox(height: 20),
+                  SegmentedButton<bool>(
+                    direction:
+                        MediaQuery.sizeOf(context).width < 400 &&
+                            MediaQuery.textScalerOf(context).scale(16) > 22
+                        ? Axis.vertical
+                        : Axis.horizontal,
+                    segments: const [
+                      ButtonSegment(
+                        value: false,
+                        label: Text('本地视频'),
+                        icon: Icon(Icons.video_file_outlined),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        label: Text('分享链接'),
+                        icon: Icon(Icons.link),
+                      ),
+                    ],
+                    selected: {_useLink},
+                    onSelectionChanged: _isPickingLocalVideo || _continuing
+                        ? null
+                        : (v) {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            setState(() {
+                              _useLink = v.single;
+                              _validationMessage = null;
+                            });
+                          },
+                  ),
+                  const SizedBox(height: 20),
+                  if (!_useLink) ...[
+                    const Text('导入本地视频后，可使用 A-B 循环、和弦分析、分轨伴奏和演奏空间。'),
+                    const SizedBox(height: 16),
+                    _LocalImportTile(
+                      key: const Key('pick_gallery_video'),
+                      icon: Icons.photo_library_outlined,
+                      title: '从相册选择',
+                      subtitle: '选择一个视频，下一步确认名称',
+                      isLoading: _isPickingLocalVideo,
+                      onTap: () =>
+                          _pickLocalVideo(LocalVideoPickOrigin.gallery),
+                    ),
+                    const SizedBox(height: 10),
+                    _LocalImportTile(
+                      key: const Key('pick_file_video'),
+                      icon: Icons.folder_open_rounded,
+                      title: '从文件导入',
+                      subtitle: '从下载目录、云盘或其他文件位置选择',
+                      isLoading: _isPickingLocalVideo,
+                      onTap: () => _pickLocalVideo(LocalVideoPickOrigin.files),
+                    ),
+                    if (_isPickingLocalVideo)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Text('正在读取视频，请稍候…'),
+                      ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '原视频保留在原位置。分析需在练习页手动开始，不会在导入时上传。',
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                  ] else ...[
+                    const Text(
+                      '粘贴 B站、抖音、小红书、YouTube 或网页链接，也可以粘贴完整分享文案。不同平台的播放能力有所不同；和弦分析与分轨请使用本地视频。',
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      key: const Key('create_share_text_field'),
+                      controller: _shareTextController,
+                      minLines: 2,
+                      maxLines: 5,
+                      enabled: !_continuing,
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (_) {
+                        if (_validationMessage != null) {
+                          setState(() => _validationMessage = null);
+                        }
+                      },
+                      onSubmitted: (_) => _continueWithLink(),
+                      decoration: InputDecoration(
+                        labelText: '分享文字或链接',
+                        hintText: 'https://www.bilibili.com/video/BV…',
+                        errorText: _validationMessage,
+                        alignLabelWithHint: true,
+                        border: const OutlineInputBorder(),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    '本地视频',
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 10),
-                  _LocalImportTile(
-                    key: const Key('pick_gallery_video'),
-                    icon: Icons.photo_library_outlined,
-                    title: '从相册选择',
-                    subtitle: '使用 Android 系统照片选择器，无需读取整个相册',
-                    isLoading: _isPickingLocalVideo,
-                    onTap: () => _pickLocalVideo(LocalVideoPickOrigin.gallery),
-                  ),
-                  const SizedBox(height: 8),
-                  _LocalImportTile(
-                    key: const Key('pick_file_video'),
-                    icon: Icons.folder_open_rounded,
-                    title: '从文件导入',
-                    subtitle: '从下载目录、云盘或其他文件位置选择视频',
-                    isLoading: _isPickingLocalVideo,
-                    onTap: () => _pickLocalVideo(LocalVideoPickOrigin.files),
-                  ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      key: const Key('create_paste_button'),
+                      onPressed: _continuing ? null : _pasteFromClipboard,
+                      icon: const Icon(Icons.content_paste_rounded),
+                      label: const Text('从剪贴板粘贴'),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      key: const Key('create_continue_button'),
+                      onPressed: _continuing ? null : _continueWithLink,
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                      label: const Text('识别并继续'),
+                    ),
+                  ],
                 ],
               ),
             ),

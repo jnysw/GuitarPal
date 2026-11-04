@@ -11,6 +11,7 @@ import 'application/performance_export_service.dart';
 import 'data/performance_export_platform.dart';
 import 'domain/performance_take.dart';
 import 'performance_resolver_providers.dart';
+import 'performance_dialog.dart';
 
 final performanceExportPlatformProvider = Provider(
   (ref) => const PerformanceExportPlatform(),
@@ -45,7 +46,9 @@ class _PerformanceExportScreenState
       _external = false,
       _playing = false,
       _foreground = true;
-  bool _polling = false, _rendering = false;
+  bool _polling = false, _rendering = false, _generating = false;
+  bool _cancelling = false, _allowPop = false, _leaving = false;
+  bool _savedToFiles = false, _failed = false;
   int _generation = 0;
   double _progress = 0;
   String _stage = '', _message = '';
@@ -69,11 +72,11 @@ class _PerformanceExportScreenState
     _foreground = state == AppLifecycleState.resumed;
     if (!_foreground) {
       unawaited(_platform.stop().catchError((Object _) {}));
-      if (_busy && !_external) {
+      if (_generating) {
         unawaited(_platform.cancel().catchError((Object _) {}));
       }
       // Also invalidate a preparation that has not reached the native renderer yet.
-      if (_busy && !_external) {
+      if (_generating) {
         ++_generation;
         setState(() {
           _stage = '正在停止导出';
@@ -93,7 +96,7 @@ class _PerformanceExportScreenState
       if (mounted) {
         setState(() {
           _progress = ((s['progress'] as num?)?.toDouble() ?? 0).clamp(0, 1);
-          _stage = s['stage'] as String? ?? '';
+          if (!_cancelling) _stage = s['stage'] as String? ?? '';
           _playing = s['playing'] == true;
         });
       }
@@ -114,6 +117,10 @@ class _PerformanceExportScreenState
     final token = ++_generation;
     setState(() {
       _busy = true;
+      _generating = true;
+      _cancelling = false;
+      _failed = false;
+      _savedToFiles = false;
       _result = null;
       _playing = false;
       _message = '';
@@ -143,16 +150,27 @@ class _PerformanceExportScreenState
       });
     } on Object catch (e) {
       if (mounted && token == _generation) {
-        setState(() => _message = _error(e));
+        setState(() {
+          _message = _error(e);
+          _failed = true;
+        });
       }
     } finally {
       _rendering = false;
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _generating = false;
+          _cancelling = false;
+        });
+      }
     }
   }
 
   Future<void> _cancel() async {
+    if (_cancelling) return;
     ++_generation;
+    _cancelling = true;
     setState(() => _stage = '正在停止导出');
     await _platform.cancel().catchError((Object _) {});
     if (mounted) {
@@ -178,14 +196,19 @@ class _PerformanceExportScreenState
         } else {
           await _platform.play(result.id);
         }
-        if (mounted) setState(() => _playing = play);
+        if (!_foreground) await _platform.stop();
+        if (mounted) setState(() => _playing = play && _foreground);
       } else if (action == 'save') {
         final saved = await _platform.save(result.id, widget.title);
         if (mounted) {
-          setState(() => _message = saved ? '已保存到你选择的位置' : '已取消保存，本机作品仍保留');
+          setState(() {
+            _savedToFiles = _savedToFiles || saved;
+            _message = saved ? '已保存到你选择的位置' : '已取消保存，本机作品仍保留，可再次保存';
+          });
         }
       } else {
         await _platform.share(result.id);
+        if (mounted) setState(() => _message = '已打开系统分享，是否发送由你选择');
       }
     } on Object catch (e) {
       if (mounted) setState(() => _message = _error(e));
@@ -199,6 +222,52 @@ class _PerformanceExportScreenState
     }
   }
 
+  Future<void> _leave() async {
+    if (_leaving) return;
+    _leaving = true;
+    if (_generating) {
+      final leave = await showPerformanceDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('停止生成并返回？'),
+          content: const Text('本次生成会停止，原始录音仍保留。稍后可重新导出。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('继续生成'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('停止并返回'),
+            ),
+          ],
+        ),
+      );
+      if (leave != true || !mounted) {
+        _leaving = false;
+        return;
+      }
+      await _cancel();
+    }
+    await _platform.stop().catchError((Object _) {});
+    if (!mounted) return;
+    setState(() => _allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.pop(context);
+    });
+  }
+
+  void _changeBacking(bool value) {
+    unawaited(_platform.stop().catchError((Object _) {}));
+    setState(() {
+      _backing = value;
+      _result = null;
+      _playing = false;
+      _message = '';
+      _failed = false;
+    });
+  }
+
   @override
   void dispose() {
     ++_generation;
@@ -210,88 +279,182 @@ class _PerformanceExportScreenState
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('导出演奏音频')),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(widget.title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 12),
-          Text(
-            '完整录音 ${(widget.take.durationMs / 1000).toStringAsFixed(1)} 秒 · 录制速度 ${widget.take.preset.speed.toStringAsFixed(2)}×',
+  Widget build(BuildContext context) => PopScope(
+    canPop: _allowPop,
+    onPopInvokedWithResult: (popped, _) {
+      if (!popped) unawaited(_leave());
+    },
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('导出演奏音频'),
+        leading: BackButton(onPressed: _leave),
+      ),
+      body: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${(widget.take.durationMs / 1000).toStringAsFixed(1)} 秒 · ${widget.take.preset.speed.toStringAsFixed(2)}× 演奏',
+                ),
+                const SizedBox(height: 16),
+                if (_result case final result?) ...[
+                  Card(
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Icon(
+                            _savedToFiles
+                                ? Icons.task_alt
+                                : Icons.audio_file_outlined,
+                            size: 36,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _savedToFiles ? '已保存到文件' : '音频已生成',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _backing ? '我的演奏 + 本次伴奏' : '仅我的录音',
+                            textAlign: TextAlign.center,
+                          ),
+                          Text(
+                            'WAV · ${(result.bytes / 1024 / 1024).toStringAsFixed(1)} MB',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton.icon(
+                            key: const Key('performance_export_save'),
+                            onPressed: _busy ? null : () => _action('save'),
+                            icon: const Icon(Icons.save_alt),
+                            label: Text(_savedToFiles ? '另存一份' : '保存到文件'),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: _busy ? null : () => _action('play'),
+                            icon: Icon(
+                              _playing ? Icons.stop : Icons.play_arrow,
+                            ),
+                            label: Text(_playing ? '停止回听' : '回听导出音频'),
+                          ),
+                          OutlinedButton.icon(
+                            key: const Key('performance_export_share'),
+                            onPressed: _busy ? null : () => _action('share'),
+                            icon: const Icon(Icons.share_outlined),
+                            label: const Text('系统分享'),
+                          ),
+                          if (!_savedToFiles)
+                            const Text('请保存到文件以长期留存，本机临时作品会在 7 天后清理。'),
+                          ExpansionTile(
+                            tilePadding: EdgeInsets.zero,
+                            title: const Text('音频详情'),
+                            children: [
+                              const Text('44.1 kHz · 16 bit · 立体声'),
+                              Text(
+                                '整体防削顶衰减 ${math.max(0, -20 * math.log(result.attenuation) / math.ln10).toStringAsFixed(1)} dB',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                if (_result == null) ...[
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('混入本次伴奏'),
+                    subtitle: Text(
+                      widget.take.preset.speed == 1
+                          ? '沿用录制时的选轨与已保存的回听音量'
+                          : '当前仅支持 1.00× 伴奏混音，此成果可仅导出录音',
+                    ),
+                    value: _backing,
+                    onChanged: _busy || widget.take.preset.speed != 1
+                        ? null
+                        : _changeBacking,
+                  ),
+                  Text(
+                    _backing
+                        ? '将伴奏与录音合成一个音频文件，使用已保存的试听对齐。'
+                        : '将我的录音另存为 WAV，应用已保存的录音音量。',
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (_generating) ...[
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(_cancelling ? '正在停止生成…' : _stage),
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: _progress > 0 ? _progress : null,
+                  ),
+                  if (_progress > 0) Text('${(_progress * 100).floor()}%'),
+                  TextButton(
+                    key: const Key('performance_export_cancel'),
+                    onPressed: _cancelling ? null : _cancel,
+                    child: const Text('取消生成'),
+                  ),
+                ],
+                if (_message.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Semantics(liveRegion: true, child: Text(_message)),
+                  ),
+                if (_result == null)
+                  FilledButton.icon(
+                    key: const Key('performance_export_render'),
+                    onPressed: _busy ? null : _render,
+                    icon: const Icon(Icons.audio_file_outlined),
+                    label: Text(_failed ? '重试生成' : '生成音频'),
+                  ),
+                if (_failed && _backing && !_busy)
+                  OutlinedButton(
+                    onPressed: () {
+                      _changeBacking(false);
+                      unawaited(_render());
+                    },
+                    child: const Text('仅导出录音'),
+                  ),
+                if (_result != null)
+                  TextButton.icon(
+                    key: const Key('performance_export_render'),
+                    onPressed: _busy ? null : () => _changeBacking(_backing),
+                    icon: const Icon(Icons.tune),
+                    label: const Text('调整导出设置'),
+                  ),
+                const SizedBox(height: 12),
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('格式与注意事项'),
+                  children: [
+                    const Text(
+                      'WAV · 44.1 kHz · 16 bit · 立体声。仅使用本机文件，原始录音保持不变，导出不增加练习时长。',
+                    ),
+                    Text(
+                      '试听微调 ${widget.take.alignmentMs} ms；设备与蓝牙延迟仍需凭听感校准。建议戴耳机录制，避免麦克风再次收到外放伴奏。',
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const Text('WAV · 44.1 kHz · 16 bit · 立体声'),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('混入本次伴奏'),
-            subtitle: Text(
-              widget.take.preset.speed == 1
-                  ? '使用保存的选轨、静音、独奏、声像和回听音量'
-                  : '当前仅支持 1.00× 伴奏混音，此成果可仅导出录音',
-            ),
-            value: _backing,
-            onChanged: _busy || widget.take.preset.speed != 1
-                ? null
-                : (v) {
-                    unawaited(_platform.stop().catchError((Object _) {}));
-                    setState(() {
-                      _backing = v;
-                      _result = null;
-                      _playing = false;
-                    });
-                  },
-          ),
-          Text(
-            _backing
-                ? '试听微调 ${widget.take.alignmentMs} ms；伴奏仅在实际演奏区间混入。设备与蓝牙延迟仍需凭听感校准。'
-                : '仅导出麦克风录音，应用已保存的录音音量。',
-          ),
-          const SizedBox(height: 12),
-          const Text('全程使用本机文件。伴奏缺失时可关闭上方开关，仅导出录音。建议戴耳机录制，外放伴奏可能被麦克风再次收到。'),
-          const SizedBox(height: 20),
-          if (_busy && !_external) ...[
-            LinearProgressIndicator(value: _progress > 0 ? _progress : null),
-            Text(_stage),
-            TextButton(onPressed: _cancel, child: const Text('取消导出')),
-          ],
-          FilledButton.icon(
-            key: const Key('performance_export_render'),
-            onPressed: _busy ? null : _render,
-            icon: const Icon(Icons.audio_file_outlined),
-            label: Text(_result == null ? '生成音频' : '重新生成'),
-          ),
-          if (_result case final result?) ...[
-            const SizedBox(height: 12),
-            Text(
-              '${(result.bytes / 1024 / 1024).toStringAsFixed(1)} MB · 整体防削顶衰减 ${(-20 * math.log(result.attenuation) / math.ln10).toStringAsFixed(1)} dB',
-            ),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : () => _action('play'),
-              icon: Icon(_playing ? Icons.stop : Icons.play_arrow),
-              label: Text(_playing ? '停止回听' : '回听导出音频'),
-            ),
-            FilledButton.tonalIcon(
-              key: const Key('performance_export_save'),
-              onPressed: _busy ? null : () => _action('save'),
-              icon: const Icon(Icons.save_alt),
-              label: const Text('保存到文件'),
-            ),
-            OutlinedButton.icon(
-              key: const Key('performance_export_share'),
-              onPressed: _busy ? null : () => _action('share'),
-              icon: const Icon(Icons.share_outlined),
-              label: const Text('系统分享'),
-            ),
-          ],
-          if (_message.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(_message),
-            ),
-          const SizedBox(height: 12),
-          const Text('原始录音保持不变，导出不增加练习时长。本机临时作品保留 7 天，请用“保存到文件”留存。'),
-        ],
+        ),
       ),
     ),
   );

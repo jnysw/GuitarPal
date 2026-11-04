@@ -65,6 +65,7 @@ class _PerformanceReviewScreenState
   late final TextEditingController _title;
   bool _saved = false, _saving = false, _allowPop = false, _leaving = false;
   String _savedSignature = '';
+  bool _navigating = false;
   String get _signature =>
       '${_review.take.alignmentMs}|${_review.micVolume}|${_review.backingVolume}|${_title.text.trim()}';
   String? _message;
@@ -77,6 +78,7 @@ class _PerformanceReviewScreenState
     _title = TextEditingController(
       text: widget.saved?.title ?? '演奏 · ${_date(widget.take.createdAt)}',
     );
+    _title.addListener(_titleChanged);
     _review = PerformanceReviewController(
       widget.take,
       ref.read(practiceAudioRecorderProvider),
@@ -87,6 +89,35 @@ class _PerformanceReviewScreenState
     );
     _savedSignature = _signature;
     unawaited(_review.initialize());
+  }
+
+  void _titleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _dirty => !_saved || _savedSignature != _signature;
+
+  Future<bool> _saveBeforeContinue(String destination) async {
+    if (!_dirty) return true;
+    final save = await showPerformanceDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('保存调整并继续？'),
+        content: Text('将保存当前标题、音量和试听对齐，再$destination。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('继续调整'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('保存并继续'),
+          ),
+        ],
+      ),
+    );
+    if (save != true || !mounted) return false;
+    return _save();
   }
 
   PageRoute<dynamic>? _route;
@@ -122,8 +153,8 @@ class _PerformanceReviewScreenState
     }
   }
 
-  Future<void> _save() async {
-    if (_saving || widget.take.trial) return;
+  Future<bool> _save() async {
+    if (_saving || widget.take.trial) return false;
     setState(() {
       _saving = true;
       _message = null;
@@ -142,6 +173,7 @@ class _PerformanceReviewScreenState
           _message = '演奏已保存，可以从同曲演奏录音再次回听';
         });
       }
+      return mounted;
     } on Object catch (e) {
       if (mounted) {
         setState(
@@ -150,19 +182,30 @@ class _PerformanceReviewScreenState
               : '保存未完成，草稿与原始录音仍保留，请重试',
         );
       }
+      return false;
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<void> _linkPlan() async {
+  Future<void> _navigateOnce(Future<void> Function() action) async {
+    if (_navigating) return;
+    _navigating = true;
+    try {
+      await action();
+    } finally {
+      _navigating = false;
+    }
+  }
+
+  Future<void> _linkPlan() => _navigateOnce(_openPlan);
+  Future<void> _export() => _navigateOnce(_openExport);
+
+  Future<void> _openPlan() async {
     if (_saving || !_saved) return;
     await _review.pause();
     if (!mounted) return;
-    if (_savedSignature != _signature) {
-      setState(() => _message = '请先保存本次回听调整，再关联计划');
-      return;
-    }
+    if (!await _saveBeforeContinue('管理练习计划') || !mounted) return;
     final changed = await context.push<bool>(
       Uri(
         path: '/performance/plan',
@@ -174,14 +217,11 @@ class _PerformanceReviewScreenState
     }
   }
 
-  Future<void> _export() async {
+  Future<void> _openExport() async {
     if (_saving || !_saved) return;
     await _review.pause();
     if (!mounted) return;
-    if (_savedSignature != _signature) {
-      setState(() => _message = '请先保存本次回听调整，再导出音频');
-      return;
-    }
+    if (!await _saveBeforeContinue('导出演奏音频') || !mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => PerformanceExportScreen(
@@ -289,6 +329,7 @@ class _PerformanceReviewScreenState
     WidgetsBinding.instance.removeObserver(this);
     performanceRouteObserver.unsubscribe(this);
     _review.dispose();
+    _title.removeListener(_titleChanged);
     _title.dispose();
     super.dispose();
   }
@@ -308,6 +349,7 @@ class _PerformanceReviewScreenState
         child: AnimatedBuilder(
           animation: _review,
           builder: (c, _) => ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.all(20),
             children: [
               Text(
@@ -329,6 +371,30 @@ class _PerformanceReviewScreenState
                   ),
                 ),
               const SizedBox(height: 16),
+              if (!widget.take.trial) ...[
+                Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: ListTile(
+                    leading: Icon(
+                      _dirty ? Icons.edit_note : Icons.check_circle_outline,
+                    ),
+                    title: Text(
+                      !_saved
+                          ? '演奏草稿'
+                          : _dirty
+                          ? '有未保存的调整'
+                          : '演奏已保存',
+                    ),
+                    subtitle: Text(
+                      !_saved
+                          ? '先回听，满意后保存为演奏成果。'
+                          : _dirty
+                          ? '继续导出或关联计划时，可一并保存。'
+                          : '可导出音频作品，也可关联练习计划。',
+                    ),
+                  ),
+                ),
+              ],
               if (_review.busy) const LinearProgressIndicator(),
               if (_review.error != null)
                 Text(
@@ -426,13 +492,15 @@ class _PerformanceReviewScreenState
                 ),
                 FilledButton.icon(
                   key: const Key('performance_take_save'),
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving || !_dirty ? null : _save,
                   icon: const Icon(Icons.bookmark_add_outlined),
                   label: Text(
                     _saving
                         ? '正在保存…'
                         : _saved
-                        ? '保存调整'
+                        ? _dirty
+                              ? '保存调整'
+                              : '已保存'
                         : '保存这次演奏',
                   ),
                 ),
