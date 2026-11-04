@@ -13,6 +13,7 @@ import 'performance_resolver_providers.dart';
 import 'performance_route_observer.dart';
 import 'performance_take_providers.dart';
 import 'performance_dialog.dart';
+import 'performance_export_screen.dart';
 
 final performanceReviewProvider = FutureProvider.autoDispose
     .family<({PerformanceTake take, PracticeRecording? saved}), String>((
@@ -171,6 +172,24 @@ class _PerformanceReviewScreenState
     if (mounted && changed == true) {
       setState(() => _message = '计划关联已更新，可从计划的成果录音回听');
     }
+  }
+
+  Future<void> _export() async {
+    if (_saving || !_saved) return;
+    await _review.pause();
+    if (!mounted) return;
+    if (_savedSignature != _signature) {
+      setState(() => _message = '请先保存本次回听调整，再导出音频');
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => PerformanceExportScreen(
+          take: _review.take,
+          title: _title.text.trim(),
+        ),
+      ),
+    );
   }
 
   Future<void> _discard() async {
@@ -394,7 +413,7 @@ class _PerformanceReviewScreenState
                             ? '本次起点估计不可用，默认从零开始试听；请以听感调整。'
                             : '录音与伴奏起点为估计值；若听起来有先后，可用上方滑块调整。',
                       ),
-                      const Text('当前合听用于练习对比，设备与蓝牙延迟尚未校准；原始文件不变，暂不提供合成导出。'),
+                      const Text('当前合听用于练习对比，设备与蓝牙延迟尚未校准；保存调整后可导出演奏音频。'),
                     ],
                   ),
                 ],
@@ -423,6 +442,13 @@ class _PerformanceReviewScreenState
                     onPressed: _saving ? null : _linkPlan,
                     icon: const Icon(Icons.link),
                     label: const Text('关联／管理练习计划'),
+                  ),
+                if (_saved)
+                  OutlinedButton.icon(
+                    key: const Key('performance_take_export'),
+                    onPressed: _saving ? null : _export,
+                    icon: const Icon(Icons.audio_file_outlined),
+                    label: const Text('导出演奏音频'),
                   ),
               ],
               if (!_saved)

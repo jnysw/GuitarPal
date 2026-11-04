@@ -52,6 +52,25 @@ void main() {
         expect(f.repo.rows.length, 1);
         expect(f.mic.files, contains(f.take.filePath));
         expect(f.mic.playing, isFalse);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('performance_take_export')),
+          140,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('performance_take_export')));
+        await tester.pumpAndSettle();
+        expect(find.text('导出演奏音频'), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('performance_export_render')),
+          140,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('performance_export_render')),
+          findsOneWidget,
+        );
+        expect(f.repo.rows.length, 1);
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox());

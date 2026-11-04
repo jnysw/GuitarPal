@@ -1,6 +1,6 @@
 # 演奏空间开发规划
 
-版本：2026-11-02 / v5。P0a 伴奏准备、P0b 自由演奏与 P0c 原始麦克风录音／本机对齐回听首版已实现（Android Debug），详见 [实际进度](progress.md)。同曲历史 A/B 对比和显式计划成果关联已接入，详见 [历史对比](history_comparison.md) 与 [计划成果](plan_outcomes.md)。下一阶段顺序见 [后续计划](../next_development_plan.md)。当前 Drift v14，保留旧录音种类与字段。正式 IP 素材待用户提供；耳机／蓝牙设备延迟尚未校准，数字作品导出属于后续阶段。
+版本：2026-11-04 / v6。P0a 伴奏准备、P0b 自由演奏与 P0c 原始麦克风录音／本机对齐回听首版已实现（Android Debug），详见 [实际进度](progress.md)。同曲历史 A/B 对比和显式计划成果关联已接入，详见 [历史对比](history_comparison.md) 与 [计划成果](plan_outcomes.md)。下一阶段顺序见 [后续计划](../next_development_plan.md)。当前 Drift v14，保留旧录音种类与字段。正式 IP 素材待用户提供；耳机／蓝牙设备延迟尚未校准，数字作品 WAV 导出首版已接，1.00× 混音／仅录音范围见 [导出说明](digital_export_plan.md)。
 
 ## 1. 产品定位与闭环
 

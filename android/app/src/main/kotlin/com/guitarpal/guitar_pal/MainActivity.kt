@@ -16,6 +16,7 @@ class MainActivity : FlutterActivity() {
     private var practiceAudioRecordingPlugin: PracticeAudioRecordingPlugin? = null
     private var algorithmAudioImportPlugin: AlgorithmAudioImportPlugin? = null
     private var algorithmStemPlugin: AlgorithmStemPlugin? = null
+    private var performanceExportPlugin: PerformanceExportPlugin? = null
     private var algorithmMixPlugin: AlgorithmMixPlugin? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +88,7 @@ class MainActivity : FlutterActivity() {
         algorithmAudioImportPlugin = AlgorithmAudioImportPlugin(this, flutterEngine.dartExecutor.binaryMessenger)
         algorithmStemPlugin = AlgorithmStemPlugin(this, flutterEngine.dartExecutor.binaryMessenger)
         algorithmMixPlugin = AlgorithmMixPlugin(this, flutterEngine.dartExecutor.binaryMessenger)
+        performanceExportPlugin = PerformanceExportPlugin(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -103,6 +105,7 @@ class MainActivity : FlutterActivity() {
 
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (performanceExportPlugin?.onActivityResult(requestCode, resultCode, data) == true) return
         if (algorithmAudioImportPlugin?.onActivityResult(requestCode, resultCode, data) == true) return
         if (localVideoImportPlugin?.onActivityResult(requestCode, resultCode, data) == true) {
             return
@@ -137,6 +140,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onStop() {
+        performanceExportPlugin?.onHostStop()
         algorithmMixPlugin?.onHostStop()
         algorithmStemPlugin?.stop()
         practiceAudioRecordingPlugin?.onHostStop()
@@ -158,6 +162,8 @@ class MainActivity : FlutterActivity() {
         algorithmAudioImportPlugin = null
         algorithmStemPlugin?.dispose()
         algorithmStemPlugin = null
+        performanceExportPlugin?.dispose()
+        performanceExportPlugin = null
         algorithmMixPlugin?.dispose()
         algorithmMixPlugin = null
         super.cleanUpFlutterEngine(flutterEngine)

@@ -47,6 +47,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <provider
+            android:name=".PerformanceExportFileProvider"
+            android:authorities="${applicationId}.performance_exports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/performance_export_paths" />
+        </provider>
         <receiver
             android:name=".PracticeReminderReceiver"
             android:exported="false" />

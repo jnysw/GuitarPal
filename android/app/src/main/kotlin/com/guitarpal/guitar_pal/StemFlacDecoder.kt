@@ -12,7 +12,8 @@ import java.security.MessageDigest
 
 /** Decode a downloaded lossless stem once; playback retries keep the original download. */
 internal object StemFlacDecoder {
-    @Synchronized fun decode(source: File): File {
+    @Synchronized fun decode(source: File, checkCancellation: () -> Unit = {}): File {
+        checkCancellation()
         val target = File(source.parentFile, "${source.name}.mix.wav")
         val receipt = File(source.parentFile, "${source.name}.mix.identity")
         val identity = "${source.length()}:${source.lastModified()}"
@@ -87,6 +88,7 @@ internal object StemFlacDecoder {
                 if (raw) {
                     val buffer = ByteBuffer.allocate(2 * 1024 * 1024).order(ByteOrder.LITTLE_ENDIAN)
                     while (true) {
+                        checkCancellation()
                         check(System.nanoTime() < deadline) { "本机解码超时，FLAC 已保留，可直接重试载入" }
                         buffer.clear()
                         val size = extractor.readSampleData(buffer, 0)
@@ -99,6 +101,7 @@ internal object StemFlacDecoder {
                     val info = MediaCodec.BufferInfo()
                     var inputEnded = false; var outputEnded = false
                     while (!outputEnded) {
+                        checkCancellation()
                         check(System.nanoTime() < deadline) { "本机解码超时，FLAC 已保留，可直接重试载入" }
                         if (!inputEnded) {
                             val slot = decoder.dequeueInputBuffer(10_000)
@@ -141,6 +144,7 @@ internal object StemFlacDecoder {
                     .putShort((expectedChannels * 2).toShort()).putShort(16).put("data".toByteArray()).putInt(bytes.toInt())
                 output.seek(0); output.write(h.array())
             }
+            checkCancellation()
             require("${source.length()}:${source.lastModified()}" == identity) { "本机分轨文件已变化，请重试载入" }
             check(partial.renameTo(target)) { "无法保存解码音轨，请检查本机空间；无需重新下载 FLAC" }
             receipt.writeText(identity)

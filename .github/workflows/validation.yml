@@ -21,6 +21,23 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.3.1'
+      - name: Configure Android paths
+        run: |
+          python3 - <<'PYTHON'
+          import os, pathlib, shutil
+          sdk = pathlib.Path(shutil.which('flutter')).resolve().parents[1]
+          pathlib.Path('android/local.properties').write_text(
+              f"sdk.dir={os.environ['ANDROID_HOME']}\nflutter.sdk={sdk}\n"
+          )
+          PYTHON
+      - run: gradle -p android :app:testDebugUnitTest
 
   audio-contracts:
     runs-on: ubuntu-latest
