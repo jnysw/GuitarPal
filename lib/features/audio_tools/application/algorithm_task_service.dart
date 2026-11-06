@@ -199,7 +199,7 @@ class AlgorithmTaskService {
           await repository.update(
             id,
             AlgorithmTaskState.lost,
-            message: '服务器任务不存在、已过期或不属于当前测试账号。本机已有结果仍会保留；不会迁移旧地址任务',
+            message: '这条服务器任务已过期或无法由当前会话打开。可查看本机已有结果。',
           );
         } else if (error.httpStatus == 409 || error.isTemporary) {
           final seconds = (2 * (1 << failures.clamp(0, 4))).clamp(2, 30);

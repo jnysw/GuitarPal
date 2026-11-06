@@ -57,18 +57,37 @@ class LegacyAlgorithmApi implements AlgorithmApi {
     AlgorithmOperation operation = AlgorithmOperation.chords,
   }) async {
     if (isMelpalAlgorithm(endpoint.origin)) {
-      await access.requireToken();
       final health = await _get('/health', timeout: healthTimeout);
       if (health['status'] != 'ok' ||
           health['service'] != 'melpal-algorithm-api') {
         throw const FormatException('存活检查响应无效');
       }
-      // A fixed nonexistent ID exercises authentication without a POST, upload
-      // or inference. Gateway ownership checks intentionally return 404.
+      final token = await access.requireToken();
+      final guestsEnabled = health['guest_access'] == true;
+      if (token.startsWith('mg_') && !guestsEnabled) {
+        throw const AlgorithmApiError(
+          'guest_access_unavailable',
+          '服务器尚未开放访客分析，请稍后再试',
+        );
+      }
+
+      // A nonexistent ID exercises ownership and auth using a read-only call.
+      Future<void> verifySession() async {
+        try {
+          await _get('/api/v1/jobs/${'0' * 32}/status', timeout: healthTimeout);
+        } on AlgorithmApiError catch (e) {
+          if (e.httpStatus != 404) rethrow;
+        }
+      }
+
       try {
-        await _get('/api/v1/jobs/${'0' * 32}/status', timeout: healthTimeout);
+        await verifySession();
       } on AlgorithmApiError catch (e) {
-        if (e.httpStatus != 404) rethrow;
+        if (e.httpStatus != 401 || !guestsEnabled || !token.startsWith('mp_')) {
+          rethrow;
+        }
+        await access.useGuest();
+        await verifySession();
       }
       return; // Public gateway deliberately does not expose model diagnostics.
     }
@@ -262,6 +281,13 @@ class LegacyAlgorithmApi implements AlgorithmApi {
               ? data['error'] as String
               : 'http_${response.statusCode}',
           algorithmHttpMessage(response.statusCode) ??
+              switch (data['error']) {
+                'guest_quota_exceeded' => '访客分析今日额度已用完，请明天再试',
+                'quota_exceeded' => '此设备分析次数已达上限，请稍后再试',
+                'queue_full' => '当前有其他分析正在进行，请稍后再试',
+                'rate_limited' => '请求过于频繁，请稍后再试',
+                _ => null,
+              } ??
               (data['detail'] is String
                   ? data['detail'] as String
                   : '算法服务请求失败'),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -19,6 +20,8 @@ class AlgorithmAccess {
   const AlgorithmAccess([this.storage = const FlutterSecureStorage()]);
   final FlutterSecureStorage storage;
   static const key = 'guitarpal.algorithm.melpal.access.v1';
+  static const guestKey = 'guitarpal.algorithm.melpal.guest.v1';
+  static Future<String>? _creatingGuest;
 
   Future<bool> configured() async => (await token()) != null;
   Future<String?> token() async {
@@ -28,7 +31,7 @@ class AlgorithmAccess {
     } on Object {
       throw const AlgorithmApiError(
         'credential_storage_unavailable',
-        '无法读取内测凭据，请到「我的 → 算法服务」重新保存',
+        '无法读取此设备的分析会话，请重新打开应用后重试',
       );
     }
   }
@@ -77,15 +80,53 @@ class AlgorithmAccess {
     }
   }
 
-  Future<String> requireToken() async {
-    final value = await token();
-    if (value == null) {
+  Future<String> requireToken() async =>
+      await _readGuest() ?? await token() ?? await useGuest();
+
+  Future<String?> _readGuest() async {
+    try {
+      final value = await storage.read(key: guestKey);
+      if (value != null && !RegExp(r'^mg_[0-9a-f]{64}$').hasMatch(value)) {
+        throw const FormatException();
+      }
+      return value;
+    } on Object {
       throw const AlgorithmApiError(
-        'authorization_required',
-        '请先到「我的 → 算法服务」设置个人内测凭据',
+        'credential_storage_unavailable',
+        '无法读取此设备的分析会话，请重新打开应用后重试',
       );
     }
-    return value;
+  }
+
+  /// Serialize first use across preflight, uploads and downloads in this app.
+  Future<String> useGuest() async {
+    final current = _creatingGuest;
+    if (current != null) return current;
+    final creation = _createGuest();
+    _creatingGuest = creation;
+    try {
+      return await creation;
+    } finally {
+      _creatingGuest = null;
+    }
+  }
+
+  Future<String> _createGuest() async {
+    final existing = await _readGuest();
+    if (existing != null) return existing;
+    try {
+      final random = Random.secure();
+      final bytes = List.generate(32, (_) => random.nextInt(256));
+      final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      final guest = 'mg_$hex';
+      await storage.write(key: guestKey, value: guest);
+      return guest;
+    } on Object {
+      throw const AlgorithmApiError(
+        'credential_storage_unavailable',
+        '暂时无法建立设备的分析会话，请稍后重试',
+      );
+    }
   }
 }
 
@@ -111,7 +152,7 @@ class MelpalHttpClient extends http.BaseClient {
 }
 
 String? algorithmHttpMessage(int? status) => switch (status) {
-  401 => '内测凭据已过期、被撤销或无效，请到「我的 → 算法服务」更新后重新查询；不会重复上传',
+  401 => '当前分析会话无法验证，请稍后重试或在「我的 → 算法服务」检查连接',
   530 => '分析服务暂时离线，请稍后重试；本地练习和已下载内容仍可使用',
   _ => null,
 };

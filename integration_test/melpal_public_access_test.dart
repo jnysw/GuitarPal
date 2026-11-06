@@ -5,131 +5,102 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:guitar_pal/features/audio_tools/algorithm_access_screen.dart';
+import 'package:guitar_pal/features/audio_tools/algorithm_providers.dart';
 import 'package:guitar_pal/features/audio_tools/data/algorithm_access.dart';
 import 'package:guitar_pal/features/audio_tools/data/algorithm_service_configuration.dart';
 import 'package:guitar_pal/features/audio_tools/data/legacy_algorithm_api.dart';
-import 'package:guitar_pal/features/audio_tools/domain/legacy_algorithm_models.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'ordinary Android configuration reaches public HTTPS and keystore credential UI handles 401 without POST',
+    'Android verifies a guest session without a credential form and saves it in secure storage',
     (tester) async {
       const storage = FlutterSecureStorage();
-      const access = AlgorithmAccess();
-      // Never print or copy a pre-existing secret into a fixture or file.
-      final previous = await storage.read(key: AlgorithmAccess.key);
+      final keys = [AlgorithmAccess.key, AlgorithmAccess.guestKey];
+      final previous = {
+        for (final key in keys) key: await storage.read(key: key),
+      };
       final raw = http.Client();
       try {
         expect(
           await const AlgorithmServiceConfiguration().load(),
           melpalAlgorithmOrigin,
         );
-        final health = await raw
-            .get(Uri.parse('$melpalAlgorithmOrigin/health'))
-            .timeout(const Duration(seconds: 15));
-        expect(health.statusCode, 200);
-        expect(
-          (jsonDecode(health.body) as Map)['service'],
-          'melpal-algorithm-api',
-        );
-        final denied = await raw
-            .get(
-              Uri.parse(
-                '$melpalAlgorithmOrigin/api/v1/jobs/${'0' * 32}/status',
-              ),
-            )
-            .timeout(const Duration(seconds: 15));
-        expect(denied.statusCode, 401);
-        await access.clear();
-        final api = LegacyAlgorithmApi(
-          AlgorithmEndpoint(melpalAlgorithmOrigin, allowLocalHttp: false),
-        );
-        try {
-          await expectLater(
-            api.ping(),
-            throwsA(
-              isA<AlgorithmApiError>().having(
-                (e) => e.code,
-                'local auth gate',
-                'authorization_required',
-              ),
-            ),
-          );
-        } finally {
-          api.close();
+        const live = bool.fromEnvironment('CHECK_MELPAL_GUEST_LIVE');
+        if (live) {
+          final health = await raw
+              .get(Uri.parse('$melpalAlgorithmOrigin/health'))
+              .timeout(const Duration(seconds: 15));
+          expect(health.statusCode, 200);
+          final data = jsonDecode(health.body) as Map;
+          expect(data['guest_access'], isTrue);
+          final denied = await raw
+              .get(
+                Uri.parse(
+                  '$melpalAlgorithmOrigin/api/v1/jobs/${'0' * 32}/status',
+                ),
+              )
+              .timeout(const Duration(seconds: 15));
+          expect(denied.statusCode, 401);
+        }
+        for (final key in keys) {
+          await storage.delete(key: key);
         }
         await tester.pumpWidget(
-          const ProviderScope(
-            child: MaterialApp(home: AlgorithmAccessScreen()),
+          ProviderScope(
+            overrides: [
+              if (!live)
+                algorithmApiFactoryProvider.overrideWithValue(
+                  (endpoint) => LegacyAlgorithmApi(
+                    endpoint,
+                    client: MockClient((request) async {
+                      expect(request.method, 'GET');
+                      if (request.url.path == '/health') {
+                        expect(request.headers['Authorization'], isNull);
+                        return http.Response(
+                          '{"status":"ok","service":"melpal-algorithm-api","guest_access":true}',
+                          200,
+                        );
+                      }
+                      expect(
+                        request.headers['Authorization'],
+                        'Bearer ${await storage.read(key: AlgorithmAccess.guestKey)}',
+                      );
+                      return http.Response('{"error":"job_not_found"}', 404);
+                    }),
+                  ),
+                ),
+            ],
+            child: const MaterialApp(home: AlgorithmAccessScreen()),
           ),
         );
         await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(
-          find.byKey(const Key('algorithm_access_input')),
-          150,
-          scrollable: find.byType(Scrollable).first,
-        );
+        expect(find.byType(TextField), findsNothing);
+        await tester.tap(find.byKey(const Key('algorithm_access_verify')));
         await tester.pumpAndSettle();
-        // Deliberately invalid, non-secret token exercises the real 401 route.
-        await tester.enterText(
-          find.byKey(const Key('algorithm_access_input')),
-          'mp_${'invalid'.padRight(43, 'x')}',
+        expect(find.text('连接正常，可回到练习页开始和弦分析或分轨'), findsOneWidget);
+        final guest = await storage.read(key: AlgorithmAccess.guestKey);
+        expect(
+          guest != null && RegExp(r'^mg_[0-9a-f]{64}$').hasMatch(guest),
+          isTrue,
         );
-        FocusManager.instance.primaryFocus?.unfocus();
-        await tester.pumpAndSettle();
-        await _tap(tester, 'algorithm_access_save');
-        expect(await access.configured(), isTrue);
-        expect(await const AlgorithmAccess().configured(), isTrue);
-        await _tap(tester, 'algorithm_access_verify');
-        await _until(
-          tester,
-          () => find.textContaining('内测凭据已过期、被撤销或无效').evaluate().isNotEmpty,
-        );
-        await _tap(tester, 'algorithm_access_clear');
-        expect(await access.configured(), isFalse);
+        expect(await storage.read(key: AlgorithmAccess.key), isNull);
         expect(tester.takeException(), isNull);
       } finally {
         raw.close();
         await tester.pumpWidget(const SizedBox());
         await tester.pump();
-        if (previous == null) {
-          await storage.delete(key: AlgorithmAccess.key);
-        } else {
-          await storage.write(key: AlgorithmAccess.key, value: previous);
+        for (final entry in previous.entries) {
+          if (entry.value case final value?) {
+            await storage.write(key: entry.key, value: value);
+          } else {
+            await storage.delete(key: entry.key);
+          }
         }
       }
     },
   );
-}
-
-Future<void> _tap(WidgetTester tester, String key) async {
-  await tester.scrollUntilVisible(
-    find.byKey(Key(key)),
-    150,
-    scrollable: find.byType(Scrollable).first,
-  );
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(Key(key)));
-  await tester.pump();
-  for (
-    var i = 0;
-    i < 80 && find.byType(LinearProgressIndicator).evaluate().isNotEmpty;
-    i++
-  ) {
-    await tester.pump(const Duration(milliseconds: 50));
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-  }
-  await tester.pumpAndSettle();
-}
-
-Future<void> _until(WidgetTester tester, bool Function() ready) async {
-  for (var i = 0; i < 150; i++) {
-    await tester.pump(const Duration(milliseconds: 50));
-    if (ready()) return;
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-  }
-  fail('Public credential response did not arrive');
 }

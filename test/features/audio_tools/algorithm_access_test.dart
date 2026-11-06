@@ -141,42 +141,92 @@ void main() {
     api.close();
   });
 
-  test('missing local credentials block before extraction or any HTTP; 401 has actionable sanitized message', () async {
-    var calls = 0;
+  test('fresh install keeps one guest identity and preflights only a compatible gateway', () async {
+    var guestsEnabled = false;
+    final routes = <String>[];
     final api = LegacyAlgorithmApi(
       endpoint,
       client: MockClient((r) async {
-        calls++;
-        return http.Response('{"detail":"server echo"}', 401);
+        expect(r.method, 'GET');
+        routes.add(r.url.path);
+        if (r.url.path == '/health') {
+          return http.Response(
+            jsonEncode({
+              'status': 'ok',
+              'service': 'melpal-algorithm-api',
+              if (guestsEnabled) 'guest_access': true,
+            }),
+            200,
+          );
+        }
+        expect(
+          r.headers['Authorization'],
+          'Bearer ${await access.requireToken()}',
+        );
+        return http.Response('{"error":"job_not_found"}', 404);
       }),
     );
-    await expectLater(
-      api.ping(),
-      throwsA(
-        isA<AlgorithmApiError>().having(
-          (e) => e.code,
-          'code',
-          'authorization_required',
+    try {
+      await expectLater(
+        api.ping(),
+        throwsA(
+          isA<AlgorithmApiError>().having(
+            (e) => e.code,
+            'code',
+            'guest_access_unavailable',
+          ),
         ),
-      ),
-    );
-    expect(calls, 0);
-    await access.save(secret);
-    await expectLater(
-      api.status('0' * 32, AlgorithmOperation.chords),
-      throwsA(
-        isA<AlgorithmApiError>()
-            .having((e) => e.httpStatus, 'HTTP', 401)
-            .having(
-              (e) => e.message,
-              'message',
-              allOf(contains('内测凭据'), isNot(contains('server echo'))),
-            ),
-      ),
-    );
-    expect(calls, 1);
-    api.close();
+      );
+      expect(routes, ['/health']);
+      final tokens = await Future.wait(
+        List.generate(4, (_) => const AlgorithmAccess().requireToken()),
+      );
+      expect(tokens.toSet(), hasLength(1));
+      expect(tokens.first, matches(r'^mg_[0-9a-f]{64}$'));
+      expect(await access.token(), isNull);
+      guestsEnabled = true;
+      await api.ping();
+      expect(routes, ['/health', '/health', '/api/v1/jobs/${'0' * 32}/status']);
+    } finally {
+      api.close();
+    }
   });
+
+  test(
+    'an expired personal session falls back to guest during GET preflight only',
+    () async {
+      await access.save(secret);
+      final auth = <String?>[];
+      final api = LegacyAlgorithmApi(
+        endpoint,
+        client: MockClient((r) async {
+          expect(r.method, 'GET');
+          if (r.url.path == '/health') {
+            return http.Response(
+              '{"status":"ok","service":"melpal-algorithm-api","guest_access":true}',
+              200,
+            );
+          }
+          final token = r.headers['Authorization'];
+          auth.add(token);
+          return token == 'Bearer $secret'
+              ? http.Response('{"detail":"server echo"}', 401)
+              : http.Response('{"error":"job_not_found"}', 404);
+        }),
+      );
+      try {
+        await api.ping();
+        expect(auth, [
+          'Bearer $secret',
+          'Bearer ${await access.requireToken()}',
+        ]);
+        expect(auth.last, startsWith('Bearer mg_'));
+        expect(await access.token(), secret);
+      } finally {
+        api.close();
+      }
+    },
+  );
 
   test('multipart, status and result share bearer; Retry-After and uncertain acceptance remain explicit', () async {
     await access.save(secret);

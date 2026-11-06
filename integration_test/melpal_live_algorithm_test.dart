@@ -29,7 +29,8 @@ void main() {
     (tester) async {
       const access = AlgorithmAccess(), secure = FlutterSecureStorage();
       const mix = AlgorithmMixPlatform();
-      final prior = await secure.read(key: AlgorithmAccess.key);
+      final keys = [AlgorithmAccess.key, AlgorithmAccess.guestKey];
+      final prior = {for (final key in keys) key: await secure.read(key: key)};
       final root = await const AlgorithmStemPlatform().directory();
       final bootstrap = File('${root.parent.path}/melpal-test-credential.json');
       final video = File(
@@ -75,6 +76,7 @@ void main() {
           final value = await bootstrap.readAsString();
           await bootstrap.delete();
           await access.save(value);
+          await secure.delete(key: AlgorithmAccess.guestKey);
         }
         await api.ping();
         await video.parent.create(recursive: true);
@@ -206,10 +208,12 @@ void main() {
         }
         if (await video.exists()) await video.delete();
         if (await bootstrap.exists()) await bootstrap.delete();
-        if (prior == null) {
-          await secure.delete(key: AlgorithmAccess.key);
-        } else {
-          await secure.write(key: AlgorithmAccess.key, value: prior);
+        for (final entry in prior.entries) {
+          if (entry.value case final value?) {
+            await secure.write(key: entry.key, value: value);
+          } else {
+            await secure.delete(key: entry.key);
+          }
         }
       }
     },

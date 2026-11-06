@@ -1210,7 +1210,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         ),
       ),
       if (_serviceNotice != null) ...[
-        Text(_serviceNotice!),
+        Semantics(liveRegion: true, child: Text(_serviceNotice!)),
         TextButton(
           key: const Key('video_analysis_retry_connection'),
           onPressed: _busy ? null : _retryConnection,

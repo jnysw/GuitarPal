@@ -11,10 +11,9 @@ import 'package:guitar_pal/features/audio_tools/data/legacy_algorithm_api.dart';
 
 void main() {
   testWidgets(
-    'narrow large text saves hidden token, verifies with GET only and clears without showing secret',
+    'narrow large text checks the guest service using GET without a credential form',
     (tester) async {
       FlutterSecureStorage.setMockInitialValues({});
-      final secret = 'mp_${'s' * 43}';
       var requests = 0;
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1;
@@ -23,6 +22,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            algorithmEndpointProvider.overrideWithValue(melpalAlgorithmOrigin),
             algorithmApiFactoryProvider.overrideWithValue(
               (endpoint) => LegacyAlgorithmApi(
                 endpoint,
@@ -31,7 +31,7 @@ void main() {
                   expect(r.method, 'GET');
                   return r.url.path == '/health'
                       ? http.Response(
-                          '{"status":"ok","service":"melpal-algorithm-api"}',
+                          '{"status":"ok","service":"melpal-algorithm-api","guest_access":true}',
                           200,
                         )
                       : http.Response('{"error":"not_found"}', 404);
@@ -50,38 +50,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('algorithm_access_input')),
-        150,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('algorithm_access_input')),
-        secret,
-      );
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('algorithm_access_input')))
-            .obscureText,
-        isTrue,
-      );
-      FocusManager.instance.primaryFocus?.unfocus();
-      await tester.pumpAndSettle();
-      await _tap(tester, 'algorithm_access_save');
-      expect(await const AlgorithmAccess().configured(), isTrue);
-      expect(find.text(secret), findsNothing);
+      expect(find.byType(TextField), findsNothing);
       await _tap(tester, 'algorithm_access_verify');
       expect(requests, 2);
-      await tester.scrollUntilVisible(
-        find.text('公网连接与内测凭据检查通过，可返回练习进行分析'),
-        150,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('公网连接与内测凭据检查通过，可返回练习进行分析'), findsOneWidget);
-      await _tap(tester, 'algorithm_access_clear');
-      expect(await const AlgorithmAccess().configured(), isFalse);
+      expect(find.text('连接正常，可回到练习页开始和弦分析或分轨'), findsOneWidget);
+      expect(await const AlgorithmAccess().token(), isNull);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await tester.pump();

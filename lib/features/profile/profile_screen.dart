@@ -90,7 +90,7 @@ class ProfileScreen extends ConsumerWidget {
                             key: const Key('profile_algorithm_access'),
                             icon: Icons.graphic_eq,
                             title: '算法服务',
-                            subtitle: '管理个人内测凭据与公网连接',
+                            subtitle: '检查和弦分析与分轨连接',
                             status: '内测',
                             available: true,
                             onTap: () => context.push('/profile/algorithm'),
