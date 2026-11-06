@@ -236,7 +236,13 @@ void main() {
       });
       VideoStemLoadChoice? choice;
       await showPicker(tester, store, result(), (v) => choice = v);
-      expect(find.textContaining('可续传'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('video_pick_stem_guitar')),
+          matching: find.textContaining('可续传'),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('只听吉他'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('video_apply_stem_choice')));
