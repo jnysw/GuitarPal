@@ -112,7 +112,13 @@ void main() {
       ); // A cleared A-B must still allow returning to whole-video mode.
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('video_analysis_submit')));
-      await tester.pumpAndSettle();
+      await _until(
+        tester,
+        () => find
+            .byKey(const Key('video_analysis_confirm'))
+            .evaluate()
+            .isNotEmpty,
+      );
       expect(api.uploads, 0);
       expect(find.textContaining('仅提取并上传此区间的音频'), findsOneWidget);
       await tester.tap(find.byKey(const Key('video_analysis_confirm')));
@@ -135,8 +141,30 @@ void main() {
       );
       await _until(tester, () => find.text('分析服务已连接').evaluate().isNotEmpty);
       await tester.tap(find.byKey(const Key('video_analysis_submit')));
-      await tester.pumpAndSettle();
+      await _until(
+        tester,
+        () => find
+            .byKey(const Key('video_analysis_confirm'))
+            .evaluate()
+            .isNotEmpty,
+      );
+      api.completed = false;
       await tester.tap(find.byKey(const Key('video_analysis_confirm')));
+      final submit = find.byKey(const Key('video_analysis_submit'));
+      await _until(
+        tester,
+        () =>
+            api.uploads == 1 &&
+            tester.widget<FilledButton>(submit).onPressed != null,
+      );
+      await tester.ensureVisible(submit);
+      await tester.tap(submit);
+      await _until(tester, () => find.text('这个区间已提交分析').evaluate().isNotEmpty);
+      expect(find.byKey(const Key('video_analysis_confirm')), findsNothing);
+      expect(extractor.calls, 1);
+      expect(api.uploads, 1);
+      api.completed = true;
+      await tester.tap(find.text('查询进度'));
       await _until(tester, () => find.text('与视频时间校准').evaluate().isNotEmpty);
       expect(extractor.calls, 1);
       expect(api.uploads, 1);
@@ -209,7 +237,7 @@ class _Extractor extends VideoAudioExtractor {
 
 class _Api implements AlgorithmApi {
   int uploads = 0;
-  bool failPing = true;
+  bool failPing = true, completed = true;
   @override
   Future<void> ping({
     AlgorithmOperation operation = AlgorithmOperation.chords,
@@ -248,8 +276,8 @@ class _Api implements AlgorithmApi {
     AlgorithmOperation operation,
   ) async => LegacyAlgorithmStatus.fromJson({
     'job_id': jobId,
-    'status': 'completed',
-    'progress': 100,
+    'status': completed ? 'completed' : 'processing',
+    'progress': completed ? 100 : 30,
     'message': 'completed',
   }, operation);
   @override

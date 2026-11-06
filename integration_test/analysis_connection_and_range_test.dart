@@ -37,14 +37,13 @@ void main() {
               .get(Uri.parse(origin).resolve('/health'))
               .timeout(const Duration(seconds: 15));
           expect(response.statusCode, 200);
-          expect(jsonDecode(response.body), {
-            'status': 'ok',
-            'service': 'melpal-algorithm-api',
-          });
+          final health = jsonDecode(response.body) as Map<String, Object?>;
+          expect(health['status'], 'ok');
+          expect(health['service'], 'melpal-algorithm-api');
         } finally {
           client.close();
         }
-        return; // Personal credential checks live in melpal_public_access_test.
+        return; // Guest session checks live in melpal_public_access_test.
       }
       final api = LegacyAlgorithmApi(
         AlgorithmEndpoint(origin, allowLocalHttp: true),

@@ -14,6 +14,21 @@ class AlgorithmTaskRepository {
           .watch()
           .map((rows) => rows.map(_map).toList(growable: false));
 
+  Future<List<AlgorithmTaskRecord>> forSource(
+    String sourceId,
+    AlgorithmOperation operation,
+  ) async {
+    final query = database.select(database.algorithmTasks)
+      ..where(
+        (row) =>
+            row.linkedSourceId.equals(sourceId) &
+            row.operation.equals(operation.name) &
+            row.mediaBindingJson.isNotNull(),
+      )
+      ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]);
+    return (await query.get()).map(_map).toList(growable: false);
+  }
+
   Future<AlgorithmTaskRecord?> get(String id) async {
     final row = await (database.select(
       database.algorithmTasks,

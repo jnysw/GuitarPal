@@ -70,29 +70,39 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
               final expired = !DateTime.now().toUtc().isBefore(
                 widget.result.expiresAt,
               );
-              final cached = _selected
+              final available = widget.result.stems
+                  .where(
+                    (stem) => !expired || states?[stem.id]?.complete == true,
+                  )
+                  .toList();
+              final selected = _selected.intersection(
+                available.map((s) => s.id).toSet(),
+              );
+              final cached = selected
                   .where((id) => states?[id]?.complete == true)
                   .toSet();
-              final remaining = states == null
+              final remaining = states == null || expired
                   ? null
-                  : widget.result.stems
-                        .where((s) => _selected.contains(s.id))
+                  : available
+                        .where((stem) => selected.contains(stem.id))
                         .fold(
                           0,
-                          (sum, s) =>
-                              sum + s.sizeBytes - states[s.id]!.receivedBytes,
+                          (sum, stem) =>
+                              sum +
+                              stem.sizeBytes -
+                              (states[stem.id]?.receivedBytes ?? 0),
                         );
               final allLocal =
-                  _selected.isNotEmpty && cached.length == _selected.length;
-              final models = widget.result.stems
+                  selected.isNotEmpty && cached.length == selected.length;
+              final models = available
                   .where((s) => s.origin == 'model')
                   .map((s) => s.id)
                   .toSet();
               final backing =
-                  widget.result.stems.any(
+                  available.any(
                     (s) => s.id == 'vocals' && s.origin == 'model',
                   ) &&
-                  widget.result.stems.any(
+                  available.any(
                     (s) => s.id == 'instrumental' && s.origin == 'derived',
                   );
               return Column(
@@ -102,14 +112,18 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                     child: ListView(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
-                        const Text('只下载本次要练习的音轨。完整本机音轨可离线使用，未完成下载会继续断点。'),
+                        Text(
+                          expired
+                              ? '选择已完整下载的音轨进行离线练习。'
+                              : '只下载本次要练习的音轨。已下载的音轨可离线使用，未完成的下载可续传。',
+                        ),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
                           children: [
                             if (models.isNotEmpty)
                               ActionChip(
-                                label: const Text('全部分轨'),
+                                label: Text(expired ? '已下载的乐器音轨' : '全部分轨'),
                                 onPressed: () =>
                                     setState(() => _selected = Set.of(models)),
                               ),
@@ -143,21 +157,31 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                             child: const Text('重试读取'),
                           ),
                         ],
-                        if (expired) const Text('服务器结果已到期，仍可使用本机已下载音轨。'),
+                        if (expired)
+                          Text(
+                            states != null && available.isEmpty
+                                ? '服务器音轨已到期，本机没有完整音轨。请返回并重新分轨。'
+                                : '服务器音轨已到期，可以选择本机已下载的音轨。',
+                          ),
                         for (final stem in widget.result.stems)
                           CheckboxListTile(
                             key: Key('video_pick_stem_${stem.id}'),
                             contentPadding: EdgeInsets.zero,
                             title: Text(stem.displayName),
-                            subtitle: Text(_status(stem, states?[stem.id])),
-                            value: _selected.contains(stem.id),
-                            onChanged: (_) => setState(
-                              () => _selected = toggleVideoStem(
-                                widget.result,
-                                _selected,
-                                stem.id,
-                              ),
+                            subtitle: Text(
+                              _status(stem, states?[stem.id], expired: expired),
                             ),
+                            value: selected.contains(stem.id),
+                            onChanged:
+                                expired && states?[stem.id]?.complete != true
+                                ? null
+                                : (_) => setState(
+                                    () => _selected = toggleVideoStem(
+                                      widget.result,
+                                      selected,
+                                      stem.id,
+                                    ),
+                                  ),
                           ),
                         const Text('合成音轨与乐器分轨分开播放，避免重复叠加；人声可搭配合成伴奏。'),
                       ],
@@ -169,19 +193,16 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          '已选 ${_selected.length} 轨${remaining == null ? '' : ' · 还需下载 ${_bytes(remaining)}'}',
+                          '已选 ${selected.length} 轨${remaining == null ? '' : ' · 还需下载 ${_bytes(remaining)}'}',
                         ),
                         FilledButton(
                           key: const Key('video_apply_stem_choice'),
-                          onPressed:
-                              states == null ||
-                                  _selected.isEmpty ||
-                                  (expired && !allLocal)
+                          onPressed: states == null || selected.isEmpty
                               ? null
                               : () => Navigator.pop(
                                   context,
                                   VideoStemLoadChoice(
-                                    _selected,
+                                    selected,
                                     localOnly: allLocal,
                                   ),
                                 ),
@@ -209,9 +230,14 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
   );
 }
 
-String _status(LegacyStemFile stem, StemCacheStatus? state) {
+String _status(
+  LegacyStemFile stem,
+  StemCacheStatus? state, {
+  required bool expired,
+}) {
   if (state == null) return '正在检查本机下载…';
   if (state.complete) return '已下载 · ${_bytes(stem.sizeBytes)}';
+  if (expired) return '服务器音轨已到期';
   if (state.receivedBytes > 0) {
     return '可续传 · ${_bytes(state.receivedBytes)} / ${_bytes(stem.sizeBytes)}';
   }

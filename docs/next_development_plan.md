@@ -32,6 +32,6 @@ IP 素材未到位时，继续数字音频、真实歌曲验证及账号工作�
 
 数字混音导出首版已开放，使用方式与边界见 [导出计划](performance_space/digital_export_plan.md)。下一项先验证保音高时间伸缩与长曲性能。公网变更详情见 [接入说明](ai_audio/melpal_public_access.md)。
 
-本轮公网入口：「我的 → 算法服务」保存个人凭据 → 验证连接 → 返回原视频分析。个人令牌与合成音频真实联调已通过，不把个人内测令牌视为正式产品账号。
+新版客户端会从练习页自动建立访客会话。「我的 → 算法服务」可检查连接。Windows 公网网关更新并返回 `guest_access: true` 后，可直接开始访客分析。[访客更新说明](https://github.com/jnysw/chordengine-algorithm-server/blob/codex/melpal-guest-access/MELPAL_GUEST_ACCESS.md)
 
 页面体验专项（2026-11-05）已完成导入方式分流、确认页简化、回听保存并继续、导出阶段反馈和录音列表错误恢复，见 [流程与验收](ux/navigation_experience_2026-11-05.md)。下一轮仍优先保音高导出、长曲性能及实际设备体验。

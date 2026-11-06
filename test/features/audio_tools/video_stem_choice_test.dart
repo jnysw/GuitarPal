@@ -246,27 +246,32 @@ void main() {
       expect(store.inspections, 1);
     },
   );
-  testWidgets('expired server results can use only complete local selections', (
-    tester,
-  ) async {
-    final store = _Store({
-      'guitar': const StemCacheStatus(complete: true, receivedBytes: 256044),
-    });
-    VideoStemLoadChoice? choice;
-    await showPicker(tester, store, result(expired: true), (v) => choice = v);
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const Key('video_apply_stem_choice')),
-          )
-          .onPressed,
-      isNull,
-    );
-    await tester.tap(find.byKey(const Key('video_use_cached_stems')));
-    await tester.pumpAndSettle();
-    expect(choice!.ids, {'guitar'});
-    expect(choice!.localOnly, isTrue);
-  });
+  testWidgets(
+    'expired results default to complete cached tracks and disable partial files',
+    (tester) async {
+      final store = _Store({
+        'guitar': const StemCacheStatus(complete: true, receivedBytes: 256044),
+        'bass': const StemCacheStatus(complete: false, receivedBytes: 32768),
+      });
+      VideoStemLoadChoice? choice;
+      await showPicker(tester, store, result(expired: true), (v) => choice = v);
+      expect(find.textContaining('可续传'), findsNothing);
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(const Key('video_pick_stem_bass')),
+            )
+            .onChanged,
+        isNull,
+      );
+      final apply = find.byKey(const Key('video_apply_stem_choice'));
+      expect(tester.widget<FilledButton>(apply).onPressed, isNotNull);
+      await tester.tap(apply);
+      await tester.pumpAndSettle();
+      expect(choice!.ids, {'guitar'});
+      expect(choice!.localOnly, isTrue);
+    },
+  );
   testWidgets(
     'backing preset uses only the actual vocal and instrumental files',
     (tester) async {

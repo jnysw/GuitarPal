@@ -251,7 +251,15 @@ void main() {
           tester,
           () => find.text('这个区间已经分过轨').evaluate().isNotEmpty,
         );
-        await tester.tap(find.text('使用已有结果'));
+        await tester.tap(find.text('选择已有音轨'));
+        final apply = find.byKey(const Key('video_apply_stem_choice'));
+        await _until(
+          tester,
+          () =>
+              apply.evaluate().isNotEmpty &&
+              tester.widget<FilledButton>(apply).onPressed != null,
+        );
+        await tester.tap(apply);
         await _until(tester, () => f.controller.stemsLoaded);
         expect(f.networkRequests, 0);
         expect(f.bridge.loadCount, 1);
