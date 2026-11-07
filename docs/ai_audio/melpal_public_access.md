@@ -1,12 +1,12 @@
 # MelPal 公网内测客户端
 
-2026-11-03。客户端基于算法仓库 `codex/melpal-public-api` 的 `b91a300dc77485e7a2b877b8fbfa405c2981e63f` 接入。服务器定义见 [MELPAL_PUBLIC_API.md](https://github.com/jnysw/chordengine-algorithm-server/blob/b91a300dc77485e7a2b877b8fbfa405c2981e63f/MELPAL_PUBLIC_API.md)。域名接入包含个人令牌、任务归属、配额与受保护下载，不能只替换 URL。
+更新于 2026-11-07。公网协议包含任务归属、配额与受保护下载。访客模式沿用这些接口，并为首次使用者自动创建会话。[公网协议](https://github.com/jnysw/chordengine-algorithm-server/blob/b91a300dc77485e7a2b877b8fbfa405c2981e63f/MELPAL_PUBLIC_API.md)
 
 ## 访客使用
 
 新版 Android 在本地视频练习页直接开始和弦分析或分轨。应用自动建立设备会话并存入系统安全存储。已有有效的个人内测会话可继续使用。「我的 → 算法服务」提供连接检查。
 
-Windows 需要更新公网网关。`GET /health` 返回 `guest_access: true` 后，设备可用访客会话提交任务。每台访客设备在滚动 24 小时内最多提交 10 次，全部访客共 40 次。查询和续传使用同一设备会话。[Windows 访客接入](https://github.com/jnysw/chordengine-algorithm-server/blob/codex/melpal-guest-access/MELPAL_GUEST_ACCESS.md)
+Windows 公网网关于 2026-11-07 启用访客。`GET /health` 已返回 `guest_access: true`。每个访客会话每分钟最多提交 3 次、滚动 24 小时内最多 10 次，所有访客共 40 次／滚动 24 小时。查询和续传使用同一设备会话。清除应用数据或换设备后，旧任务不会继承到新会话。[服务端 PR #3](https://github.com/jnysw/chordengine-algorithm-server/pull/3)
 
 ## 请求与状态
 
@@ -15,6 +15,7 @@ Windows 需要更新公网网关。`GET /health` 返回 `guest_access: true` 后
 - POST、状态／结果 GET 以及下载／Range 续传，共用精确 HTTPS origin 的 Bearer 认证。端口必须 443、无 userInfo，非目标域名和旧私网地址不收到该凭据。受保护请求禁止跟随重定向。
 - 401 或本机安全存储不可用时，已有远端任务暂停轮询并保留编号。「重新查询」发起 GET。过期或归属不同的远端任务可查看已有本机结果。
 - 429 GET 沿用 Retry-After 退避；不自动重发 POST。503 submission_unavailable 保持接收状态未知，不能为立即重试而自动上传第二次。
+- 自动查询优先处理最久未更新且已到查询时间的任务。等待退避的记录会留在列表中，给其他任务让出本轮查询名额。
 - 下载的 401 不重试风暴，也不删除可续传部分；更换令牌后继续原 GET/Range/If-Range，SHA-256 和容器校验仍保留。完整缓存离线使用不读取凭据、不发请求。
 
 录音和本地音轨仍保存在当前设备私有目录。内测令牌不是多账号本地缓存隔离机制，也不是正式产品登录；后续正式账号方案另行验收。
@@ -23,8 +24,11 @@ Windows 需要更新公网网关。`GET /health` 返回 `guest_access: true` 后
 
 每条任务保留创建时的 endpoint，不能把私网 job ID 直接改成公网读取，因为内部历史任务没有公网归属。已完成的缓存不变；缺失的旧私网音轨仍需原 Tailscale 通道。若要通过公网重新分析，必须由用户从原视频显式新建，客户端不自动迁移、删除或重复推理。
 
-## 本轮验证边界
+## Android 访客验收
 
-个人内测会话此前已完成 Android 真实和弦、分轨、七轨摘要校验和中断续传。[11 月 3 日验收](live_validation_2026-11-03.md)
+2026-11-07，Mac 验证公网健康响应 HTTP 200。Android 模拟器首次检查遇到 HTTP 530，在上传前结束。复测完成以下两项。
 
-访客版已通过 Flutter 484 项测试、Android 安全存储及连接页验收、网关 18 项回归。Android 使用模拟网关响应验证首次建立会话，实际公网访客推理等待 Windows 更新。
+- `melpal_public_access_test.dart` 在空会话下点击「检查连接」。公网健康正常，未认证的受保护 GET 返回 401，页面自动创建访客会话并写入 Android 安全存储，个人凭据存储为空。
+- `melpal_live_algorithm_test.dart` 从空会话提取 8 秒合成视频音频，经公网各提交一次和弦分析与分轨。验证采样时间映射、所有返回分轨的完整性、1024 字节处中断后续传、本机离线缓存及 Android AudioTrack 播放头推进。
+
+实体手机的 Wi-Fi／移动网络、长曲耗时和真实歌曲的和弦切换精度列在 [优化计划](../next_development_plan.md)。个人内测会话的历史结果见 [11 月 3 日验收](live_validation_2026-11-03.md)。

@@ -67,7 +67,7 @@ class _AlgorithmToolsScreenState extends ConsumerState<AlgorithmToolsScreen>
     _polling = true;
     final service = ref.read(algorithmTaskServiceProvider);
     try {
-      for (final task in _tasks.where((t) => t.shouldPoll).take(5).toList()) {
+      for (final task in service.pendingPollBatch(_tasks, limit: 5)) {
         if (!mounted || !_foreground || _showingResult) break;
         await service.refresh(task.id);
       }

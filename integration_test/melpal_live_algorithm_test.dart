@@ -57,11 +57,20 @@ void main() {
       };
       String? input;
       try {
+        const freshGuest = bool.fromEnvironment('CHECK_MELPAL_GUEST_LIVE');
+        const importCredential = bool.fromEnvironment(
+          'IMPORT_MELPAL_TEST_CREDENTIAL',
+        );
+        expect(freshGuest && importCredential, isFalse);
         await tester.pumpWidget(
           const MaterialApp(home: Scaffold(body: Text('MelPal 合成音频联调'))),
         );
         await tester.pumpAndSettle();
-        if (const bool.fromEnvironment('IMPORT_MELPAL_TEST_CREDENTIAL')) {
+        if (freshGuest) {
+          for (final key in keys) {
+            await secure.delete(key: key);
+          }
+        } else if (importCredential) {
           debugPrint('MELPAL_PRIVATE_CREDENTIAL_READY');
           final waiting = Stopwatch()..start();
           while (!await bootstrap.exists()) {
@@ -79,6 +88,11 @@ void main() {
           await secure.delete(key: AlgorithmAccess.guestKey);
         }
         await api.ping();
+        if (freshGuest) {
+          expect((await access.requireToken()).startsWith('mg_'), isTrue);
+          expect(await secure.read(key: AlgorithmAccess.key), isNull);
+          summary['access'] = 'fresh-guest';
+        }
         await video.parent.create(recursive: true);
         await video.writeAsBytes(base64Decode(videoAnalysisFixtureBase64));
         final extracted = await const VideoAudioExtractor().extract(

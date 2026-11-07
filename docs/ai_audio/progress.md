@@ -1,6 +1,11 @@
 # AI 音频阶段进度
 
-更新日期：2026-11-05。完整范围见 [原始开发规划](development_plan.md)，源码审计见 [current_state.md](current_state.md)。每批在 GitHub 开发分支提交代码、验证结果及本文件，完成后经 PR 评审。
+更新于 2026-11-07。完整范围见 [原始开发规划](development_plan.md)，源码审计见 [current_state.md](current_state.md)。每批在 GitHub 开发分支提交代码、验证结果及本文件，完成后经 PR 评审。
+
+## 公网访客联调与任务进度
+
+- 服务端 [PR #3](https://github.com/jnysw/chordengine-algorithm-server/pull/3) 的访客网关已部署。Android 从空会话通过公开域名完成连接验证、8 秒合成视频的真实双算法、断点续传、校验与本机播放。[公网访客验收](melpal_public_access.md)
+- 视频分析面板与开发任务页优先查询等待最久且已到期的任务，保留逐条退避与原有每轮上限。Flutter 全量 **488 项通过**，后续按 [优化计划](../next_development_plan.md) 推进实体手机、长曲和保音高导出验收。
 
 ## 当前范围：本地视频 AI 练习闭环与协议基础
 

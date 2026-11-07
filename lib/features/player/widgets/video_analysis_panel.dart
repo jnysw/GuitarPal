@@ -295,7 +295,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     _polling = true;
     final service = ref.read(algorithmTaskServiceProvider);
     try {
-      for (final task in _tasks.where((t) => t.shouldPoll).take(4)) {
+      for (final task in service.pendingPollBatch(_tasks, limit: 4)) {
         if (!mounted || !_foreground || !_expanded) break;
         await service.refresh(task.id);
       }

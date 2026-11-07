@@ -19,8 +19,9 @@ void main() {
     late AlgorithmTaskRepository repository;
     late AlgorithmTaskService service;
     late _Api api;
-    var now = DateTime.utc(2026, 10, 27, 12);
+    late DateTime now;
     setUp(() {
+      now = DateTime.utc(2026, 10, 27, 12);
       database = AppDatabase(NativeDatabase.memory());
       repository = AlgorithmTaskRepository(database);
       api = _Api();
@@ -218,6 +219,48 @@ void main() {
         AlgorithmTaskState.failed,
       );
     });
+
+    test(
+      'poll batch skips backoff and rotates to the least recently checked',
+      () async {
+        final later = now.add(const Duration(seconds: 20));
+        final tasks = [
+          for (var i = 0; i < 4; i++)
+            _task(
+              'backoff-$i',
+              remoteJobId: 'job_$i',
+              state: AlgorithmTaskState.unavailable,
+              updatedAt: now.subtract(Duration(minutes: 10 - i)),
+              nextPollAt: later,
+            ),
+          _task(
+            'recent',
+            remoteJobId: 'job_recent',
+            state: AlgorithmTaskState.processing,
+            updatedAt: now,
+          ),
+          _task(
+            'older',
+            remoteJobId: 'job_older',
+            state: AlgorithmTaskState.queued,
+            updatedAt: now.subtract(const Duration(minutes: 1)),
+          ),
+        ];
+        expect(
+          service.pendingPollBatch(tasks, limit: 1).map((task) => task.id),
+          ['older'],
+        );
+        expect(
+          service.pendingPollBatch(tasks, limit: 4).map((task) => task.id),
+          ['older', 'recent'],
+        );
+        now = later;
+        expect(
+          service.pendingPollBatch(tasks, limit: 4).map((task) => task.id),
+          ['backoff-0', 'backoff-1', 'backoff-2', 'backoff-3'],
+        );
+      },
+    );
 
     test(
       'HTTP-200 failed jobs stop and GET retries respect Retry-After',
@@ -435,6 +478,10 @@ void main() {
 AlgorithmTaskRecord _task(
   String id, {
   AlgorithmOperation operation = AlgorithmOperation.chords,
+  AlgorithmTaskState state = AlgorithmTaskState.submitting,
+  String? remoteJobId,
+  DateTime? updatedAt,
+  DateTime? nextPollAt,
 }) {
   final time = DateTime.utc(2026, 10, 27);
   return AlgorithmTaskRecord(
@@ -446,9 +493,11 @@ AlgorithmTaskRecord _task(
     inputSizeBytes: 8000,
     inputDurationMs: 8000,
     ownsInput: false,
-    state: AlgorithmTaskState.submitting,
+    state: state,
+    remoteJobId: remoteJobId,
+    nextPollAt: nextPollAt,
     createdAt: time,
-    updatedAt: time,
+    updatedAt: updatedAt ?? time,
     failures: 0,
   );
 }

@@ -136,6 +136,29 @@ class AlgorithmTaskService {
     await refresh(id, force: true);
   }
 
+  Iterable<AlgorithmTaskRecord> pendingPollBatch(
+    Iterable<AlgorithmTaskRecord> tasks, {
+    required int limit,
+  }) {
+    final now = _clock().toUtc();
+    final due =
+        tasks
+            .where(
+              (task) => !_refreshing.contains(task.id) && _pollDue(task, now),
+            )
+            .toList()
+          ..sort((a, b) {
+            final order = a.updatedAt.compareTo(b.updatedAt);
+            return order == 0 ? a.createdAt.compareTo(b.createdAt) : order;
+          });
+    return due.take(limit);
+  }
+
+  bool _pollDue(AlgorithmTaskRecord task, DateTime now) =>
+      task.shouldPoll &&
+      task.resultJson == null &&
+      !(task.nextPollAt?.isAfter(now) ?? false);
+
   Future<void> refresh(String id, {bool force = false}) async {
     await initialize();
     if (!_refreshing.add(id)) return;
@@ -144,9 +167,7 @@ class AlgorithmTaskService {
       if (task == null ||
           task.remoteJobId == null ||
           task.resultJson != null ||
-          (!force &&
-              (!task.shouldPoll ||
-                  (task.nextPollAt?.isAfter(_clock().toUtc()) ?? false)))) {
+          (!force && !_pollDue(task, _clock().toUtc()))) {
         return;
       }
       final api = _factory(
