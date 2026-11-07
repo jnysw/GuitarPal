@@ -19,7 +19,9 @@ import 'performance_stage_controller_test.dart' show StageStore;
 class _Platform extends PerformanceExportPlatform {
   int renders = 0, cancels = 0, saves = 0, shares = 0;
   Completer<PerformanceExportResult>? pending;
-  bool cancelCompletes = false;
+  bool cancelCompletes = false, playing = false;
+  Completer<Map<String, Object?>>? snapshotGate;
+  final savedIds = <String>[];
   @override
   Future<PerformanceExportResult> render(Map<String, Object?> m) async {
     renders++;
@@ -34,13 +36,24 @@ class _Platform extends PerformanceExportPlatform {
   }
 
   @override
-  Future<Map<String, Object?>> snapshot() async => {
-    'progress': .3,
-    'stage': '正在合成',
-    'playing': false,
-  };
+  Future<Map<String, Object?>> snapshot() async {
+    final gate = snapshotGate;
+    snapshotGate = null;
+    return gate != null
+        ? gate.future
+        : {'progress': .3, 'stage': '正在合成', 'playing': playing};
+  }
+
   @override
-  Future<void> stop() async {}
+  Future<void> play(String id) async {
+    playing = true;
+  }
+
+  @override
+  Future<void> stop() async {
+    playing = false;
+  }
+
   @override
   Future<void> discard(String id) async {}
   @override
@@ -56,6 +69,7 @@ class _Platform extends PerformanceExportPlatform {
   @override
   Future<bool> save(String id, String title) async {
     saves++;
+    savedIds.add(id);
     return true;
   }
 
@@ -126,6 +140,44 @@ void main() {
         await tester.tap(find.byKey(const Key('performance_export_save')));
         await tester.pumpAndSettle();
         expect(platform.saves, 1);
+        Future<void> tapKey(String key) async {
+          await tester.scrollUntilVisible(find.byKey(Key(key)), 180);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(Key(key)));
+          await tester.pumpAndSettle();
+        }
+
+        await tapKey('performance_export_render');
+        await tester.ensureVisible(find.byType(SwitchListTile));
+        await tester.tap(find.byType(SwitchListTile));
+        await tester.pumpAndSettle();
+        await tapKey('performance_export_restore');
+        expect(platform.renders, 1);
+        expect(find.text('已保存到文件'), findsOneWidget);
+        expect(find.text('我的演奏 + 本次伴奏'), findsOneWidget);
+
+        await tapKey('performance_export_render');
+        await tester.ensureVisible(find.byType(SwitchListTile));
+        await tester.tap(find.byType(SwitchListTile));
+        await tester.pumpAndSettle();
+        platform.pending = Completer<PerformanceExportResult>();
+        await tester.scrollUntilVisible(
+          find.byKey(const Key('performance_export_render')),
+          180,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('performance_export_render')));
+        await tester.pump();
+        platform.pending!.completeError(
+          PlatformException(code: 'export_failed', message: '生成失败'),
+        );
+        await tester.pumpAndSettle();
+        await tapKey('performance_export_restore');
+        expect(platform.renders, 2);
+        expect(find.text('已保存到文件'), findsOneWidget);
+        await tapKey('performance_export_save');
+        expect(platform.savedIds, ['output', 'output']);
+
         await tester.scrollUntilVisible(
           find.byKey(const Key('performance_export_share')),
           180,
@@ -134,6 +186,60 @@ void main() {
         await tester.tap(find.byKey(const Key('performance_export_share')));
         await tester.pumpAndSettle();
         expect(platform.shares, 1);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        root.deleteSync(recursive: true);
+      }
+    },
+  );
+  testWidgets(
+    'a delayed playback snapshot cannot turn the stop button back on after pausing',
+    (tester) async {
+      final root = Directory.systemTemp.createTempSync('gp_export_poll_');
+      final c = fixtureCandidate(root);
+      final take = PerformanceTake.begin(
+        'take',
+        c,
+        BackingPreset.forCandidate(c, {'bass'}),
+        trial: false,
+      ).update({'durationMs': 1000, 'endSourceMs': 3000});
+      final mic = FakePerformanceMic()..files.add(take.filePath);
+      final platform = _Platform();
+      try {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              performanceExportPlatformProvider.overrideWithValue(platform),
+              performanceExportServiceProvider.overrideWithValue(
+                PerformanceExportService(
+                  mic,
+                  StageStore(root),
+                  TakeResolver(c),
+                  platform,
+                ),
+              ),
+            ],
+            child: MaterialApp(
+              home: PerformanceExportScreen(take: take, title: '回放状态验证'),
+            ),
+          ),
+        );
+        await tester.tap(find.byKey(const Key('performance_export_render')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('回听导出音频'));
+        await tester.pump();
+        final gate = Completer<Map<String, Object?>>();
+        platform.snapshotGate = gate;
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.tap(find.text('停止回听'));
+        await tester.pump();
+        gate.complete({'playing': true});
+        await tester.pump();
+        expect(find.text('回听导出音频'), findsOneWidget);
+        expect(find.text('停止回听'), findsNothing);
+        expect(platform.playing, isFalse);
         expect(tester.takeException(), isNull);
       } finally {
         await tester.pumpWidget(const SizedBox());

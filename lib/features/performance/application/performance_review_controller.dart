@@ -179,12 +179,23 @@ class PerformanceReviewController extends ChangeNotifier {
   }
 
   Future<void> seek(int value) async {
-    if (busy || _closed) return;
+    if (busy || _closed || !_foreground) return;
     final resume = playing;
-    await pause();
-    positionMs = value.clamp(0, take.durationMs);
+    busy = true;
     _notify();
-    if (resume) await toggle();
+    try {
+      final stopping = pause();
+      final token = _revision;
+      await stopping;
+      if (!_current(token)) return;
+      positionMs = value.clamp(0, take.durationMs);
+      busy = false;
+      _notify();
+      if (resume) await toggle();
+    } finally {
+      busy = false;
+      _notify();
+    }
   }
 
   Future<void> setVolumes({double? mic, double? backing}) async {

@@ -69,6 +69,7 @@ class _PerformanceReviewScreenState
   String get _signature =>
       '${_review.take.alignmentMs}|${_review.micVolume}|${_review.backingVolume}|${_title.text.trim()}';
   String? _message;
+  int? _seekPreviewMs;
   @override
   void initState() {
     super.initState();
@@ -134,6 +135,7 @@ class _PerformanceReviewScreenState
 
   @override
   void didPushNext() {
+    _seekPreviewMs = null;
     unawaited(_review.suspend());
   }
 
@@ -149,6 +151,7 @@ class _PerformanceReviewScreenState
     if (state == AppLifecycleState.resumed) {
       _review.resume();
     } else {
+      setState(() => _seekPreviewMs = null);
       unawaited(_review.suspend());
     }
   }
@@ -403,7 +406,7 @@ class _PerformanceReviewScreenState
                 ),
               Slider(
                 key: const Key('performance_review_position'),
-                value: _review.positionMs.toDouble().clamp(
+                value: (_seekPreviewMs ?? _review.positionMs).toDouble().clamp(
                   0,
                   widget.take.durationMs.toDouble(),
                 ),
@@ -413,10 +416,14 @@ class _PerformanceReviewScreenState
                 ),
                 onChanged: _review.busy || _saving
                     ? null
-                    : (v) => unawaited(_review.seek(v.round())),
+                    : (v) => setState(() => _seekPreviewMs = v.round()),
+                onChangeEnd: (v) {
+                  setState(() => _seekPreviewMs = null);
+                  unawaited(_review.seek(v.round()));
+                },
               ),
               Text(
-                '${_time(_review.positionMs)} / ${_time(widget.take.durationMs)}',
+                '${_time(_seekPreviewMs ?? _review.positionMs)} / ${_time(widget.take.durationMs)}',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),

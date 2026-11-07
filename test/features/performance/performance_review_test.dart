@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:guitar_pal/features/performance/application/performance_review_controller.dart';
@@ -31,7 +32,7 @@ class TakeResolver implements PerformanceSourceResolver {
 
 void main() {
   late Directory root;
-  late FakePerformanceMic mic;
+  late _DelayedPauseMic mic;
   late FakePerformanceAudio extra;
   late StagePlayer player;
   late StageStore store;
@@ -50,7 +51,7 @@ void main() {
       BackingPreset.forCandidate(c, {'bass'}).copyWith(speed: 1.37),
       trial: false,
     ).update({'durationMs': 2000, 'endSourceMs': 4500, 'leadMs': 120});
-    mic = FakePerformanceMic()..files.add(take.filePath);
+    mic = _DelayedPauseMic()..files.add(take.filePath);
     extra = FakePerformanceAudio(mic);
     review = PerformanceReviewController(
       take,
@@ -103,6 +104,21 @@ void main() {
     expect(mic.position, 1000);
     expect(mic.playing, isTrue);
   });
+  test('pause during an in-flight seek keeps playback paused and ignores the pending jump', () async {
+    await review.initialize();
+    await review.toggle();
+    final gate = Completer<void>();
+    mic.pauseGate = gate;
+    final seeking = review.seek(900);
+    expect(review.busy, isTrue);
+    await review.pause();
+    gate.complete();
+    await seeking;
+    expect(mic.playing, isFalse);
+    expect(review.playing, isFalse);
+    expect(review.positionMs, 0);
+    expect(review.busy, isFalse);
+  });
   test('missing original or changed revision preserves raw microphone playback without new network requests', () async {
     resolver.missing = true;
     await review.initialize();
@@ -141,4 +157,15 @@ void main() {
     expect(review.playing, isFalse);
     expect(player.playing, isFalse);
   });
+}
+
+class _DelayedPauseMic extends FakePerformanceMic {
+  Completer<void>? pauseGate;
+  @override
+  Future<void> pausePlayback() async {
+    final gate = pauseGate;
+    pauseGate = null;
+    await super.pausePlayback();
+    if (gate != null) await gate.future;
+  }
 }

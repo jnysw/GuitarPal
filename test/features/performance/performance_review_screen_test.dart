@@ -80,6 +80,42 @@ void main() {
     },
   );
   testWidgets(
+    'dragging the review timeline seeks once on release and keeps playback running',
+    (tester) async {
+      final f = (await tester.runAsync(() => _Fixture.create(trial: true)))!;
+      try {
+        await tester.pumpWidget(f.app());
+        await tester.tap(find.text('打开回听'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('performance_review_play')));
+        await tester.pumpAndSettle();
+        final pauses = f.mic.pauses;
+        final slider = find.byKey(const Key('performance_review_position'));
+        await tester.ensureVisible(slider);
+        final rect = tester.getRect(slider);
+        final gesture = await tester.startGesture(
+          Offset(rect.left + 24, rect.center.dy),
+        );
+        for (var i = 0; i < 3; i++) {
+          await gesture.moveBy(const Offset(40, 0));
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        expect(f.mic.pauses, pauses);
+        expect(f.mic.position, 0);
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(f.mic.pauses, pauses + 1);
+        expect(f.mic.position, greaterThan(0));
+        expect(f.mic.playing, isTrue);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        await tester.runAsync(f.close);
+      }
+    },
+  );
+  testWidgets(
     'export can save current edits and continue, but a failed save stays in review',
     (tester) async {
       final f = (await tester.runAsync(() => _Fixture.create()))!;
@@ -189,7 +225,7 @@ class _Fixture {
   final Directory root;
   final PerformanceTake take;
   final TakeResolver resolver;
-  final mic = FakePerformanceMic();
+  final mic = _CountingMic();
   final player = StagePlayer();
   final repo = MemoryPerformanceRecordings();
   late final store = PerformanceTakeStore(() async => root);
@@ -243,5 +279,14 @@ class _Fixture {
     await player.meter.close();
     await repo.changes.close();
     await root.delete(recursive: true);
+  }
+}
+
+class _CountingMic extends FakePerformanceMic {
+  int pauses = 0;
+  @override
+  Future<void> pausePlayback() async {
+    pauses++;
+    await super.pausePlayback();
   }
 }

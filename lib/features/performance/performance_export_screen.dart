@@ -49,6 +49,7 @@ class _PerformanceExportScreenState
   bool _polling = false, _rendering = false, _generating = false;
   bool _cancelling = false, _allowPop = false, _leaving = false;
   bool _savedToFiles = false, _failed = false;
+  bool _editingSettings = false, _resultBacking = true;
   int _generation = 0;
   double _progress = 0;
   String _stage = '', _message = '';
@@ -71,13 +72,14 @@ class _PerformanceExportScreenState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
     if (!_foreground) {
+      if (!_external) ++_generation;
+      setState(() => _playing = false);
       unawaited(_platform.stop().catchError((Object _) {}));
       if (_generating) {
         unawaited(_platform.cancel().catchError((Object _) {}));
       }
       // Also invalidate a preparation that has not reached the native renderer yet.
       if (_generating) {
-        ++_generation;
         setState(() {
           _stage = '正在停止导出';
           _message = '导出已中断，原始录音仍保留，可重试';
@@ -87,13 +89,22 @@ class _PerformanceExportScreenState
   }
 
   Future<void> _poll() async {
-    if (_polling || (!_rendering && !_playing) || !_foreground || _external) {
+    if (_polling ||
+        (!_rendering && !_playing) ||
+        (_busy && !_rendering) ||
+        !_foreground ||
+        _external) {
       return;
     }
     _polling = true;
+    final token = _generation;
     try {
       final s = await _platform.snapshot();
-      if (mounted) {
+      if (mounted &&
+          _foreground &&
+          !_external &&
+          (!_busy || _rendering) &&
+          token == _generation) {
         setState(() {
           _progress = ((s['progress'] as num?)?.toDouble() ?? 0).clamp(0, 1);
           if (!_cancelling) _stage = s['stage'] as String? ?? '';
@@ -120,8 +131,7 @@ class _PerformanceExportScreenState
       _generating = true;
       _cancelling = false;
       _failed = false;
-      _savedToFiles = false;
-      _result = null;
+      _editingSettings = true;
       _playing = false;
       _message = '';
       _stage = '校验本机录音与伴奏';
@@ -146,6 +156,9 @@ class _PerformanceExportScreenState
       if (!mounted || token != _generation) return;
       setState(() {
         _result = result;
+        _resultBacking = _backing;
+        _savedToFiles = false;
+        _editingSettings = false;
         _message = '音频已生成，可先回听再保存或分享';
       });
     } on Object catch (e) {
@@ -182,22 +195,26 @@ class _PerformanceExportScreenState
 
   Future<void> _action(String action) async {
     final result = _result;
-    if (result == null || _busy) return;
+    if (result == null || _busy || !_foreground) return;
+    final token = ++_generation;
+    final play = !_playing;
     setState(() {
       _busy = true;
+      if (action != 'play') _playing = false;
       _external = action != 'play';
       _message = '';
     });
     try {
       if (action == 'play') {
-        final play = !_playing;
         if (!play) {
           await _platform.stop();
         } else {
           await _platform.play(result.id);
         }
         if (!_foreground) await _platform.stop();
-        if (mounted) setState(() => _playing = play && _foreground);
+        if (mounted && token == _generation) {
+          setState(() => _playing = play && _foreground);
+        }
       } else if (action == 'save') {
         final saved = await _platform.save(result.id, widget.title);
         if (mounted) {
@@ -258,11 +275,29 @@ class _PerformanceExportScreenState
   }
 
   void _changeBacking(bool value) {
-    unawaited(_platform.stop().catchError((Object _) {}));
     setState(() {
       _backing = value;
-      _result = null;
+      _message = '';
+      _failed = false;
+    });
+  }
+
+  void _editSettings() {
+    ++_generation;
+    unawaited(_platform.stop().catchError((Object _) {}));
+    setState(() {
+      _editingSettings = true;
       _playing = false;
+      _message = '';
+      _failed = false;
+    });
+  }
+
+  void _restoreResult() {
+    ++_generation;
+    setState(() {
+      _backing = _resultBacking;
+      _editingSettings = false;
       _message = '';
       _failed = false;
     });
@@ -306,7 +341,7 @@ class _PerformanceExportScreenState
                   '${(widget.take.durationMs / 1000).toStringAsFixed(1)} 秒 · ${widget.take.preset.speed.toStringAsFixed(2)}× 演奏',
                 ),
                 const SizedBox(height: 16),
-                if (_result case final result?) ...[
+                if (_result case final result? when !_editingSettings) ...[
                   Card(
                     margin: EdgeInsets.zero,
                     child: Padding(
@@ -329,7 +364,7 @@ class _PerformanceExportScreenState
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _backing ? '我的演奏 + 本次伴奏' : '仅我的录音',
+                            _resultBacking ? '我的演奏 + 本次伴奏' : '仅我的录音',
                             textAlign: TextAlign.center,
                           ),
                           Text(
@@ -374,7 +409,7 @@ class _PerformanceExportScreenState
                     ),
                   ),
                 ],
-                if (_result == null) ...[
+                if (_result == null || _editingSettings) ...[
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('混入本次伴奏'),
@@ -416,12 +451,18 @@ class _PerformanceExportScreenState
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Semantics(liveRegion: true, child: Text(_message)),
                   ),
-                if (_result == null)
+                if (_result == null || _editingSettings)
                   FilledButton.icon(
                     key: const Key('performance_export_render'),
                     onPressed: _busy ? null : _render,
                     icon: const Icon(Icons.audio_file_outlined),
-                    label: Text(_failed ? '重试生成' : '生成音频'),
+                    label: Text(
+                      _failed
+                          ? '重试生成'
+                          : _result == null
+                          ? '生成音频'
+                          : '重新生成音频',
+                    ),
                   ),
                 if (_failed && _backing && !_busy)
                   OutlinedButton(
@@ -431,10 +472,16 @@ class _PerformanceExportScreenState
                     },
                     child: const Text('仅导出录音'),
                   ),
-                if (_result != null)
+                if (_result != null && _editingSettings)
+                  OutlinedButton(
+                    key: const Key('performance_export_restore'),
+                    onPressed: _busy ? null : _restoreResult,
+                    child: const Text('返回已生成音频'),
+                  ),
+                if (_result != null && !_editingSettings)
                   TextButton.icon(
                     key: const Key('performance_export_render'),
-                    onPressed: _busy ? null : () => _changeBacking(_backing),
+                    onPressed: _busy ? null : _editSettings,
                     icon: const Icon(Icons.tune),
                     label: const Text('调整导出设置'),
                   ),
