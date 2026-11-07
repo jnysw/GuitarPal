@@ -292,6 +292,54 @@ void main() {
     expect(await File('${file.path}.mix.wav').exists(), isFalse);
     expect(await File('${file.path}.mix.identity').exists(), isFalse);
   });
+
+  test(
+    'large complete partial can be verified offline after pausing',
+    () async {
+      const seconds = 150;
+      final bytes = syntheticAlgorithmWav(seconds: seconds);
+      final large = LegacyStemFile.fromJson(
+        {
+          ...Map<String, Object?>.from(
+            (separationFixture(size: bytes.length)['stems'] as List).first
+                as Map,
+          ),
+          'duration_seconds': seconds,
+          'sha256': sha256.convert(bytes).toString(),
+        },
+        endpoint,
+        'contract_job_1',
+      );
+      final cancellation = StemDownloadCancellation();
+      final transfer = store((_) async => response(bytes));
+      await expectLater(
+        transfer.download(
+          'task',
+          large,
+          cancellation: cancellation,
+          onProgress: (received, total) {
+            if (received == total) cancellation.cancel();
+          },
+        ),
+        throwsA(isA<StemDownloadPaused>()),
+      );
+      expect(
+        (await transfer.inspect('task', [large]))[large.id]?.receivedBytes,
+        bytes.length,
+      );
+      final offline = store(
+        (_) async => throw StateError('Complete partial needs no HTTP'),
+      );
+      final file = await offline.download('task', large);
+      expect(await file.length(), bytes.length);
+      expect(await File('${file.path}.part').exists(), isFalse);
+      bytes[100] = (bytes[100] + 1) % 256;
+      await file.writeAsBytes(bytes);
+      expect(await file.length(), bytes.length);
+      final reopened = AlgorithmStemStore(() async => root);
+      expect(await reopened.localFile('task', large), isNull);
+    },
+  );
   test(
     'persistent server checksum mismatch is bounded and never publishes cache',
     () async {

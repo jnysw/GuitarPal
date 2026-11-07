@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,14 @@ import 'package:uuid/uuid.dart';
 import '../domain/legacy_algorithm_models.dart';
 import 'stem_audio_validation.dart';
 import 'algorithm_access.dart';
+
+Future<String> _stemSha256(String path, int sizeBytes) {
+  Future<String> digest() async =>
+      (await sha256.bind(File(path).openRead()).first).toString();
+
+  // Large transfers and cold cache checks can hash multiple tracks at once.
+  return sizeBytes >= 4 * 1024 * 1024 ? Isolate.run(digest) : digest();
+}
 
 class StemDownloadPaused implements Exception {
   const StemDownloadPaused();
@@ -129,9 +138,6 @@ class ResumableStemTransfer {
     if (await f.exists()) await f.delete();
   }
 
-  Future<String> _hash(File f) async =>
-      (await sha256.bind(f.openRead()).first).toString();
-
   Future<File?> localFile(String taskId, LegacyStemFile stem) async {
     final target = await file(taskId, stem);
     if (!await target.exists()) return null;
@@ -146,7 +152,7 @@ class ResumableStemTransfer {
           '${stat.size}:${stat.modified.microsecondsSinceEpoch}:${stem.sha256 ?? ''}';
       if (_verified[target.path] == stamp) return target;
       await validateStemAudio(target, stem);
-      final digest = await _hash(target);
+      final digest = await _stemSha256(target.path, stem.sizeBytes);
       if (stem.sha256 != null && digest != stem.sha256) {
         throw const FormatException('音轨缓存与服务器校验不一致');
       }
@@ -280,7 +286,9 @@ class ResumableStemTransfer {
         metaFile = File('${target.path}.part.json');
     var meta = await _json(metaFile);
     var offset = await partialBytesFrom(target, stem, meta);
-    if (offset == stem.sizeBytes) return _publish(target, part, metaFile, stem);
+    if (offset == stem.sizeBytes) {
+      return _publish(target, part, metaFile, stem, token);
+    }
     if (offset == 0) {
       await _remove(part);
       await _remove(metaFile);
@@ -403,7 +411,7 @@ class ResumableStemTransfer {
         await output.close();
       }
       token.check();
-      return await _publish(target, part, metaFile, stem);
+      return await _publish(target, part, metaFile, stem, token);
     } finally {
       if (!abort.isCompleted) abort.complete();
       detach();
@@ -435,7 +443,9 @@ class ResumableStemTransfer {
     File part,
     File meta,
     LegacyStemFile stem,
+    StemDownloadCancellation token,
   ) async {
+    token.check();
     try {
       await validateStemAudio(part, stem);
     } on FormatException {
@@ -443,7 +453,8 @@ class ResumableStemTransfer {
       await _remove(meta);
       rethrow;
     }
-    final digest = await _hash(part);
+    final digest = await _stemSha256(part.path, stem.sizeBytes);
+    token.check();
     if (stem.sha256 != null && digest != stem.sha256) {
       await _remove(part);
       await _remove(meta);
@@ -547,9 +558,9 @@ class ResumableStemTransfer {
             stem,
             client: connection,
             cancellation: token,
-            onProgress: (n, _) {
+            onProgress: (n, size) {
               received[stem.id] = n;
-              notify();
+              notify(force: n == size);
             },
           );
           paths[stem.id] = f.path;

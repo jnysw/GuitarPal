@@ -15,6 +15,7 @@ import 'package:guitar_pal/features/audio_tools/data/algorithm_stem_store.dart';
 import 'package:guitar_pal/features/audio_tools/data/legacy_algorithm_api.dart';
 import 'package:guitar_pal/features/audio_tools/data/video_audio_extractor.dart';
 import 'package:guitar_pal/features/audio_tools/domain/legacy_algorithm_models.dart';
+import 'package:guitar_pal/features/audio_tools/domain/separation_processing_info.dart';
 import 'package:guitar_pal/features/audio_tools/domain/stem_mix_settings.dart';
 
 import 'support/video_analysis_fixture.dart';
@@ -33,8 +34,11 @@ void main() {
       final prior = {for (final key in keys) key: await secure.read(key: key)};
       final root = await const AlgorithmStemPlatform().directory();
       final bootstrap = File('${root.parent.path}/melpal-test-credential.json');
+      const profileSeconds = int.fromEnvironment('MELPAL_LIVE_PROFILE_SECONDS');
+      final profiling = profileSeconds != 0;
+      final durationMs = profiling ? profileSeconds * 1000 : 8000;
       final video = File(
-        '${root.parent.path}/guitarpal_videos/melpal-live-${const Uuid().v4()}.mp4',
+        '${root.parent.path}/guitarpal_videos/${profiling ? 'melpal-profile.mp4' : 'melpal-live-${const Uuid().v4()}.mp4'}',
       );
       final report = File('${root.parent.path}/melpal-live-report.json');
       final trace = <String>[];
@@ -52,7 +56,10 @@ void main() {
         clientFactory: () => _TraceClient(http.Client(), trace),
       );
       final summary = <String, Object?>{
-        'source': 'generated-eight-second-video',
+        'source': profiling
+            ? 'generated-profile-video'
+            : 'generated-eight-second-video',
+        'duration_ms': durationMs,
         'jobs': <String, Object?>{},
       };
       String? input;
@@ -62,6 +69,14 @@ void main() {
           'IMPORT_MELPAL_TEST_CREDENTIAL',
         );
         expect(freshGuest && importCredential, isFalse);
+        if (profiling) {
+          expect([30, 180, 480], contains(profileSeconds));
+          expect(freshGuest, isTrue);
+          expect(
+            const String.fromEnvironment('LIVE_SEPARATION_JOB_ID'),
+            isEmpty,
+          );
+        }
         await tester.pumpWidget(
           const MaterialApp(home: Scaffold(body: Text('MelPal 合成音频联调'))),
         );
@@ -94,15 +109,32 @@ void main() {
           summary['access'] = 'fresh-guest';
         }
         await video.parent.create(recursive: true);
-        await video.writeAsBytes(base64Decode(videoAnalysisFixtureBase64));
+        if (profiling) {
+          debugPrint('MELPAL_PROFILE_VIDEO_READY');
+          final deadline = Stopwatch()..start();
+          while (!await video.exists()) {
+            if (deadline.elapsed > const Duration(seconds: 45)) {
+              throw TimeoutException('Synthetic profile video not supplied');
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+          }
+        } else {
+          await video.writeAsBytes(base64Decode(videoAnalysisFixtureBase64));
+        }
+        final extraction = Stopwatch()..start();
         final extracted = await const VideoAudioExtractor().extract(
           video.path,
           0,
-          8000,
-          sourceDurationMs: 8000,
+          durationMs,
+          sourceDurationMs: profiling ? null : 8000,
         );
         input = extracted.input.path;
-        for (final operation in AlgorithmOperation.values) {
+        summary['extraction_ms'] = extraction.elapsedMilliseconds;
+        summary['input_bytes'] = extracted.input.sizeBytes;
+        final operations = profiling
+            ? [AlgorithmOperation.separation]
+            : AlgorithmOperation.values;
+        for (final operation in operations) {
           final watch = Stopwatch()..start();
           final oldId = operation == AlgorithmOperation.chords
               ? const String.fromEnvironment('LIVE_CHORD_JOB_ID')
@@ -111,10 +143,14 @@ void main() {
               ? oldId
               : (await api.upload(
                   input,
-                  'melpal-generated-eight-seconds.wav',
+                  'melpal-generated.wav',
                   operation: operation,
                 )).jobId;
-          final item = <String, Object?>{'job_id': id};
+          final item = <String, Object?>{
+            'job_id': id,
+            if (oldId.isEmpty)
+              'submit_to_receipt_ms': watch.elapsedMilliseconds,
+          };
           (summary['jobs'] as Map<String, Object?>)[operation.name] = item;
           await report.writeAsString(jsonEncode(summary), flush: true);
           debugPrint('MELPAL_LIVE_${operation.name}: job=$id');
@@ -124,7 +160,7 @@ void main() {
               throw StateError('Synthetic ${operation.name} job failed');
             }
             if (status.state == LegacyJobState.completed) break;
-            if (watch.elapsed > const Duration(minutes: 3)) {
+            if (watch.elapsed > Duration(minutes: profiling ? 10 : 3)) {
               throw TimeoutException('Synthetic job not completed');
             }
             await Future<void>.delayed(const Duration(seconds: 2));
@@ -145,8 +181,11 @@ void main() {
           } else {
             final stems = LegacySeparationResult.fromJson(result, endpoint);
             expect(stems.stems, isNotEmpty);
-            expect(stems.duration.inMilliseconds, closeTo(8000, 100));
+            expect(stems.duration.inMilliseconds, closeTo(durationMs, 100));
             expect(stems.stems.every((s) => s.sha256 != null), isTrue);
+            if (stems.processing case final info?) {
+              item['server_ms'] = _serverTimings(info);
+            }
             final largest = ([
               ...stems.stems,
             ]..sort((a, b) => b.sizeBytes.compareTo(a.sizeBytes))).first;
@@ -157,13 +196,27 @@ void main() {
               clientFactory: () =>
                   _CutClient(_TraceClient(http.Client(), trace)),
             );
+            final transfer = Stopwatch()..start();
             await expectLater(
               interrupted.download(localId, largest),
               throwsA(isA<AlgorithmApiError>()),
             );
             final partial = await store.inspect(localId, [largest]);
             expect(partial[largest.id]!.receivedBytes, 1024);
-            final paths = await store.downloadBatch(localId, stems.stems);
+            final paths = await store.downloadBatch(
+              localId,
+              stems.stems,
+              onProgress: (p) {
+                if (p.completedFiles > 0) {
+                  item['first_verified_stem_ms'] ??=
+                      transfer.elapsedMilliseconds;
+                }
+              },
+            );
+            item['all_stems_downloaded_ms'] = transfer.elapsedMilliseconds;
+            item['stem_bytes'] = {
+              for (final stem in stems.stems) stem.id: stem.sizeBytes,
+            };
             expect(
               trace.any((entry) => entry.contains('Range=bytes=1024-')),
               isTrue,
@@ -172,9 +225,11 @@ void main() {
             final models = stems.stems
                 .where((s) => s.origin == 'model')
                 .toList();
+            final decode = Stopwatch()..start();
             await mix.load({
               for (final stem in models) stem.id: paths[stem.id]!,
             });
+            item['native_mix_load_ms'] = decode.elapsedMilliseconds;
             await mix.configureTracks(
               {for (final stem in models) stem.id: const StemMixControl()},
               master: 0,
@@ -202,17 +257,26 @@ void main() {
           await report.writeAsString(jsonEncode(summary), flush: true);
           debugPrint('MELPAL_LIVE_${operation.name}: complete');
         }
-        final expectedPosts =
-            (const String.fromEnvironment('LIVE_CHORD_JOB_ID').isEmpty
-                ? 1
-                : 0) +
-            (const String.fromEnvironment('LIVE_SEPARATION_JOB_ID').isEmpty
-                ? 1
-                : 0);
+        final expectedPosts = profiling
+            ? 1
+            : (const String.fromEnvironment('LIVE_CHORD_JOB_ID').isEmpty
+                      ? 1
+                      : 0) +
+                  (const String.fromEnvironment('LIVE_SEPARATION_JOB_ID')
+                          .isEmpty
+                      ? 1
+                      : 0);
         expect(trace.where((p) => p.startsWith('POST ')).length, expectedPosts);
         summary['post_count'] = expectedPosts;
         summary['passed'] = true;
         await report.writeAsString(jsonEncode(summary), flush: true);
+        if (profiling) {
+          ((summary['jobs'] as Map)['separation'] as Map).remove('job_id');
+          debugPrint(
+            'MELPAL_PROFILE_METRICS ${jsonEncode(summary)}',
+            wrapWidth: 4096,
+          );
+        }
       } finally {
         api.close();
         await mix.stop();
@@ -231,10 +295,23 @@ void main() {
         }
       }
     },
-    timeout: const Timeout(Duration(minutes: 8)),
+    timeout: const Timeout(Duration(minutes: 16)),
     skip: !const bool.fromEnvironment('CHECK_MELPAL_LIVE'),
   );
 }
+
+Map<String, int> _serverTimings(SeparationProcessingInfo info) => {
+  for (final entry in {
+    'queue': info.queue,
+    'prepare': info.preparing,
+    'model_load': info.loading,
+    'inference': info.inference,
+    'encode': info.encoding,
+    'publish': info.publishing,
+    'processing': info.processing,
+  }.entries)
+    if (entry.value case final duration?) entry.key: duration.inMilliseconds,
+};
 
 class _TraceClient extends http.BaseClient {
   _TraceClient(this.inner, this.trace);

@@ -2,6 +2,11 @@
 
 更新于 2026-11-07。完整范围见 [原始开发规划](development_plan.md)，源码审计见 [current_state.md](current_state.md)。每批在 GitHub 开发分支提交代码、验证结果及本文件，完成后经 PR 评审。
 
+## 长曲分轨性能基线
+
+- 模拟器通过公网访客入口完成 30 秒、3 分钟和 8 分钟合成视频分轨。每段一次提交，七轨验证并在 1024 字节处恢复被中断的下载，六轨原生混音播放头正常。[测量与复测](long_separation_baseline.md)
+- 4 MiB 及以上音轨的 SHA-256 在后台执行。练习面板区分下载、校验和解码，已接收完的临时文件暂停后可继续校验。Flutter 全量 **489 项通过**。
+
 ## 公网访客联调与任务进度
 
 - 服务端 [PR #3](https://github.com/jnysw/chordengine-algorithm-server/pull/3) 的访客网关已部署。Android 从空会话通过公开域名完成连接验证、8 秒合成视频的真实双算法、断点续传、校验与本机播放。[公网访客验收](melpal_public_access.md)

@@ -743,6 +743,12 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
             onProgress: (p) {
               if (!_canLoad(token)) return;
               setState(() {
+                if (p.receivedBytes == p.totalBytes &&
+                    p.completedFiles < p.totalFiles) {
+                  _stage = '音轨已接收，正在校验文件…';
+                  _progress = null;
+                  return;
+                }
                 final speed = p.bytesPerSecond > 0
                     ? ' · ${_bytes(p.bytesPerSecond.round())}/s'
                     : '';
