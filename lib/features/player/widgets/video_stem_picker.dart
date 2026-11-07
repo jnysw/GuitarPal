@@ -115,7 +115,7 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                         Text(
                           expired
                               ? '选择已完整下载的音轨进行离线练习。'
-                              : '只下载本次要练习的音轨。已下载的音轨可离线使用，未完成的下载可续传。',
+                              : '只下载所选音轨，下载期间可继续练习。已下载的音轨可离线使用，未完成的下载可续传。',
                         ),
                         const SizedBox(height: 8),
                         Wrap(
@@ -206,7 +206,7 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                                     localOnly: allLocal,
                                   ),
                                 ),
-                          child: Text(allLocal ? '使用所选音轨' : '下载并使用所选音轨'),
+                          child: Text(allLocal ? '使用所选音轨' : '下载所选音轨'),
                         ),
                         if (cached.isNotEmpty && !allLocal)
                           TextButton(

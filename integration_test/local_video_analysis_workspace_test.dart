@@ -127,12 +127,28 @@ void main() {
         await tester.pump(const Duration(milliseconds: 350));
         await tester.tap(find.text('扒和弦'));
         await tester.pump(const Duration(milliseconds: 500));
+        final transport = tester
+            .widget<VideoAnalysisPanel>(find.byType(VideoAnalysisPanel))
+            .controller;
+        final playDuringAnalysis = Stopwatch()..start();
+        await transport.play();
+        await _spin(tester, () => transport.isPlaying);
         await _tapVisible(
           tester,
           find.byKey(const Key('video_analysis_submit')),
         );
         await tester.pump(const Duration(milliseconds: 350));
+        expect(transport.isPlaying, isTrue);
         await tester.tap(find.byKey(const Key('video_analysis_confirm')));
+        await _spin(tester, () => api.uploads == 1);
+        expect(transport.isPlaying, isTrue);
+        await transport.pause();
+        playDuringAnalysis.stop();
+        await transport.seek(Duration.zero);
+        await _spin(
+          tester,
+          () => !transport.isPlaying && transport.position == Duration.zero,
+        );
         const automatic = bool.fromEnvironment('AUTO_CHORD_TIMELINE');
         await _spin(
           tester,
@@ -363,7 +379,10 @@ void main() {
         expect(sessions, hasLength(1));
         expect(
           sessions.single.activeDurationMilliseconds,
-          inInclusiveRange(1000, 2500),
+          inInclusiveRange(
+            playDuringAnalysis.elapsedMilliseconds + 1000,
+            playDuringAnalysis.elapsedMilliseconds + 2500,
+          ),
         );
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());

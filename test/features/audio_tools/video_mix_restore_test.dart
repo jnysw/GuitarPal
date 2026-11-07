@@ -30,7 +30,7 @@ import '../../support/algorithm_fixtures.dart';
 
 void main() {
   testWidgets(
-    'choosing guitar downloads only that file from the existing task',
+    'downloading a selected guitar track keeps playback until explicit load',
     (tester) async {
       final f = (await tester.runAsync(_Fixture.create))!;
       final requests = <String>[];
@@ -43,6 +43,7 @@ void main() {
             await File('${f.root.path}/task_$id.wav').delete();
           }
         });
+        await f.controller.play();
         await f.show(tester);
         await tester.tap(find.text('和弦与分轨'));
         await tester.pumpAndSettle();
@@ -76,14 +77,21 @@ void main() {
               null,
         );
         await tester.tap(find.byKey(const Key('video_apply_stem_choice')));
+        final load = find.byKey(const Key('video_continue_stem_action'));
         await _until(
           tester,
           () =>
               downloading.error != null ||
-              (f.controller.stemsLoaded &&
+              (load.evaluate().isNotEmpty &&
                   find.byType(BottomSheet).evaluate().isEmpty),
         );
         expect(downloading.error, isNull, reason: '${downloading.stack}');
+        expect(f.controller.isPlaying, isTrue);
+        expect(f.bridge.loadCount, 0);
+        expect(find.text('载入已下载音轨'), findsOneWidget);
+        await tester.ensureVisible(load);
+        await tester.tap(load);
+        await _until(tester, () => f.controller.stemsLoaded);
         expect(requests, [
           'GET /api/v1/separation/jobs/contract_job_1/files/guitar',
         ]);
@@ -269,52 +277,55 @@ void main() {
     },
   );
 
-  testWidgets('pause download keeps result available for manual retry', (
-    tester,
-  ) async {
-    final f = (await tester.runAsync(_Fixture.create))!;
-    f.store = _PausedStore(f.root);
-    try {
-      await tester.runAsync(
-        () => File('${f.root.path}/video_workspace/source.json').delete(),
-      );
-      await f.show(tester);
-      await tester.tap(find.text('和弦与分轨'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('分轨').first);
-      await tester.pumpAndSettle();
-      await _until(tester, () => find.text('在当前视频中使用分轨').evaluate().isNotEmpty);
-      tester
-          .widget<TextButton>(find.widgetWithText(TextButton, '在当前视频中使用分轨'))
-          .onPressed!();
-      await _until(
-        tester,
-        () => find
-            .byKey(const Key('video_pause_stem_download'))
-            .evaluate()
-            .isNotEmpty,
-      );
-      tester
-          .widget<TextButton>(
-            find.byKey(const Key('video_pause_stem_download')),
-          )
-          .onPressed!();
-      await _until(
-        tester,
-        () => find.textContaining('下载已暂停').evaluate().isNotEmpty,
-      );
-      expect(f.controller.stemsLoaded, isFalse);
-      final retry = tester.widget<TextButton>(
-        find.widgetWithText(TextButton, '在当前视频中使用分轨'),
-      );
-      expect(retry.onPressed, isNotNull);
-      retry.onPressed!();
-      await _until(tester, () => f.controller.stemsLoaded);
-      expect(f.networkRequests, 0);
-    } finally {
-      await f.close(tester);
-    }
-  });
+  testWidgets(
+    'pause download offers direct continuation of the same selection',
+    (tester) async {
+      final f = (await tester.runAsync(_Fixture.create))!;
+      f.store = _PausedStore(f.root);
+      try {
+        await tester.runAsync(
+          () => File('${f.root.path}/video_workspace/source.json').delete(),
+        );
+        await f.show(tester);
+        await tester.tap(find.text('和弦与分轨'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('分轨').first);
+        await tester.pumpAndSettle();
+        await _until(
+          tester,
+          () => find.text('在当前视频中使用分轨').evaluate().isNotEmpty,
+        );
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, '在当前视频中使用分轨'))
+            .onPressed!();
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('video_pause_stem_download'))
+              .evaluate()
+              .isNotEmpty,
+        );
+        tester
+            .widget<TextButton>(
+              find.byKey(const Key('video_pause_stem_download')),
+            )
+            .onPressed!();
+        await _until(
+          tester,
+          () => find.textContaining('下载已暂停').evaluate().isNotEmpty,
+        );
+        expect(f.controller.stemsLoaded, isFalse);
+        final retry = find.byKey(const Key('video_continue_stem_action'));
+        expect(find.text('继续下载所选音轨'), findsOneWidget);
+        await tester.ensureVisible(retry);
+        await tester.tap(retry);
+        await _until(tester, () => f.controller.stemsLoaded);
+        expect(f.networkRequests, 0);
+      } finally {
+        await f.close(tester);
+      }
+    },
+  );
 
   testWidgets(
     'fresh in-place load tolerates native loaded event arriving before load acknowledgement',

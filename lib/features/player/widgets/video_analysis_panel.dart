@@ -82,6 +82,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   StemDownloadCancellation? _downloadCancellation;
   bool _networkDownload = false;
   String? _downloadNotice;
+  final _downloadStatus = GlobalKey();
+  ({AlgorithmTaskRecord task, VideoStemLoadChoice choice})? _stemAction;
   @override
   void initState() {
     super.initState();
@@ -124,6 +126,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       _generation++;
       _loadedTaskId = null;
       _pendingRestore = null;
+      _stemAction = null;
+      _downloadNotice = null;
       _busy = _loadingStems = false;
       unawaited(_restoreSelection());
     }
@@ -269,6 +273,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       if (!mounted || token != _generation) return;
       setState(() {
         _loadedTaskId = null;
+        _stemAction = null;
+        _downloadNotice = null;
         _restoreNotice = '已切回视频原声，分轨设置已保留';
       });
       if (_saved != null) await _persist(_saved!.withMode(false));
@@ -512,8 +518,6 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       }
     }
     if (!mounted || !canContinue()) return;
-    await controller.pause();
-    if (!mounted || !canContinue()) return;
     final previousUnknown = matching.any(
       (task) => task.state == AlgorithmTaskState.submissionUnknown,
     );
@@ -524,7 +528,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           operation == AlgorithmOperation.chords ? '分析当前视频的和弦？' : '分离当前视频的音轨？',
         ),
         content: Text(
-          '「${source.title}」\n${_time(start)}–${_time(end)}\n仅提取并上传此区间的音频用于分析，视频保留在本机。${operation == AlgorithmOperation.separation && end - start > 60000 ? '\n长音频的计算与下载分别耗时。可取消并先设置较短 A-B，只分离需要练习的片段。' : ''}${previousUnknown ? '\n上次相同区间尚未确认接收状态，继续可能产生重复任务。' : ''}',
+          '「${source.title}」\n${_time(start)}–${_time(end)}\n仅提取并上传此区间的音频用于分析，视频保留在本机。分析期间可以继续练习。${operation == AlgorithmOperation.separation && end - start > 60000 ? '\n长音频的计算与下载分别耗时。可取消并先设置较短 A-B，只分离需要练习的片段。' : ''}${previousUnknown ? '\n上次相同区间尚未确认接收状态，继续可能产生重复任务。' : ''}',
         ),
         actions: [
           TextButton(
@@ -689,10 +693,25 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       _busy = _loadingStems = true;
       _networkDownload = !restoring && !localOnly;
       _downloadNotice = null;
+      if (!restoring) _stemAction = null;
+      _progress = null;
       _stage = restoring ? '正在恢复本机分轨…' : '正在准备当前视频的音轨…';
     });
+    if (!restoring) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final status = _downloadStatus.currentContext;
+        if (_canLoad(token) && status != null) {
+          unawaited(
+            Scrollable.ensureVisible(
+              status,
+              duration: const Duration(milliseconds: 220),
+              alignment: .15,
+            ),
+          );
+        }
+      });
+    }
     try {
-      if (!restoring) await controller.pause();
       final binding = _binding(task);
       await _verify(binding);
       if (!_canLoad(token)) return;
@@ -716,7 +735,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       );
       final paths = <String, String>{};
       final expired = !DateTime.now().toUtc().isBefore(result.expiresAt);
-      if (restoring || localOnly || expired) {
+      final shouldDownload = !restoring && !localOnly && !expired;
+      if (!shouldDownload) {
         if (expired && _networkDownload) {
           setState(() => _networkDownload = false);
         }
@@ -735,6 +755,10 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           paths[stem.id] = file.path;
         }
       } else {
+        _stemAction = (
+          task: task,
+          choice: VideoStemLoadChoice(chosen.map((stem) => stem.id)),
+        );
         paths.addAll(
           await store.downloadBatch(
             task.id,
@@ -764,13 +788,25 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         );
       }
       if (!_canLoad(token)) return;
+      if (!restoring) {
+        _stemAction = (
+          task: task,
+          choice: VideoStemLoadChoice(paths.keys, localOnly: true),
+        );
+      }
+      await _verify(binding);
+      if (!_canLoad(token)) return;
+      if (shouldDownload && controller.isPlaying) {
+        setState(
+          () => _downloadNotice = '所选音轨已下载，当前声音继续播放。需要切换时再载入。',
+        );
+        return;
+      }
       setState(() {
         _networkDownload = false;
         _stage = '音轨已就绪，正在本机解码并载入混音…';
         _progress = null;
       });
-      await _verify(binding);
-      if (!_canLoad(token)) return;
       final selection =
           _saved?.taskId == task.id &&
               _saved?.inputSha256 == binding.inputSha256
@@ -804,6 +840,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       }
       if (!_canLoad(token)) return;
       setState(() {
+        if (!restoring) _stemAction = null;
         _pans = selection.pans;
         _rememberedTask = task;
         _loadedTaskId = task.id;
@@ -835,7 +872,10 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         if (restoring) {
           setState(() => _restoreNotice = message);
         } else {
-          setState(() => _downloadNotice = message);
+          setState(() {
+            if (e is FormatException) _stemAction = null;
+            _downloadNotice = message;
+          });
           _message(message);
         }
       }
@@ -1247,6 +1287,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
               t.mediaBindingJson != null,
         )
         .toList();
+    final stemAction = _stemAction;
     final content = <Widget>[
       const Text('共用当前视频、播放进度、倍速与 A-B；无需再次导入或关联曲目。'),
       const SizedBox(height: 8),
@@ -1294,15 +1335,39 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           child: const Text('重试连接'),
         ),
       ],
-      if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
-      if (_networkDownload && _downloadCancellation != null)
-        TextButton.icon(
-          key: const Key('video_pause_stem_download'),
-          onPressed: () => _downloadCancellation?.cancel(),
-          icon: const Icon(Icons.pause),
-          label: const Text('暂停下载，保留进度'),
-        ),
-      if (_downloadNotice != null) Text(_downloadNotice!),
+      Column(
+        key: _downloadStatus,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
+          if (_networkDownload && _downloadCancellation != null)
+            TextButton.icon(
+              key: const Key('video_pause_stem_download'),
+              onPressed: () => _downloadCancellation?.cancel(),
+              icon: const Icon(Icons.pause),
+              label: const Text('暂停下载，保留进度'),
+            ),
+          if (_downloadNotice != null)
+            Semantics(liveRegion: true, child: Text(_downloadNotice!)),
+          if (!_busy && stemAction != null)
+            FilledButton.tonalIcon(
+              key: const Key('video_continue_stem_action'),
+              onPressed: !widget.enabled || widget.recordingActive
+                  ? null
+                  : () => _loadStems(
+                      stemAction.task,
+                      trackIds: stemAction.choice.ids,
+                      localOnly: stemAction.choice.localOnly,
+                    ),
+              icon: Icon(
+                stemAction.choice.localOnly ? Icons.graphic_eq : Icons.download,
+              ),
+              label: Text(
+                stemAction.choice.localOnly ? '载入已下载音轨' : '继续下载所选音轨',
+              ),
+            ),
+        ],
+      ),
       if (_restoreNotice != null) Text(_restoreNotice!),
       if (_rememberedTask != null && !widget.controller.stemsLoaded)
         TextButton(

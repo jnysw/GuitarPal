@@ -111,6 +111,7 @@ void main() {
         find.byType(SwitchListTile),
       ); // A cleared A-B must still allow returning to whole-video mode.
       await tester.pumpAndSettle();
+      await controller.play();
       await tester.tap(find.byKey(const Key('video_analysis_submit')));
       await _until(
         tester,
@@ -119,8 +120,21 @@ void main() {
             .evaluate()
             .isNotEmpty,
       );
+      expect(controller.isPlaying, isTrue);
       expect(api.uploads, 0);
       expect(find.textContaining('仅提取并上传此区间的音频'), findsOneWidget);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(controller.isPlaying, isTrue);
+      expect(extractor.calls, 0);
+      await tester.tap(find.byKey(const Key('video_analysis_submit')));
+      await _until(
+        tester,
+        () => find
+            .byKey(const Key('video_analysis_confirm'))
+            .evaluate()
+            .isNotEmpty,
+      );
       await tester.tap(find.byKey(const Key('video_analysis_confirm')));
       await _until(tester, () {
         final retry = find.byKey(const Key('video_analysis_retry_connection'));
@@ -129,6 +143,7 @@ void main() {
       });
       expect(extractor.calls, 0);
       expect(api.uploads, 0);
+      expect(controller.isPlaying, isTrue);
       expect(
         (await tester.runAsync(
           () => database.select(database.algorithmTasks).get(),
@@ -157,6 +172,7 @@ void main() {
             api.uploads == 1 &&
             tester.widget<FilledButton>(submit).onPressed != null,
       );
+      expect(controller.isPlaying, isTrue);
       await tester.ensureVisible(submit);
       await tester.tap(submit);
       await _until(tester, () => find.text('这个区间已提交分析').evaluate().isNotEmpty);
@@ -293,9 +309,10 @@ class _Api implements AlgorithmApi {
 class _Bridge implements LocalVideoPlayerBridge {
   LocalVideoStateListener? listener;
   Duration? lastSeek;
+  bool playing = false;
   void emit() => listener?.call({
     'ready': true,
-    'playing': false,
+    'playing': playing,
     'positionMilliseconds': lastSeek?.inMilliseconds ?? 0,
     'durationMilliseconds': 8000,
   });
@@ -306,11 +323,13 @@ class _Bridge implements LocalVideoPlayerBridge {
 
   @override
   Future<void> play() async {
+    playing = true;
     emit();
   }
 
   @override
   Future<void> pause() async {
+    playing = false;
     emit();
   }
 
