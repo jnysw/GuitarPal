@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:guitarpal:audio:result:v1",
+  "title": "GuitarPal audio result v1 (source-media milliseconds)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "job_id", "status", "asset_id", "media_revision_id", "timebase", "coverage", "mapping", "chords", "separation", "warnings"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "job_id": {"$ref": "#/$defs/id"},
+    "asset_id": {"$ref": "#/$defs/id"},
+    "media_revision_id": {"$ref": "#/$defs/id"},
+    "status": {"enum": ["succeeded", "partially_succeeded"]},
+    "timebase": {"const": "source_media_ms"},
+    "coverage": {"$ref": "#/$defs/range"},
+    "mapping": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_offset_ms", "trim_start_ms"],
+      "properties": {
+        "source_offset_ms": {"type": "integer", "minimum": 0},
+        "trim_start_ms": {"const": 0}
+      }
+    },
+    "chords": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/chords"}]},
+    "separation": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/separation"}]},
+    "warnings": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/text"}}
+  },
+  "anyOf": [
+    {"properties": {"chords": {"$ref": "#/$defs/chords"}}},
+    {"properties": {"separation": {"allOf": [{"$ref": "#/$defs/separation"}, {"properties": {"status": {"const": "succeeded"}}}]}}}
+  ],
+  "$defs": {
+    "text": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+    "id": {"type": "string", "format": "uuid"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "probability": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "range": {
+      "type": "object", "additionalProperties": false,
+      "required": ["start_ms", "end_ms"],
+      "properties": {
+        "start_ms": {"type": "integer", "minimum": 0},
+        "end_ms": {"type": "integer", "minimum": 1}
+      }
+    },
+    "segment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "start_ms", "end_ms", "raw_label", "chord_key", "display_label", "confidence", "origin"],
+      "properties": {
+        "id": {"$ref": "#/$defs/text"},
+        "start_ms": {"type": "integer", "minimum": 0},
+        "end_ms": {"type": "integer", "minimum": 1},
+        "raw_label": {"$ref": "#/$defs/text"},
+        "chord_key": {"$ref": "#/$defs/text"},
+        "display_label": {"$ref": "#/$defs/text"},
+        "roman": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/text"}]},
+        "confidence": {"$ref": "#/$defs/probability"},
+        "origin": {"enum": ["machine", "human"]}
+      }
+    },
+    "chords": {
+      "type": "object", "additionalProperties": false,
+      "required": ["analysis_id", "revision", "profile_id", "input_kind", "key", "tempo", "confidence_method", "segments", "provenance"],
+      "properties": {
+        "analysis_id": {"$ref": "#/$defs/id"},
+        "revision": {"type": "integer", "minimum": 1},
+        "profile_id": {"$ref": "#/$defs/text"},
+        "input_kind": {"const": "original"},
+        "key": {
+          "oneOf": [{"type": "null"}, {
+            "type": "object", "additionalProperties": false,
+            "required": ["label", "confidence"],
+            "properties": {"label": {"$ref": "#/$defs/text"}, "confidence": {"$ref": "#/$defs/probability"}}
+          }]
+        },
+        "tempo": {
+          "oneOf": [{"type": "null"}, {
+            "type": "object", "additionalProperties": false,
+            "required": ["bpm", "confidence"],
+            "properties": {"bpm": {"type": "number", "exclusiveMinimum": 0}, "confidence": {"$ref": "#/$defs/probability"}}
+          }]
+        },
+        "confidence_method": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/text"}]},
+        "segments": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/segment"}},
+        "provenance": {
+          "type": "object", "additionalProperties": false,
+          "required": ["code_commit", "checkpoint_sha256", "preprocess_version", "postprocess_version", "vocabulary_hash"],
+          "properties": {
+            "code_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+            "preprocess_version": {"$ref": "#/$defs/text"},
+            "postprocess_version": {"$ref": "#/$defs/text"},
+            "vocabulary_hash": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      }
+    },
+    "stem": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "role", "format", "size_bytes", "sha256", "sample_rate", "sample_count", "channels", "offset_samples", "coverage"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "role": {"$ref": "#/$defs/text"},
+        "format": {"enum": ["flac", "wav"]},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "sample_rate": {"type": "integer", "minimum": 1},
+        "sample_count": {"type": "integer", "minimum": 1},
+        "channels": {"enum": [1, 2]},
+        "offset_samples": {"type": "integer"},
+        "coverage": {"$ref": "#/$defs/range"}
+      }
+    },
+    "separation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "error_code", "artifacts"],
+      "properties": {
+        "status": {"enum": ["succeeded", "failed", "canceled"]},
+        "error_code": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/text"}]},
+        "artifacts": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/stem"}}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "succeeded"}}},
+        "then": {"properties": {"error_code": {"type": "null"}, "artifacts": {"minItems": 1}}},
+        "else": {"properties": {"artifacts": {"maxItems": 0}}}
+      }]
+    }
+  }
+}

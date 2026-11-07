@@ -13,3 +13,9 @@ abstract interface class PracticeRecordingRepository {
 
   Future<void> delete(String id);
 }
+
+/// Atomically preserves plan, segment, session and note when an existing stage
+/// recording's title or audition settings are saved again.
+abstract interface class PerformanceTakeRecordingWriter {
+  Future<void> savePerformanceTake(PracticeRecording recording);
+}

@@ -38,6 +38,10 @@ dependencies:
   go_router: ^18.0.1
   drift: ^2.35.0
   drift_flutter: ^0.3.1
+  crypto: ^3.0.8
+  http: ^1.6.0
+  flutter_secure_storage: ^11.2.0
+  supabase_flutter: ^2.18.3
   uuid: ^4.6.0
   webview_flutter: ^4.14.1
   webview_flutter_android: ^4.14.1
@@ -68,6 +72,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/chords/standard_guitar_v1.json
+    - third_party/chords-db/LICENSE
 
   # To add assets to your application, add an assets section, like this:
   # assets:

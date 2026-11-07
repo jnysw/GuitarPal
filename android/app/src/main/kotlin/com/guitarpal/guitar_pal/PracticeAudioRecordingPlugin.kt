@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.media.AudioManager
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
@@ -24,6 +26,7 @@ class PracticeAudioRecordingPlugin(
 ) : MethodChannel.MethodCallHandler {
     private data class ActiveRecording(
         val recorder: MediaRecorder,
+        val performance: Boolean,
         val pendingFile: File,
         val finalFile: File,
         val relativePath: String,
@@ -54,6 +57,17 @@ class PracticeAudioRecordingPlugin(
             "requestPermission" -> requestPermission(result)
             "openAppSettings" -> openAppSettings(result)
             "start" -> start(call.argument<String>("recordingId"), result)
+            "startPerformance" -> start(call.argument<String>("recordingId"), result, true)
+            "performanceEnvironment" -> result.success(environment())
+            "recoverPerformance" -> {
+                try { result.success(recordingInfo(call.argument<String>("recordingId"))) }
+                catch (e: Throwable) { result.error("recording_not_found", e.message, null) }
+            }
+            "setPlaybackVolume" -> {
+                val volume = call.argument<Number>("volume")?.toFloat()
+                if (volume == null || !volume.isFinite() || volume !in 0f..1f) result.error("invalid_volume", "音量无效", null)
+                else { playbackPlayer?.setVolume(volume, volume); result.success(null) }
+            }
             "stop" -> stop(result)
             "cancel" -> {
                 cancelActiveRecording()
@@ -64,6 +78,7 @@ class PracticeAudioRecordingPlugin(
                 call.argument<String>("relativePath"),
                 call.argument<Number>("positionMilliseconds")?.toInt() ?: 0,
                 result,
+                call.argument<Number>("volume")?.toFloat() ?: 1f,
             )
             "pausePlayback" -> pausePlayback(result)
             "seekPlayback" -> seekPlayback(
@@ -108,7 +123,9 @@ class PracticeAudioRecordingPlugin(
     }
 
     fun onHostStop() {
-        cancelActiveRecording()
+        if (activeRecording?.performance == true) {
+            try { commitRecording() } catch (_: Throwable) { }
+        } else cancelActiveRecording()
         stopPlayback()
     }
 
@@ -121,7 +138,9 @@ class PracticeAudioRecordingPlugin(
             null,
         )
         pendingPermissionResult = null
-        cancelActiveRecording()
+        if (activeRecording?.performance == true) {
+            try { commitRecording() } catch (_: Throwable) { }
+        } else cancelActiveRecording()
         stopPlayback()
         channel.setMethodCallHandler(null)
     }
@@ -203,7 +222,7 @@ class PracticeAudioRecordingPlugin(
         }
     }
 
-    private fun start(recordingId: String?, result: MethodChannel.Result) {
+    private fun start(recordingId: String?, result: MethodChannel.Result, performance: Boolean = false) {
         if (permissionStatus() != permissionGranted) {
             result.error("microphone_permission_denied", "尚未获得麦克风权限", null)
             return
@@ -241,12 +260,13 @@ class PracticeAudioRecordingPlugin(
             }
             activeRecording = ActiveRecording(
                 recorder = recorder,
+                performance = performance,
                 pendingFile = pendingFile,
                 finalFile = finalFile,
                 relativePath = "$recordingDirectoryName/${finalFile.name}",
                 startedAtElapsedMilliseconds = SystemClock.elapsedRealtime(),
             )
-            result.success(null)
+            result.success(if (performance) mapOf("startedAtElapsedMs" to activeRecording!!.startedAtElapsedMilliseconds, "environment" to environment()) else null)
         } catch (error: Throwable) {
             try {
                 recorder?.release()
@@ -262,52 +282,55 @@ class PracticeAudioRecordingPlugin(
         }
     }
 
-    private fun stop(result: MethodChannel.Result) {
-        val active = activeRecording
-        if (active == null) {
-            result.error("not_recording", "当前没有正在进行的录音", null)
-            return
+    private fun environment(): Map<String, Any?> {
+        val manager = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        fun devices(flag: Int) = manager.getDevices(flag).map {
+            mapOf("id" to it.id, "type" to it.type, "name" to it.productName.toString())
         }
-        activeRecording = null
+        return mapOf("availableInputDevices" to devices(AudioManager.GET_DEVICES_INPUTS),
+            "availableOutputDevices" to devices(AudioManager.GET_DEVICES_OUTPUTS),
+            "actualRouteVerified" to false, "freeBytes" to recordingDirectory().usableSpace,
+            "elapsedRealtimeMs" to SystemClock.elapsedRealtime())
+    }
 
+    private fun recordingInfo(id: String?): Map<String, Any?> {
+        require(id != null && id.matches(safeRecordingId)) { "录音 ID 无效" }
+        val file = File(recordingDirectory(), "$id.m4a")
+        check(file.isFile && file.length() > 0) { "未找到可恢复的录音" }
+        val metadata = MediaMetadataRetriever()
+        val duration = try {
+            metadata.setDataSource(file.absolutePath)
+            metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        } finally { metadata.release() }
+        check(duration > 0) { "录音尚未完整写入" }
+        return mapOf("relativePath" to "$recordingDirectoryName/${file.name}",
+            "absolutePath" to file.absolutePath, "durationMilliseconds" to duration)
+    }
+
+    private fun stop(result: MethodChannel.Result) {
+        try { result.success(commitRecording()) }
+        catch (e: Throwable) { result.error("recording_stop_failed", e.message ?: "无法保存录音", null) }
+    }
+
+    private fun commitRecording(): Map<String, Any?> {
+        val active = activeRecording ?: throw IllegalStateException("当前没有正在进行的录音")
+        activeRecording = null
         try {
             active.recorder.stop()
-            val durationMilliseconds = (
-                SystemClock.elapsedRealtime() - active.startedAtElapsedMilliseconds
-            ).coerceAtLeast(1L)
+            val duration = (SystemClock.elapsedRealtime() - active.startedAtElapsedMilliseconds).coerceAtLeast(1L)
             active.recorder.release()
-            if (!active.pendingFile.isFile || active.pendingFile.length() <= 0L) {
-                throw IllegalStateException("录音文件为空")
-            }
+            check(active.pendingFile.isFile && active.pendingFile.length() > 0) { "录音文件为空" }
             if (!active.pendingFile.renameTo(active.finalFile)) {
-                active.pendingFile.inputStream().use { source ->
-                    active.finalFile.outputStream().use { target -> source.copyTo(target) }
-                }
-                if (!active.pendingFile.delete()) {
-                    active.finalFile.delete()
-                    throw IllegalStateException("无法提交录音文件")
-                }
+                active.pendingFile.copyTo(active.finalFile, overwrite = false)
+                check(active.pendingFile.delete()) { "无法提交录音文件" }
             }
-            result.success(
-                mapOf(
-                    "relativePath" to active.relativePath,
-                    "absolutePath" to active.finalFile.absolutePath,
-                    "durationMilliseconds" to durationMilliseconds,
-                ),
-            )
-        } catch (error: Throwable) {
-            try {
-                active.recorder.release()
-            } catch (_: Throwable) {
-                // Ignore release errors after an unsuccessful stop.
-            }
-            active.pendingFile.delete()
-            active.finalFile.delete()
-            result.error(
-                "recording_stop_failed",
-                error.message ?: "无法保存录音",
-                null,
-            )
+            return if (active.performance) recordingInfo(active.finalFile.nameWithoutExtension) else mapOf(
+                "relativePath" to active.relativePath, "absolutePath" to active.finalFile.absolutePath,
+                "durationMilliseconds" to duration)
+        } catch (e: Throwable) {
+            try { active.recorder.release() } catch (_: Throwable) { }
+            active.pendingFile.delete(); active.finalFile.delete()
+            throw e
         }
     }
 
@@ -338,7 +361,9 @@ class PracticeAudioRecordingPlugin(
         relativePath: String?,
         positionMilliseconds: Int,
         result: MethodChannel.Result,
+        volume: Float = 1f,
     ) {
+        if (!volume.isFinite() || volume !in 0f..1f) { result.error("invalid_volume", "音量无效", null); return }
         if (activeRecording != null) {
             result.error("recording_busy", "录音过程中不能回听", null)
             return
@@ -362,6 +387,7 @@ class PracticeAudioRecordingPlugin(
                 setDataSource(file.absolutePath)
                 prepare()
                 seekTo(positionMilliseconds.coerceIn(0, duration.coerceAtLeast(0)))
+                setVolume(volume, volume)
                 start()
             }
             playbackPlayer = player

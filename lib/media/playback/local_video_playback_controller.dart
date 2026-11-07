@@ -27,7 +27,28 @@ abstract interface class LocalVideoPlayerBridge {
   Future<void> dispose();
 }
 
-class MethodChannelLocalVideoPlayerBridge implements LocalVideoPlayerBridge {
+abstract interface class LocalVideoStemBridge {
+  Future<void> loadStems(
+    Map<String, String> paths,
+    int startMs,
+    int durationMs, {
+    bool preservePosition = false,
+    bool onlyIfPaused = false,
+    Map<String, double>? initialGains,
+  });
+  Future<void> setStemGains(Map<String, double> gains);
+  Future<void> clearStems();
+}
+
+abstract interface class LocalVideoStemPanBridge {
+  Future<void> setStemPans(Map<String, double> pans);
+}
+
+class MethodChannelLocalVideoPlayerBridge
+    implements
+        LocalVideoPlayerBridge,
+        LocalVideoStemBridge,
+        LocalVideoStemPanBridge {
   MethodChannelLocalVideoPlayerBridge(int viewId)
     : _channel = MethodChannel('com.guitarpal/local_video_player/$viewId') {
     _channel.setMethodCallHandler(_onMethodCall);
@@ -53,6 +74,31 @@ class MethodChannelLocalVideoPlayerBridge implements LocalVideoPlayerBridge {
 
   @override
   Future<void> play() => _channel.invokeMethod<void>('play');
+
+  @override
+  Future<void> loadStems(
+    Map<String, String> paths,
+    int startMs,
+    int durationMs, {
+    bool preservePosition = false,
+    bool onlyIfPaused = false,
+    Map<String, double>? initialGains,
+  }) => _channel.invokeMethod<void>('loadStems', {
+    'tracks': paths.entries.map((e) => {'id': e.key, 'path': e.value}).toList(),
+    'startMs': startMs,
+    'durationMs': durationMs,
+    'preservePosition': preservePosition,
+    'onlyIfPaused': onlyIfPaused,
+    'gains': initialGains,
+  });
+  @override
+  Future<void> setStemGains(Map<String, double> gains) =>
+      _channel.invokeMethod<void>('setStemGains', {'gains': gains});
+  @override
+  Future<void> setStemPans(Map<String, double> pans) =>
+      _channel.invokeMethod<void>('setStemPans', {'pans': pans});
+  @override
+  Future<void> clearStems() => _channel.invokeMethod<void>('clearStems');
 
   @override
   Future<void> pause() => _channel.invokeMethod<void>('pause');
@@ -106,6 +152,7 @@ class LocalVideoPlaybackController extends ChangeNotifier {
 
   bool _loopSeekInProgress = false;
   bool _disposed = false;
+  bool stemsLoaded = false, stemsActive = false, _playIntent = false;
 
   void onNativeState(Map<String, Object?> state) {
     if (_disposed) return;
@@ -134,16 +181,68 @@ class LocalVideoPlaybackController extends ChangeNotifier {
       volume = normalizePlaybackVolume(reportedVolume.toDouble());
     }
     final error = state['error'];
+    stemsLoaded = state['stemsLoaded'] == true;
+    stemsActive = state['stemsActive'] == true;
     playerError = error is String && error.isNotEmpty ? error : null;
-    _applyLoopIfNeeded();
+    _applyLoopIfNeeded(resumeAtEnd: state['ended'] == true && _playIntent);
     _notify();
   }
 
   Future<void> requestSnapshot() => _run(_bridge.requestSnapshot);
 
-  Future<void> play() => _run(_bridge.play);
+  Future<void> play() {
+    _playIntent = true;
+    return _run(_bridge.play);
+  }
 
-  Future<void> pause() => _run(_bridge.pause);
+  Future<void> pause() {
+    _playIntent = false;
+    return _run(_bridge.pause);
+  }
+
+  Future<void> loadStems(
+    Map<String, String> paths,
+    int startMs,
+    int durationMs, {
+    bool preservePosition = false,
+    bool onlyIfPaused = false,
+    Map<String, double>? initialGains,
+  }) async {
+    final bridge = _bridge;
+    if (bridge is! LocalVideoStemBridge) throw UnsupportedError('视频音轨切换不可用');
+    if (!onlyIfPaused) await pause();
+    await (bridge as LocalVideoStemBridge).loadStems(
+      paths,
+      startMs,
+      durationMs,
+      preservePosition: preservePosition,
+      onlyIfPaused: onlyIfPaused,
+      initialGains: initialGains,
+    );
+    await requestSnapshot();
+  }
+
+  Future<void> setStemGains(Map<String, double> gains) async {
+    final bridge = _bridge;
+    if (bridge is! LocalVideoStemBridge) throw UnsupportedError('视频音轨控制不可用');
+    await (bridge as LocalVideoStemBridge).setStemGains(gains);
+  }
+
+  Future<void> clearStems() async {
+    final bridge = _bridge;
+    if (bridge is LocalVideoStemBridge) {
+      await pause();
+      await (bridge as LocalVideoStemBridge).clearStems();
+      await requestSnapshot();
+    }
+  }
+
+  bool get supportsStemPan => _bridge is LocalVideoStemPanBridge;
+  Future<void> setStemPans(Map<String, double> pans) async {
+    final bridge = _bridge;
+    if (bridge is! LocalVideoStemPanBridge) throw UnsupportedError('声像控制不可用');
+    await (bridge as LocalVideoStemPanBridge).setStemPans(pans);
+  }
 
   void previewPosition(Duration value) {
     position = _clampPosition(value);
@@ -217,12 +316,12 @@ class LocalVideoPlaybackController extends ChangeNotifier {
     await seek(range.start);
   }
 
-  void _applyLoopIfNeeded() {
+  void _applyLoopIfNeeded({bool resumeAtEnd = false}) {
     if (_loopSeekInProgress) return;
     final target = loopController.seekTargetFor(position);
     if (target == null) return;
     _loopSeekInProgress = true;
-    unawaited(_seekForLoop(target, resume: isPlaying));
+    unawaited(_seekForLoop(target, resume: isPlaying || resumeAtEnd));
   }
 
   Future<void> _seekForLoop(Duration target, {required bool resume}) async {

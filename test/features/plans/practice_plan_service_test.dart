@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:guitar_pal/domain/practice_plan/calendar_date.dart';
 import 'package:guitar_pal/domain/practice_plan/practice_plan.dart';
 import 'package:guitar_pal/domain/practice_plan/practice_plan_repository.dart';
+import 'package:guitar_pal/domain/practice_plan/reminder_time.dart';
 import 'package:guitar_pal/domain/practice_segment/practice_segment.dart';
 import 'package:guitar_pal/domain/practice_segment/practice_segment_repository.dart';
 import 'package:guitar_pal/domain/practice_source/practice_source.dart';
@@ -91,6 +92,37 @@ void main() {
       expect(updated.goal.targetDuration, const Duration(minutes: 20));
       expect(updated.repeatWeekdays, {6, 7});
       expect(planRepository.plans, [updated]);
+    },
+  );
+
+  test(
+    'updates and clears a reminder without changing other plan fields',
+    () async {
+      final original = PracticePlan(
+        id: 'plan-reminder',
+        name: '晚间练习',
+        sourceId: 'source-1',
+        goal: const PracticeGoal.loops(5),
+        startDate: startDate,
+        endDate: endDate,
+        repeatWeekdays: const {1, 3, 5},
+        createdAt: DateTime.utc(2026, 10, 1),
+        updatedAt: DateTime.utc(2026, 10, 1),
+      );
+      await planRepository.save(original);
+
+      final enabled = await service.updateReminder(
+        original,
+        ReminderTime(hour: 20, minute: 30),
+      );
+      expect(enabled.reminderTime?.hhmm, '20:30');
+      expect(enabled.name, original.name);
+      expect(enabled.repeatWeekdays, original.repeatWeekdays);
+      expect(enabled.updatedAt, now);
+
+      final disabled = await service.updateReminder(enabled, null);
+      expect(disabled.reminderTime, isNull);
+      expect(planRepository.plans.single, disabled);
     },
   );
 
@@ -280,6 +312,9 @@ final class _MemorySourceRepository implements PracticeSourceRepository {
 
 final class _MemorySegmentRepository implements PracticeSegmentRepository {
   final List<PracticeSegment> segments = [];
+
+  @override
+  Stream<List<PracticeSegment>> watchAll() => Stream.value(List.of(segments));
 
   @override
   Future<void> delete(String id) async {

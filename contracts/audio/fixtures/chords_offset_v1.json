@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "job_id": "00000000-0000-4000-8000-000000000001",
+  "status": "partially_succeeded",
+  "asset_id": "00000000-0000-4000-8000-000000000002",
+  "media_revision_id": "00000000-0000-4000-8000-000000000003",
+  "timebase": "source_media_ms",
+  "coverage": {"start_ms": 30000, "end_ms": 50000},
+  "mapping": {"source_offset_ms": 30000, "trim_start_ms": 0},
+  "chords": {
+    "analysis_id": "00000000-0000-4000-8000-000000000004",
+    "revision": 1,
+    "profile_id": "contract_fixture_only",
+    "input_kind": "original",
+    "key": null,
+    "tempo": null,
+    "confidence_method": null,
+    "segments": [
+      {"id": "s1", "start_ms": 30000, "end_ms": 32000, "raw_label": "N", "chord_key": "N", "display_label": "无和弦", "roman": null, "confidence": null, "origin": "machine"},
+      {"id": "s2", "start_ms": 32000, "end_ms": 35000, "raw_label": "C:maj", "chord_key": "C:maj", "display_label": "C", "roman": null, "confidence": null, "origin": "machine"},
+      {"id": "s3", "start_ms": 36000, "end_ms": 40000, "raw_label": "A:min", "chord_key": "A:min", "display_label": "Am", "roman": null, "confidence": null, "origin": "machine"},
+      {"id": "s4", "start_ms": 40000, "end_ms": 45000, "raw_label": "X", "chord_key": "X", "display_label": "未知", "roman": null, "confidence": null, "origin": "machine"},
+      {"id": "s5", "start_ms": 45000, "end_ms": 50000, "raw_label": "C:maj/E", "chord_key": "C:maj/E", "display_label": "C/E", "roman": null, "confidence": null, "origin": "machine"}
+    ],
+    "provenance": {
+      "code_commit": "0000000000000000000000000000000000000000",
+      "checkpoint_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "preprocess_version": "fixture-only",
+      "postprocess_version": "fixture-only",
+      "vocabulary_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "separation": {"status": "failed", "error_code": "MODEL_RESOURCE_EXHAUSTED", "artifacts": []},
+  "warnings": ["CHORD_CONFIDENCE_UNAVAILABLE", "CONTRACT_FIXTURE_NOT_INFERENCE"]
+}

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:uuid/uuid.dart';
 
 import '../../../domain/practice_plan/calendar_date.dart';
@@ -96,7 +98,20 @@ class PracticePlaybackSessionRecorder {
   }
 
   Future<PracticeSession?> finish() {
-    return _finishFuture ??= _finish();
+    final current = _finishFuture;
+    if (current != null) return current;
+    final attempt = _finish();
+    _finishFuture = attempt;
+    // A failed write must be retryable with the same session ID and totals.
+    unawaited(
+      attempt.then<void>(
+        (_) {},
+        onError: (Object error, StackTrace stack) {
+          if (identical(_finishFuture, attempt)) _finishFuture = null;
+        },
+      ),
+    );
+    return attempt;
   }
 
   Future<PracticeSession?> _finish() async {

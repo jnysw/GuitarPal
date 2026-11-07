@@ -149,6 +149,9 @@ final class _MemorySegmentRepository implements PracticeSegmentRepository {
   final List<PracticeSegment> segments = [];
 
   @override
+  Stream<List<PracticeSegment>> watchAll() => Stream.value(List.of(segments));
+
+  @override
   Future<void> delete(String id) async {
     segments.removeWhere((segment) => segment.id == id);
   }

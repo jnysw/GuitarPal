@@ -82,6 +82,18 @@ class PracticePlanService {
 
   Future<void> delete(PracticePlan plan) => _repository.delete(plan.id);
 
+  Future<PracticePlan> updateReminder(
+    PracticePlan plan,
+    ReminderTime? reminderTime,
+  ) async {
+    final updated = plan.copyWith(
+      reminderTime: reminderTime,
+      updatedAt: _clock().toUtc(),
+    );
+    await _repository.save(updated);
+    return updated;
+  }
+
   void _validateInput(
     String name,
     PracticeGoal goal,
