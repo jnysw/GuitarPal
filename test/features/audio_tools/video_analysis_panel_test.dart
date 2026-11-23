@@ -255,6 +255,7 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       await tester.tap(find.text('与视频时间校准'));
+      await _until(tester, () => find.byType(TextFormField).evaluate().isNotEmpty);
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextFormField), '0');
       await tester.tap(find.text('确认'));

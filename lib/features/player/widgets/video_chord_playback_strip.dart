@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../media/playback/local_video_playback_controller.dart';
 import '../../chords/chord_providers.dart';
+import '../../segments/presentation/practice_segment_timecode.dart';
 import 'chord_practice_sheet.dart';
 import 'scrolling_chord_lane.dart';
 import '../../audio_tools/algorithm_providers.dart';
@@ -28,7 +29,7 @@ class VideoChordPlaybackStrip extends ConsumerStatefulWidget {
   });
   final String sourceId, path;
   final LocalVideoPlaybackController controller;
-  final VoidCallback onCalibrate;
+  final ValueChanged<AlgorithmTaskRecord> onCalibrate;
   final bool compact, enabled, showTimeline;
   @override
   ConsumerState<VideoChordPlaybackStrip> createState() =>
@@ -38,7 +39,8 @@ class VideoChordPlaybackStrip extends ConsumerStatefulWidget {
 class _VideoChordPlaybackStripState
     extends ConsumerState<VideoChordPlaybackStrip> {
   List<AlgorithmTaskRecord>? _cachedTasks;
-  VideoChordPlayback? _playback;
+  final _results =
+      <({AlgorithmTaskRecord task, VideoChordPlayback playback})>[];
   String? _cachedPath, _cachedSource;
 
   @override
@@ -52,8 +54,9 @@ class _VideoChordPlaybackStripState
       _cachedTasks = tasks;
       _cachedPath = widget.path;
       _cachedSource = widget.sourceId;
-      _playback = null;
-      // Newest valid result for this file. Failed/pending tasks do not hide usable results.
+      _results.clear();
+      FileStat? stat;
+      final ranges = <(int, int)>{};
       for (final task in tasks) {
         if (task.linkedSourceId != widget.sourceId ||
             task.operation != AlgorithmOperation.chords ||
@@ -68,10 +71,12 @@ class _VideoChordPlaybackStripState
           if (!binding.matches(
             widget.sourceId,
             widget.path,
-            File(widget.path).statSync(),
+            stat ??= File(widget.path).statSync(),
           )) {
             continue;
           }
+          final range = (binding.startMs, binding.endMs);
+          if (ranges.contains(range)) continue;
           final result = LegacyChordResult.fromJson(
             algorithmObject(jsonDecode(task.resultJson!)),
           );
@@ -80,22 +85,39 @@ class _VideoChordPlaybackStripState
                   binding.endMs + 20) {
             continue;
           }
-          _playback = VideoChordPlayback(result, binding);
-          break;
+          ranges.add(range);
+          _results.add((
+            task: task,
+            playback: VideoChordPlayback(result, binding),
+          ));
         } on Object {
           continue;
         }
       }
     }
-    final playback = _playback;
-    if (playback == null) return const SizedBox.shrink();
+    if (_results.isEmpty) return const SizedBox.shrink();
     final showDiagrams =
         ref.watch(chordPreferencesProvider).asData?.value.showDiagrams ?? false;
-    final data = playback;
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
         final position = widget.controller.position.inMilliseconds;
+        final loopController = widget.controller.loopController;
+        final loop = loopController.enabled ? loopController.range : null;
+        final covering = _results.where((entry) {
+          final binding = entry.playback.binding;
+          return position >= binding.startMs && position < binding.endMs;
+        });
+        final matchingLoop = loop == null
+            ? null
+            : covering.where((entry) {
+                final binding = entry.playback.binding;
+                return binding.startMs == loop.start.inMilliseconds &&
+                    binding.endMs == loop.end.inMilliseconds;
+              }).firstOrNull;
+        final selected = matchingLoop ?? covering.firstOrNull ?? _results.first;
+        final data = selected.playback;
+        final binding = data.binding;
         final current = data.current(position);
         final label = current?.displayLabel ?? '—';
         final colors = Theme.of(context).colorScheme;
@@ -137,6 +159,16 @@ class _VideoChordPlaybackStripState
                                 : '按分析区间起点显示 · 静音偏移待校准',
                             style: const TextStyle(fontSize: 11),
                           ),
+                          if (_results.length > 1)
+                            Text(
+                              binding.startMs == 0 &&
+                                      binding.endMs == binding.sourceDurationMs
+                                  ? '整段分析'
+                                  : '${formatPracticeTimecode(Duration(milliseconds: binding.startMs))}–${formatPracticeTimecode(Duration(milliseconds: binding.endMs))} 的分析',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11),
+                            ),
                         ],
                       ),
                     ),
@@ -172,7 +204,9 @@ class _VideoChordPlaybackStripState
                       icon: const Icon(Icons.back_hand_outlined),
                     ),
                     TextButton(
-                      onPressed: widget.enabled ? widget.onCalibrate : null,
+                      onPressed: widget.enabled
+                          ? () => widget.onCalibrate(selected.task)
+                          : null,
                       child: const Text('校准'),
                     ),
                   ],

@@ -35,6 +35,7 @@ class VideoAnalysisPanel extends ConsumerStatefulWidget {
     this.planId,
     this.enabled = true,
     this.requestedOperation,
+    this.requestedChordCalibration,
     this.requestRevision = 0,
     this.onSaveLoop,
     this.recordingActive = false,
@@ -47,6 +48,7 @@ class VideoAnalysisPanel extends ConsumerStatefulWidget {
   final String? planId;
   final bool enabled;
   final AlgorithmOperation? requestedOperation;
+  final AlgorithmTaskRecord? requestedChordCalibration;
   final int requestRevision;
   final VoidCallback? onSaveLoop;
   final bool recordingActive, embedded;
@@ -149,13 +151,18 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       _operation = widget.requestedOperation!;
       _userNavigated = true;
       _open(true);
+      final revision = widget.requestRevision;
+      final calibration = widget.requestedChordCalibration;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
+        if (mounted && widget.requestRevision == revision) {
           if (!widget.embedded) _expansion.expand();
           Scrollable.ensureVisible(
             context,
             duration: const Duration(milliseconds: 200),
           );
+          if (calibration != null && widget.enabled && !_busy) {
+            unawaited(_calibrate(calibration));
+          }
         }
       });
     }
@@ -1175,10 +1182,24 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   }
 
   Future<void> _calibrate(AlgorithmTaskRecord task) async {
+    if (_confirming) return;
+    _confirming = true;
+    try {
+      await _showChordCalibration(task);
+    } on Object catch (error) {
+      _message(_errorMessage(error, '无法打开和弦校准，请重试'));
+    } finally {
+      _confirming = false;
+    }
+  }
+
+  Future<void> _showChordCalibration(AlgorithmTaskRecord task) async {
     final binding = _binding(task);
     final result = LegacyChordResult.fromJson(
       algorithmObject(jsonDecode(task.resultJson!)),
     );
+    await _verify(binding);
+    if (!mounted || !widget.enabled || widget.recordingActive) return;
     await widget.controller.pause();
     if (!mounted) return;
     final value = await showDialog<String>(

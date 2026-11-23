@@ -12,6 +12,7 @@ import 'package:guitar_pal/features/audio_tools/domain/stem_mix_settings.dart';
 import 'package:guitar_pal/features/player/widgets/video_chord_playback_strip.dart';
 import 'package:guitar_pal/features/player/widgets/video_stem_mixer.dart';
 import 'package:guitar_pal/media/playback/local_video_playback_controller.dart';
+import 'package:guitar_pal/media/playback/loop_controller.dart';
 
 void main() {
   testWidgets(
@@ -25,43 +26,69 @@ void main() {
             .readAsStringSync(),
       ) as Map<String, Object?>;
       final now = DateTime.now();
-      final task = AlgorithmTaskRecord(
-        id: 'task',
-        endpoint: 'https://algorithm.example',
-        inputPath: '/input',
-        inputName: 'input.wav',
-        inputSizeBytes: 1,
-        inputDurationMs: 8000,
-        ownsInput: true,
-        state: AlgorithmTaskState.completed,
-        createdAt: now,
-        updatedAt: now,
-        failures: 0,
-        operation: AlgorithmOperation.chords,
-        linkedSourceId: 's',
-        resultJson: jsonEncode(result),
-        mediaBindingJson: jsonEncode(
-          VideoAnalysisBinding(
-            sourceId: 's',
-            path: file.path,
-            sourceBytes: stat.size,
-            modifiedMs: stat.modified.millisecondsSinceEpoch,
-            sourceDurationMs: 8000,
-            startMs: 0,
-            durationMs: 8000,
-            inputSha256: 'a' * 64,
-            waveform: [],
-          ).toJson(),
-        ),
-      );
+      AlgorithmTaskRecord task(String id, int start, int length, Object data) =>
+          AlgorithmTaskRecord(
+            id: id,
+            endpoint: 'https://algorithm.example',
+            inputPath: '/input',
+            inputName: 'input.wav',
+            inputSizeBytes: 1,
+            inputDurationMs: length,
+            ownsInput: true,
+            state: AlgorithmTaskState.completed,
+            createdAt: now,
+            updatedAt: now,
+            failures: 0,
+            operation: AlgorithmOperation.chords,
+            linkedSourceId: 's',
+            resultJson: jsonEncode(data),
+            mediaBindingJson: jsonEncode(
+              VideoAnalysisBinding(
+                sourceId: 's',
+                path: file.path,
+                sourceBytes: stat.size,
+                modifiedMs: stat.modified.millisecondsSinceEpoch,
+                sourceDurationMs: 8000,
+                startMs: start,
+                durationMs: length,
+                inputSha256: 'a' * 64,
+                waveform: [],
+              ).toJson(),
+            ),
+          );
+      final whole = task('whole', 0, 8000, result);
+      final fragment = task('fragment', 2000, 2000, {
+        ...result,
+        'duration_seconds': 2,
+        'segments': [
+          {'chord': 'G', 'roman': 'V', 'start': 0, 'end': 2, 'duration': 2},
+        ],
+      });
+      final olderFragment = task('older-fragment', 2000, 2000, {
+        ...result,
+        'duration_seconds': 2,
+        'segments': [
+          {'chord': 'D', 'roman': 'V', 'start': 0, 'end': 2, 'duration': 2},
+        ],
+      });
+      final laterFragment = task('later-fragment', 5000, 2000, {
+        ...result,
+        'duration_seconds': 2,
+        'segments': [
+          {'chord': 'F', 'roman': 'IV', 'start': 0, 'end': 2, 'duration': 2},
+        ],
+      });
       final bridge = _Bridge();
       final controller = LocalVideoPlaybackController(bridge);
       await controller.requestSnapshot();
-      var calibrationOpened = false;
+      String? calibrationTarget;
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            algorithmTasksProvider.overrideWith((_) => Stream.value([task])),
+            algorithmTasksProvider.overrideWith(
+              (_) =>
+                  Stream.value([laterFragment, whole, fragment, olderFragment]),
+            ),
           ],
           child: MaterialApp(
             home: Scaffold(
@@ -72,7 +99,7 @@ void main() {
                     sourceId: 's',
                     path: file.path,
                     controller: controller,
-                    onCalibrate: () => calibrationOpened = true,
+                    onCalibrate: (task) => calibrationTarget = task.id,
                   ),
                 ),
               ),
@@ -87,6 +114,18 @@ void main() {
       await controller.setSpeed(1.37);
       await tester.pumpAndSettle();
       expect(find.text('当前和弦 Am'), findsOneWidget);
+      await controller.activateLoopRange(
+        LoopRange(
+          start: const Duration(seconds: 2),
+          end: const Duration(seconds: 4),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('当前和弦 G'), findsOneWidget);
+      expect(find.text('0:02–0:04 的分析'), findsOneWidget);
+      await tester.tap(find.text('校准'));
+      expect(calibrationTarget, 'fragment');
+      controller.clearLoop();
       await controller.seek(
         Duration.zero,
       ); // Same source-time path used for A-B wrap.
@@ -94,7 +133,13 @@ void main() {
       expect(find.text('当前和弦 C'), findsOneWidget);
       await tester.tap(find.text('校准'));
       await tester.pumpAndSettle();
-      expect(calibrationOpened, isTrue);
+      expect(calibrationTarget, 'whole');
+      await controller.seek(const Duration(milliseconds: 5500));
+      await tester.pumpAndSettle();
+      expect(find.text('当前和弦 F'), findsOneWidget);
+      await controller.seek(const Duration(seconds: 7));
+      await tester.pumpAndSettle();
+      expect(find.text('整段分析'), findsOneWidget);
       await controller.seek(const Duration(seconds: 8));
       await tester.pumpAndSettle();
       expect(find.text('当前和弦 —'), findsOneWidget);

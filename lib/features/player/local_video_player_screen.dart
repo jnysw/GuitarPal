@@ -20,6 +20,7 @@ import 'widgets/video_analysis_panel.dart';
 import 'widgets/practice_workspace.dart';
 import 'widgets/video_chord_playback_strip.dart';
 import '../audio_tools/domain/legacy_algorithm_models.dart';
+import '../audio_tools/domain/algorithm_task.dart';
 import '../segments/practice_segment_providers.dart';
 import '../segments/presentation/practice_segment_editor_sheet.dart';
 import '../segments/presentation/practice_segment_timecode.dart';
@@ -52,6 +53,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
   bool _fullscreenTransitionInProgress = false;
   bool _recordingWorkflowActive = false;
   AlgorithmOperation? _requestedAnalysis;
+  AlgorithmTaskRecord? _requestedChordCalibration;
   int _analysisRevision = 0;
   int _workspaceIndex = 0;
 
@@ -63,6 +65,18 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
     } on UnsupportedError {
       return null;
     }
+  }
+
+  void _openAnalysis(
+    AlgorithmOperation operation, {
+    AlgorithmTaskRecord? calibrate,
+  }) {
+    setState(() {
+      _workspaceIndex = 1;
+      _requestedAnalysis = operation;
+      _requestedChordCalibration = calibrate;
+      _analysisRevision++;
+    });
   }
 
   @override
@@ -431,11 +445,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                 !_recordingWorkflowActive &&
                                 _controller?.isReady == true,
                             icon: const Icon(Icons.auto_awesome),
-                            onSelected: (operation) => setState(() {
-                              _workspaceIndex = 1;
-                              _requestedAnalysis = operation;
-                              _analysisRevision++;
-                            }),
+                            onSelected: _openAnalysis,
                             itemBuilder: (_) => const [
                               PopupMenuItem(
                                 value: AlgorithmOperation.chords,
@@ -553,14 +563,10 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                           controller: _controller!,
                           compact: true,
                           enabled: !_recordingWorkflowActive,
-                          onCalibrate: () async {
+                          onCalibrate: (task) async {
                             await _toggleFullscreen();
                             if (mounted) {
-                              setState(() {
-                                _workspaceIndex = 1;
-                                _requestedAnalysis = AlgorithmOperation.chords;
-                                _analysisRevision++;
-                              });
+                              _openAnalysis(AlgorithmOperation.chords, calibrate: task);
                             }
                           },
                         ),
@@ -591,12 +597,10 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                         controller: _controller!,
                                         showTimeline: true,
                                         enabled: !_recordingWorkflowActive,
-                                        onCalibrate: () => setState(() {
-                                          _workspaceIndex = 1;
-                                          _requestedAnalysis =
-                                              AlgorithmOperation.chords;
-                                          _analysisRevision++;
-                                        }),
+                                        onCalibrate: (task) => _openAnalysis(
+                                          AlgorithmOperation.chords,
+                                          calibrate: task,
+                                        ),
                                       )
                                     : null,
                                 controller: _controller!,
@@ -617,6 +621,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                             _controller!.duration >
                                                 Duration.zero,
                                         requestedOperation: _requestedAnalysis,
+                                        requestedChordCalibration: _requestedChordCalibration,
                                         requestRevision: _analysisRevision,
                                         onSaveLoop: _saveCurrentLoop,
                                         recordingActive:
