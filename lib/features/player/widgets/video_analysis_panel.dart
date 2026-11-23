@@ -62,6 +62,8 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       _foreground = true,
       _useRange = false;
   bool _confirming = false;
+  bool _preparingAnalysis = false;
+  int _preparationRevision = 0;
   bool _choosingStems = false;
   final _expansion = ExpansibleController();
   AlgorithmOperation _operation = AlgorithmOperation.chords;
@@ -120,6 +122,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   void didUpdateWidget(covariant VideoAnalysisPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
+      _cancelPreparation();
       _downloadCancellation?.cancel();
       _downloadCancellation = null;
       _networkDownload = false;
@@ -132,6 +135,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       unawaited(_restoreSelection());
     }
     if (widget.recordingActive && !oldWidget.recordingActive) {
+      _cancelPreparation();
       _cancelStemLoad(_saved == null ? '录音期间使用视频原声' : '录音期间使用视频原声，分轨设置已保留');
     }
     if (widget.enabled && _pendingRestore != null && !widget.recordingActive) {
@@ -379,6 +383,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   }
 
   Future<void> _prepareAndSubmit() async {
+    final preparation = _preparationRevision;
     if (_endpoint.isEmpty) {
       await (_configurationFuture ??= _resolveConfiguration());
       if (!mounted || _endpoint.isEmpty) return;
@@ -390,6 +395,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     final planId = widget.planId;
     final useRange = _useRange;
     bool canContinue() =>
+        preparation == _preparationRevision &&
         _foreground &&
         widget.enabled &&
         !widget.recordingActive &&
@@ -551,6 +557,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     bool handedOff = false;
     setState(() {
       _busy = true;
+      _preparingAnalysis = true;
       _stage = '正在连接分析服务…';
       _serviceNotice = null;
       _progress = null;
@@ -592,7 +599,10 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         waveform: extracted.waveform,
       );
       final now = DateTime.now().toUtc();
-      setState(() => _stage = '正在上传音频…');
+      setState(() {
+        _preparingAnalysis = false;
+        _stage = '正在上传音频…';
+      });
       await service.submit(
         AlgorithmTaskRecord(
           id: taskId,
@@ -623,6 +633,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       handedOff = true;
       unawaited(_refresh());
     } on Object catch (e) {
+      if (preparation != _preparationRevision) return;
       try {
         handedOff = await repository.get(taskId) != null;
       } on Object {
@@ -640,11 +651,19 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
       if (mounted && controller == widget.controller) {
         setState(() {
           _busy = false;
+          _preparingAnalysis = false;
           _stage = '';
           _progress = null;
         });
       }
     }
+  }
+
+  void _cancelPreparation() {
+    if (!_preparingAnalysis) return;
+    _preparationRevision++;
+    _preparingAnalysis = false;
+    _stage = '正在结束音频准备…';
   }
 
   VideoAnalysisBinding _binding(AlgorithmTaskRecord task) =>
@@ -1241,6 +1260,9 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground && _preparingAnalysis) {
+      setState(_cancelPreparation);
+    }
     if (!_foreground && _loadingStems) {
       setState(() => _cancelStemLoad('恢复已暂停，可重新选择分轨；已下载文件保留'));
     }
@@ -1340,6 +1362,13 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
+          if (_preparingAnalysis)
+            TextButton.icon(
+              key: const Key('video_cancel_analysis_preparation'),
+              onPressed: () => setState(_cancelPreparation),
+              icon: const Icon(Icons.close),
+              label: const Text('取消本次分析'),
+            ),
           if (_networkDownload && _downloadCancellation != null)
             TextButton.icon(
               key: const Key('video_pause_stem_download'),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -49,6 +50,7 @@ void main() {
       );
       final api = _Api();
       final extractor = _Extractor();
+      final importer = _Importer();
       final source = domain.PracticeSource(
         id: 'source',
         platform: domain.SourcePlatform.local,
@@ -66,6 +68,7 @@ void main() {
               'http://100.80.90.10:8000',
             ),
             videoAudioExtractorProvider.overrideWithValue(extractor),
+            algorithmAudioImportProvider.overrideWithValue(importer),
             algorithmTaskServiceProvider.overrideWithValue(
               AlgorithmTaskService(
                 repository,
@@ -155,6 +158,58 @@ void main() {
         find.byKey(const Key('video_analysis_retry_connection')),
       );
       await _until(tester, () => find.text('分析服务已连接').evaluate().isNotEmpty);
+      for (final background in [false, true]) {
+        final ready = Completer<void>();
+        extractor.ready = ready;
+        final calls = extractor.calls;
+        await tester.tap(find.byKey(const Key('video_analysis_submit')));
+        await _until(
+          tester,
+          () => find
+              .byKey(const Key('video_analysis_confirm'))
+              .evaluate()
+              .isNotEmpty,
+        );
+        await tester.tap(find.byKey(const Key('video_analysis_confirm')));
+        await _until(tester, () => extractor.calls == calls + 1);
+        if (background) {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.paused,
+          );
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          await tester.pump();
+        } else {
+          final cancel = find.byKey(
+            const Key('video_cancel_analysis_preparation'),
+          );
+          await tester.ensureVisible(cancel);
+          await tester.tap(cancel);
+        }
+        await tester.pump();
+        expect(find.text('正在结束音频准备…'), findsOneWidget);
+        expect(api.uploads, 0);
+        ready.complete();
+        final submit = find.byKey(const Key('video_analysis_submit'));
+        await _until(
+          tester,
+          () => tester.widget<FilledButton>(submit).onPressed != null,
+        );
+        expect(api.uploads, 0);
+        expect(importer.deleted.length, calls + 1);
+        expect(controller.isPlaying, isTrue);
+        expect(
+          (await tester.runAsync(
+            () => database.select(database.algorithmTasks).get(),
+          ))!,
+          isEmpty,
+        );
+      }
+      extractor.ready = null;
+      await tester.ensureVisible(
+        find.byKey(const Key('video_analysis_submit')),
+      );
       await tester.tap(find.byKey(const Key('video_analysis_submit')));
       await _until(
         tester,
@@ -177,12 +232,12 @@ void main() {
       await tester.tap(submit);
       await _until(tester, () => find.text('这个区间已提交分析').evaluate().isNotEmpty);
       expect(find.byKey(const Key('video_analysis_confirm')), findsNothing);
-      expect(extractor.calls, 1);
+      expect(extractor.calls, 3);
       expect(api.uploads, 1);
       api.completed = true;
       await tester.tap(find.text('查询进度'));
       await _until(tester, () => find.text('与视频时间校准').evaluate().isNotEmpty);
-      expect(extractor.calls, 1);
+      expect(extractor.calls, 3);
       expect(api.uploads, 1);
       final task = (await tester.runAsync(
         () => database
@@ -229,6 +284,7 @@ void main() {
 
 class _Extractor extends VideoAudioExtractor {
   int calls = 0;
+  Completer<void>? ready;
   @override
   Future<ExtractedVideoAudio> extract(
     String path,
@@ -238,6 +294,7 @@ class _Extractor extends VideoAudioExtractor {
   }) async {
     expect(sourceDurationMs, 8000);
     calls++;
+    await ready?.future;
     return ExtractedVideoAudio(
       const AlgorithmAudioInput(
         path: '/private/extracted.wav',
@@ -248,6 +305,18 @@ class _Extractor extends VideoAudioExtractor {
       'a' * 64,
       [0, .5, 1],
     );
+  }
+}
+
+class _Importer implements AlgorithmAudioImport {
+  final deleted = <String>[];
+
+  @override
+  Future<AlgorithmAudioInput?> pickAudio() async => null;
+
+  @override
+  Future<void> deleteInput(String path) async {
+    deleted.add(path);
   }
 }
 
