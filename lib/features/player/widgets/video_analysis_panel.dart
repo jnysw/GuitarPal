@@ -979,6 +979,27 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     }
   }
 
+  Future<void> _exportStems(
+    AlgorithmTaskRecord task,
+    LegacySeparationResult result,
+  ) async {
+    if (_busy || _choosingStems || !widget.enabled || widget.recordingActive) {
+      return;
+    }
+    _choosingStems = true;
+    try {
+      await showVideoStemExport(
+        context: context,
+        taskId: task.id,
+        result: result,
+        store: ref.read(algorithmStemStoreProvider),
+        title: widget.source.title,
+      );
+    } finally {
+      _choosingStems = false;
+    }
+  }
+
   Widget _mixer([StateSetter? refreshSheet]) => VideoStemMixer(
     controls: _currentSelection().activeControls,
     master: widget.controller.volume,
@@ -1581,6 +1602,15 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
                       : () => _chooseStems(task),
                   icon: const Icon(Icons.playlist_add_check),
                   label: Text(expired ? '选择本机音轨' : '选择音轨与下载'),
+                ),
+              if (separation != null)
+                TextButton.icon(
+                  key: Key('video_export_stems_${task.id}'),
+                  onPressed: _busy || !widget.enabled || widget.recordingActive
+                      ? null
+                      : () => _exportStems(task, separation),
+                  icon: const Icon(Icons.save_alt),
+                  label: const Text('导出音轨'),
                 ),
               if (task.remoteJobId != null && task.resultJson == null)
                 TextButton(

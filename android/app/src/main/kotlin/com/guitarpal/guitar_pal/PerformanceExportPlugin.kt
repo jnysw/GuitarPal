@@ -24,6 +24,7 @@ internal class PerformanceExportPlugin(private val activity: Activity, messenger
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val root = File(activity.filesDir, "performance_exports").apply { mkdirs() }
+    private val stemExportRoot = File(root, "stems")
     private val scratch = File(activity.cacheDir, "performance_export_work").apply { mkdirs() }
     @Volatile private var cancelled = AtomicBoolean(false)
     @Volatile private var busy = false
@@ -37,6 +38,7 @@ internal class PerformanceExportPlugin(private val activity: Activity, messenger
         channel.setMethodCallHandler(this)
         val before = System.currentTimeMillis() - 7L * 24 * 3600000
         root.listFiles()?.filter { it.lastModified() < before }?.forEach { it.delete() }
+        stemExportRoot.listFiles()?.filter { it.lastModified() < before }?.forEach { it.delete() }
         scratch.listFiles()?.filter { it.lastModified() < before }?.forEach { it.deleteRecursively() }
     }
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -81,17 +83,30 @@ internal class PerformanceExportPlugin(private val activity: Activity, messenger
                     activity.startActivity(Intent.createChooser(send, "分享演奏音频")); result.success(null)
                 }
                 "save" -> {
-                    check(saveResult == null) { "文件选择窗口已打开" }
                     stopPlayback()
                     val file = exported(call.argument<String>("id"))
-                    val title = call.argument<String>("title").orEmpty().replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").take(80).ifBlank { "GuitarPal演奏" }
-                    saveFile = file; saveResult = result
-                    try {
-                        activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE); type = "audio/wav"
-                            putExtra(Intent.EXTRA_TITLE, "$title.wav")
-                        }, REQUEST_SAVE)
-                    } catch (e: Exception) { saveResult = null; saveFile = null; throw e }
+                    save(file, call.argument<String>("title"), "GuitarPal演奏", "audio/wav", result)
+                }
+                "stemExportDirectory" -> {
+                    check(stemExportRoot.isDirectory || stemExportRoot.mkdirs())
+                    result.success(stemExportRoot.absolutePath)
+                }
+                "saveStemExport" -> {
+                    val id = call.argument<String>("id")
+                    val extension = call.argument<String>("extension")
+                    val type = when (extension) {
+                        "flac" -> "audio/flac"
+                        "wav" -> "audio/wav"
+                        "zip" -> "application/zip"
+                        else -> throw IllegalArgumentException("音轨导出格式无效")
+                    }
+                    require(id != null && UUID.fromString(id).toString() == id) { "导出文件标识无效" }
+                    val file = File(stemExportRoot, "$id.$extension")
+                    require(file.isFile && file.length() > 0 &&
+                        file.canonicalFile == File(stemExportRoot.canonicalFile, file.name)) {
+                        "导出文件已清理，请重试"
+                    }
+                    save(file, call.argument<String>("title"), "GuitarPal音轨", type, result)
                 }
                 else -> result.notImplemented()
             }
@@ -157,6 +172,23 @@ internal class PerformanceExportPlugin(private val activity: Activity, messenger
         require(id != null && runCatching { UUID.fromString(id).toString() == id }.getOrDefault(false)) { "作品标识无效" }
         return File(root, "$id.wav").also { require(it.isFile && it.length() > 44) { "临时作品已清理，请重新导出" } }
     }
+    private fun save(file: File, requestedTitle: String?, fallback: String, mime: String, result: MethodChannel.Result) {
+        check(saveResult == null) { "文件选择窗口已打开" }
+        val title = requestedTitle.orEmpty().replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").take(80).ifBlank { fallback }
+        saveFile = file
+        saveResult = result
+        try {
+            activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = mime
+                putExtra(Intent.EXTRA_TITLE, title + "." + file.extension)
+            }, REQUEST_SAVE)
+        } catch (e: Exception) {
+            saveResult = null
+            saveFile = null
+            throw e
+        }
+    }
     fun onActivityResult(request: Int, code: Int, data: Intent?): Boolean {
         if (request != REQUEST_SAVE) return false
         val result = saveResult; val source = saveFile; saveResult = null; saveFile = null
@@ -171,7 +203,7 @@ internal class PerformanceExportPlugin(private val activity: Activity, messenger
                 main.post { result.success(true) }
             } catch (_: Exception) {
                 runCatching { android.provider.DocumentsContract.deleteDocument(activity.contentResolver, uri) }
-                main.post { result.error("save_failed", "保存未完成，完整作品仍在本机，可重试", null) }
+                main.post { result.error("save_failed", "保存未完成，请检查所选位置后重试", null) }
             }
         }
         return true

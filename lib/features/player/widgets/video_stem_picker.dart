@@ -1,8 +1,36 @@
 import 'package:flutter/material.dart';
 
 import '../../audio_tools/data/algorithm_stem_store.dart';
+import '../../audio_tools/data/stem_export.dart';
 import '../../audio_tools/domain/legacy_algorithm_models.dart';
 import '../../audio_tools/domain/video_stem_choice.dart';
+
+Future<void> showVideoStemExport({
+  required BuildContext context,
+  required String taskId,
+  required LegacySeparationResult result,
+  required AlgorithmStemStore store,
+  required String title,
+}) async {
+  final saved = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    enableDrag: false,
+    isDismissible: false,
+    builder: (_) => VideoStemPicker(
+      taskId: taskId,
+      result: result,
+      store: store,
+      initialIds: const [],
+      exportTitle: title,
+    ),
+  );
+  if (saved == true && context.mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('所选音轨已保存')));
+  }
+}
 
 /// Select and inspect downloads without changing playback or starting HTTP work.
 class VideoStemPicker extends StatefulWidget {
@@ -12,11 +40,13 @@ class VideoStemPicker extends StatefulWidget {
     required this.result,
     required this.store,
     required this.initialIds,
+    this.exportTitle,
   });
   final String taskId;
   final LegacySeparationResult result;
   final AlgorithmStemStore store;
   final Iterable<String> initialIds;
+  final String? exportTitle;
   @override
   State<VideoStemPicker> createState() => _VideoStemPickerState();
 }
@@ -24,22 +54,90 @@ class VideoStemPicker extends StatefulWidget {
 class _VideoStemPickerState extends State<VideoStemPicker> {
   late Set<String> _selected;
   late Future<Map<String, StemCacheStatus>> _inspection;
+  StemDownloadCancellation? _exportCancellation;
+  StemDownloadProgress? _exportProgress;
+  bool _packaging = false;
+  String? _exportError;
+  bool get _exporting => _exportCancellation != null;
+  bool get _isExport => widget.exportTitle != null;
   @override
   void initState() {
     super.initState();
-    try {
-      _selected = videoStemSubset(
-        widget.result,
-        widget.initialIds,
-      ).map((s) => s.id).toSet();
-    } on FormatException {
-      _selected = widget.result.mixStems.map((s) => s.id).toSet();
+    if (_isExport) {
+      _selected = {};
+    } else {
+      try {
+        _selected = videoStemSubset(
+          widget.result,
+          widget.initialIds,
+        ).map((s) => s.id).toSet();
+      } on FormatException {
+        _selected = widget.result.mixStems.map((s) => s.id).toSet();
+      }
     }
     _inspection = widget.store.inspect(widget.taskId, widget.result.stems);
   }
 
+  Future<void> _export(Set<String> selected) async {
+    if (_exporting) return;
+    final cancellation = StemDownloadCancellation();
+    setState(() {
+      _exportCancellation = cancellation;
+      _exportError = null;
+    });
+    try {
+      final saved = await const StemExport().save(
+        store: widget.store,
+        taskId: widget.taskId,
+        result: widget.result,
+        trackIds: selected,
+        title: widget.exportTitle!,
+        cancellation: cancellation,
+        onDownload: (progress) {
+          if (mounted) setState(() => _exportProgress = progress);
+        },
+        onPreparing: () {
+          if (mounted) setState(() => _packaging = true);
+        },
+      );
+      if (saved && mounted) Navigator.pop(context, true);
+    } on Object catch (error) {
+      if (mounted) {
+        setState(
+          () => _exportError = switch (error) {
+            StemDownloadPaused() => '已暂停下载，可继续导出',
+            AlgorithmApiError() => error.message,
+            FormatException() => error.message,
+            _ => '无法导出，请检查本机存储空间后重试',
+          },
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportCancellation = null;
+          _exportProgress = null;
+          _packaging = false;
+          _inspection = widget.store.inspect(
+            widget.taskId,
+            widget.result.stems,
+          );
+        });
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => FractionallySizedBox(
+  void dispose() {
+    _exportCancellation?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      PopScope(canPop: !_exporting, child: _picker(context));
+
+  Widget _picker(BuildContext context) => FractionallySizedBox(
     heightFactor: .88,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,13 +148,13 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
             children: [
               Expanded(
                 child: Text(
-                  '选择练习音轨',
+                  _isExport ? '导出音轨' : '选择练习音轨',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
               IconButton(
                 tooltip: '关闭',
-                onPressed: () => Navigator.pop(context),
+                onPressed: _exporting ? null : () => Navigator.pop(context),
                 icon: const Icon(Icons.close),
               ),
             ],
@@ -113,7 +211,9 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
                         Text(
-                          expired
+                          _isExport
+                              ? '单轨保存为原音频文件，多轨分别打包进 ZIP。'
+                              : expired
                               ? '选择已完整下载的音轨进行离线练习。'
                               : '只下载所选音轨，下载期间可继续练习。已下载的音轨可离线使用，未完成的下载可续传。',
                         ),
@@ -121,19 +221,37 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                         Wrap(
                           spacing: 8,
                           children: [
-                            if (models.isNotEmpty)
+                            if (_isExport && available.isNotEmpty)
+                              ActionChip(
+                                label: Text(
+                                  selected.length == available.length
+                                      ? '取消全选'
+                                      : '全选',
+                                ),
+                                onPressed: _exporting
+                                    ? null
+                                    : () => setState(() {
+                                        _selected =
+                                            selected.length == available.length
+                                            ? {}
+                                            : available
+                                                  .map((stem) => stem.id)
+                                                  .toSet();
+                                      }),
+                              ),
+                            if (!_isExport && models.isNotEmpty)
                               ActionChip(
                                 label: Text(expired ? '已下载的乐器音轨' : '全部分轨'),
                                 onPressed: () =>
                                     setState(() => _selected = Set.of(models)),
                               ),
-                            if (models.contains('guitar'))
+                            if (!_isExport && models.contains('guitar'))
                               ActionChip(
                                 label: const Text('只听吉他'),
                                 onPressed: () =>
                                     setState(() => _selected = {'guitar'}),
                               ),
-                            if (backing)
+                            if (!_isExport && backing)
                               ActionChip(
                                 label: const Text('人声与伴奏'),
                                 onPressed: () => setState(
@@ -173,17 +291,27 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                             ),
                             value: selected.contains(stem.id),
                             onChanged:
-                                expired && states?[stem.id]?.complete != true
+                                _exporting ||
+                                    (expired &&
+                                        states?[stem.id]?.complete != true)
                                 ? null
-                                : (_) => setState(
-                                    () => _selected = toggleVideoStem(
-                                      widget.result,
-                                      selected,
-                                      stem.id,
-                                    ),
-                                  ),
+                                : (_) => setState(() {
+                                    if (_isExport) {
+                                      if (!selected.remove(stem.id)) {
+                                        selected.add(stem.id);
+                                      }
+                                      _selected = selected;
+                                    } else {
+                                      _selected = toggleVideoStem(
+                                        widget.result,
+                                        selected,
+                                        stem.id,
+                                      );
+                                    }
+                                  }),
                           ),
-                        const Text('合成音轨与乐器分轨分开播放，避免重复叠加；人声可搭配合成伴奏。'),
+                        if (!_isExport)
+                          const Text('合成音轨与乐器分轨分开播放，避免重复叠加；人声可搭配合成伴奏。'),
                       ],
                     ),
                   ),
@@ -195,20 +323,50 @@ class _VideoStemPickerState extends State<VideoStemPicker> {
                         Text(
                           '已选 ${selected.length} 轨${remaining == null ? '' : ' · 还需下载 ${_bytes(remaining)}'}',
                         ),
-                        FilledButton(
-                          key: const Key('video_apply_stem_choice'),
-                          onPressed: states == null || selected.isEmpty
-                              ? null
-                              : () => Navigator.pop(
-                                  context,
-                                  VideoStemLoadChoice(
-                                    selected,
-                                    localOnly: allLocal,
+                        if (_exportError != null)
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(_exportError!),
+                          ),
+                        if (_isExport)
+                          FilledButton(
+                            key: const Key('video_export_selected_stems'),
+                            onPressed:
+                                states == null || selected.isEmpty || _exporting
+                                ? null
+                                : () => _export(selected),
+                            child: Text(allLocal ? '保存所选音轨' : '下载并导出'),
+                          )
+                        else
+                          FilledButton(
+                            key: const Key('video_apply_stem_choice'),
+                            onPressed: states == null || selected.isEmpty
+                                ? null
+                                : () => Navigator.pop(
+                                    context,
+                                    VideoStemLoadChoice(
+                                      selected,
+                                      localOnly: allLocal,
+                                    ),
                                   ),
-                                ),
-                          child: Text(allLocal ? '使用所选音轨' : '下载所选音轨'),
-                        ),
-                        if (cached.isNotEmpty && !allLocal)
+                            child: Text(allLocal ? '使用所选音轨' : '下载所选音轨'),
+                          ),
+                        if (_exporting) ...[
+                          Text(_packaging ? '正在准备导出…' : '正在准备所选音轨…'),
+                          LinearProgressIndicator(
+                            value: _packaging
+                                ? null
+                                : _exportProgress?.fraction,
+                          ),
+                          if (!_packaging)
+                            TextButton(
+                              onPressed: _exportCancellation!.isCancelled
+                                  ? null
+                                  : () => setState(_exportCancellation!.cancel),
+                              child: const Text('暂停准备'),
+                            ),
+                        ],
+                        if (!_isExport && cached.isNotEmpty && !allLocal)
                           TextButton(
                             key: const Key('video_use_cached_stems'),
                             onPressed: () => Navigator.pop(

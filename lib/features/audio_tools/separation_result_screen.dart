@@ -10,6 +10,7 @@ import 'data/algorithm_stem_store.dart';
 import 'domain/algorithm_task.dart';
 import 'domain/legacy_algorithm_models.dart';
 import 'stem_mix_screen.dart';
+import '../player/widgets/video_stem_picker.dart';
 
 class SeparationResultScreen extends ConsumerStatefulWidget {
   const SeparationResultScreen({required this.task, super.key});
@@ -162,6 +163,23 @@ class _SeparationResultScreenState extends ConsumerState<SeparationResultScreen>
     }
   }
 
+  Future<void> _exportStems(LegacySeparationResult result) async {
+    if (_busy || _downloading != null) return;
+    setState(() => _busy = true);
+    try {
+      await showVideoStemExport(
+        context: context,
+        taskId: widget.task.id,
+        result: result,
+        store: _store,
+        title: widget.task.inputName,
+      );
+      if (mounted) await _load();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _poll() async {
     if (_polling || !_playing || !mounted) return;
     _polling = true;
@@ -245,6 +263,13 @@ class _SeparationResultScreenState extends ConsumerState<SeparationResultScreen>
                   onPressed: _busy || _local.isEmpty ? null : _openMix,
                   icon: const Icon(Icons.tune),
                   label: const Text('进入分轨练习'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _busy || _downloading != null
+                      ? null
+                      : () => _exportStems(result),
+                  icon: const Icon(Icons.save_alt),
+                  label: const Text('导出音轨'),
                 ),
                 for (final stem in result.stems)
                   Card(
