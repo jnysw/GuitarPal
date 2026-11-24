@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -26,10 +27,13 @@ void main() {
       final audio = syntheticAlgorithmWav();
       File('${root.path}/local-task_guitar.wav').writeAsBytesSync(audio);
       final requests = <String>[];
+      final download = Completer<void>();
+      final cancelSave = Completer<bool>();
       final store = AlgorithmStemStore(
         () async => root,
         clientFactory: () => MockClient((request) async {
           requests.add(request.url.pathSegments.last);
+          await download.future;
           return http.Response.bytes(
             audio,
             200,
@@ -61,7 +65,7 @@ void main() {
           expect(output, audio);
         }
         exports.add(extension);
-        return extension == 'wav';
+        return extension == 'zip' ? await cancelSave.future : true;
       });
       addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final result = separationFixture();
@@ -86,21 +90,38 @@ void main() {
       final guitar = find.byKey(const Key('video_pick_stem_guitar'));
       final backing = find.byKey(const Key('video_pick_stem_instrumental'));
       final save = find.byKey(const Key('video_export_selected_stems'));
-      await _waitFor(tester, () => guitar.hitTestable().evaluate().isNotEmpty);
-      await tester.tap(guitar);
+      final cachedOnly = find.text('只选已下载');
+      await _waitFor(
+        tester,
+        () => cachedOnly.hitTestable().evaluate().isNotEmpty,
+      );
+      await tester.tap(cachedOnly);
+      await tester.pump();
+      expect(tester.widget<CheckboxListTile>(guitar).value, isTrue);
+      expect(tester.widget<CheckboxListTile>(backing).value, isFalse);
+      expect(find.text('已选 1 轨 · 原音频'), findsOneWidget);
+      expect(requests, isEmpty);
       await tester.ensureVisible(backing);
       await tester.tap(backing);
       await _waitFor(
         tester,
         () => tester.widget<FilledButton>(save).onPressed != null,
       );
+      expect(find.textContaining('已选 2 轨 · ZIP · 待下载'), findsOneWidget);
       await tester.tap(save);
       await _waitFor(
         tester,
         () =>
-            exports.length == 1 &&
-            tester.widget<FilledButton>(save).onPressed != null,
+            find.text('正在下载音轨 · 0/1 轨').evaluate().isNotEmpty &&
+            requests.isNotEmpty,
       );
+      expect(find.text('暂停下载'), findsOneWidget);
+      download.complete();
+      await _waitFor(tester, () => exports.length == 1);
+      expect(find.text('请在系统窗口选择保存位置'), findsOneWidget);
+      cancelSave.complete(false);
+      final cancelled = find.text('已取消保存，所选音轨已保留');
+      await _waitFor(tester, () => cancelled.evaluate().isNotEmpty);
       expect(requests, ['instrumental']);
       expect(tester.widget<CheckboxListTile>(guitar).value, isTrue);
       expect(tester.widget<CheckboxListTile>(backing).value, isTrue);

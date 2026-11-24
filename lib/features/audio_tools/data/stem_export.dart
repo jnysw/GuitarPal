@@ -22,6 +22,7 @@ class StemExport {
     required StemDownloadCancellation cancellation,
     required void Function(StemDownloadProgress) onDownload,
     required void Function() onPreparing,
+    required void Function() onSaving,
   }) async {
     final tracks = result.stems
         .where((stem) => trackIds.contains(stem.id))
@@ -80,6 +81,7 @@ class StemExport {
       cancellation.check();
       await File(temporary).rename(target.path);
       cancellation.check();
+      onSaving();
       return await _channel.invokeMethod<bool>('saveStemExport', {
             'id': id,
             'extension': extension,
