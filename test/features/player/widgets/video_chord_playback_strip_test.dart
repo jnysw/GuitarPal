@@ -82,6 +82,7 @@ void main() {
       final controller = LocalVideoPlaybackController(bridge);
       await controller.requestSnapshot();
       String? calibrationTarget;
+      var expanded = true;
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -95,11 +96,16 @@ void main() {
               body: Center(
                 child: SizedBox(
                   width: 360,
-                  child: VideoChordPlaybackStrip(
-                    sourceId: 's',
-                    path: file.path,
-                    controller: controller,
-                    onCalibrate: (task) => calibrationTarget = task.id,
+                  child: StatefulBuilder(
+                    builder: (_, setState) => VideoChordPlaybackStrip(
+                      sourceId: 's',
+                      path: file.path,
+                      controller: controller,
+                      onCalibrate: (task) => calibrationTarget = task.id,
+                      expanded: expanded,
+                      onToggleExpanded: () =>
+                          setState(() => expanded = !expanded),
+                    ),
                   ),
                 ),
               ),
@@ -110,10 +116,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('当前和弦 C'), findsOneWidget);
       expect(find.textContaining('静音偏移待校准'), findsOneWidget);
+      final lane = find.byKey(const Key('chord_follow_scroll'));
+      expect(lane, findsOneWidget);
+      await tester.tap(find.byTooltip('收起和弦显示'));
+      await tester.pumpAndSettle();
+      expect(lane, findsNothing);
+      expect(find.text('校准'), findsNothing);
       await controller.seek(const Duration(milliseconds: 3250));
       await controller.setSpeed(1.37);
       await tester.pumpAndSettle();
       expect(find.text('当前和弦 Am'), findsOneWidget);
+      await tester.tap(find.byTooltip('展开和弦显示'));
+      await tester.pumpAndSettle();
+      expect(lane, findsOneWidget);
       await controller.activateLoopRange(
         LoopRange(
           start: const Duration(seconds: 2),

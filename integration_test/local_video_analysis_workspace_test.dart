@@ -167,7 +167,10 @@ void main() {
           expect(find.text('自动对齐原音频'), findsOneWidget);
         } else {
           expect(find.text('当前和弦 C'), findsOneWidget);
-          expect(find.textContaining('静音偏移待校准'), findsOneWidget);
+          expect(
+            find.text('按分析区间起点显示 · 静音偏移待校准'),
+            findsOneWidget,
+          );
         }
         await _tapVisible(tester, find.text(automatic ? '微调和弦时间' : '与视频时间校准'));
         await tester.pump(const Duration(milliseconds: 350));
@@ -333,13 +336,24 @@ void main() {
         expect(segments.single.startMilliseconds, 3250);
         expect(segments.single.endMilliseconds, 8000);
         expect(segments.single.title, '和弦选区练习');
+        final chordLane = find.byKey(const Key('chord_follow_scroll'));
+        final toggleChords = find.byKey(
+          const Key('video_chord_display_toggle'),
+        );
+        await _spin(tester, () => toggleChords.hitTestable().evaluate().isNotEmpty);
+        await tester.tap(toggleChords);
+        await tester.pump();
+        expect(chordLane, findsNothing);
         await tester.tap(find.byKey(const Key('local_video_fullscreen')));
         final fullscreen = find.byKey(
           const Key('local_video_fullscreen_position_slider'),
         );
         await _spin(tester, () => fullscreen.evaluate().isNotEmpty);
         expect(find.text('当前和弦 Am'), findsOneWidget);
-        expect(find.byKey(const Key('chord_follow_scroll')), findsOneWidget);
+        expect(chordLane, findsNothing);
+        await _tapVisible(tester, toggleChords);
+        await tester.pump();
+        expect(chordLane, findsOneWidget);
         expect(find.byKey(const Key('chord_follow_cursor')), findsOneWidget);
         expect(find.byType(GuitarChordDiagram), findsOneWidget);
         expect(
@@ -359,6 +373,7 @@ void main() {
         await tester.binding.handlePopRoute();
         await _spin(tester, () => fullscreen.evaluate().isEmpty);
         await tester.pump(const Duration(milliseconds: 600));
+        expect(chordLane, findsOneWidget);
         expect(find.text(automatic ? '微调和弦时间' : '调整人工校准'), findsOneWidget);
         await controller.play();
         await _spin(tester, () => controller.isPlaying);

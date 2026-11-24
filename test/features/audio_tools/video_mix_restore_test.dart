@@ -186,6 +186,9 @@ void main() {
         expect(f.bridge.preserved, isTrue);
         expect(f.networkRequests, 0);
         await tester.tap(find.text('和弦与分轨'));
+        final mixer = find.text('分轨控制');
+        await _until(tester, () => mixer.hitTestable().evaluate().isNotEmpty);
+        await tester.tap(mixer);
         await _until(
           tester,
           () =>
@@ -352,16 +355,41 @@ void main() {
         await _until(tester, () => f.controller.stemsLoaded);
         await tester.pump();
         expect(tester.takeException(), isNull);
-        expect(find.byKey(const Key('video_open_mixer')), findsNothing);
+        final controls = find.byKey(const Key('video_stem_controls'));
+        final guitar = find.byKey(const Key('video_stem_volume_guitar'));
+        expect(controls, findsNothing);
         receipt.complete();
+        final submit = find.byKey(const Key('video_analysis_submit'));
         await _until(
           tester,
-          () => find.byKey(const Key('video_open_mixer')).evaluate().isNotEmpty,
+          () =>
+              controls.evaluate().isNotEmpty &&
+              tester.widget<FilledButton>(submit).onPressed != null,
         );
+        expect(guitar, findsNothing);
+        final mixer = find.text('分轨控制');
+        await tester.ensureVisible(mixer);
+        await tester.tap(mixer);
+        await _until(tester, () => guitar.evaluate().isNotEmpty);
+        expect(guitar, findsOneWidget);
         expect(
-          find.byKey(const Key('video_stem_volume_guitar')),
+          find.byKey(const Key('video_change_practice_stems')),
           findsOneWidget,
         );
+        final chords = find.text('扒和弦');
+        await tester.ensureVisible(chords);
+        await tester.tap(chords);
+        await _until(tester, () => controls.evaluate().isEmpty);
+        expect(controls, findsNothing);
+        expect(f.controller.stemsLoaded, isTrue);
+        await tester.tap(find.text('分轨').first);
+        await _until(tester, () => guitar.evaluate().isNotEmpty);
+        expect(guitar, findsOneWidget);
+        await tester.ensureVisible(mixer);
+        await tester.tap(mixer);
+        await _until(tester, () => guitar.evaluate().isEmpty);
+        expect(guitar, findsNothing);
+        expect(f.controller.stemsLoaded, isTrue);
       } finally {
         if (!receipt.isCompleted) receipt.complete();
         await f.close(tester);
@@ -387,6 +415,9 @@ void main() {
         expect(f.controller.loopController.range!.start.inMilliseconds, 5000);
         expect(f.controller.isPlaying, isFalse);
         await tester.tap(find.text('和弦与分轨'));
+        final mixer = find.text('分轨控制');
+        await _until(tester, () => mixer.hitTestable().evaluate().isNotEmpty);
+        await tester.tap(mixer);
         await _until(tester, () {
           final original = find.byKey(const Key('video_mix_original'));
           return original.evaluate().isNotEmpty &&

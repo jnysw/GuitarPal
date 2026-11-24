@@ -15,7 +15,7 @@ import '../../audio_tools/domain/legacy_algorithm_models.dart';
 import '../../audio_tools/domain/video_analysis_binding.dart';
 import '../../audio_tools/domain/video_chord_playback.dart';
 
-/// Always visible beside the video; independent of the analysis panel's expansion.
+/// A live chord readout beside the video, with optional practice controls.
 class VideoChordPlaybackStrip extends ConsumerStatefulWidget {
   const VideoChordPlaybackStrip({
     super.key,
@@ -26,11 +26,14 @@ class VideoChordPlaybackStrip extends ConsumerStatefulWidget {
     this.compact = false,
     this.showTimeline = true,
     this.enabled = true,
+    this.expanded = true,
+    this.onToggleExpanded,
   });
   final String sourceId, path;
   final LocalVideoPlaybackController controller;
   final ValueChanged<AlgorithmTaskRecord> onCalibrate;
-  final bool compact, enabled, showTimeline;
+  final VoidCallback? onToggleExpanded;
+  final bool compact, enabled, showTimeline, expanded;
   @override
   ConsumerState<VideoChordPlaybackStrip> createState() =>
       _VideoChordPlaybackStripState();
@@ -140,26 +143,30 @@ class _VideoChordPlaybackStripState
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: widget.compact ? 18 : 22,
+                              fontSize: widget.compact || !widget.expanded
+                                  ? 18
+                                  : 22,
                               fontWeight: FontWeight.bold,
                               color: colors.primary,
                             ),
                           ),
-                          Text(
-                            '下一和弦 ${data.next(position)?.displayLabel ?? '—'} · 调性 ${data.result.keyEstimate.isEmpty ? '未知' : data.result.keyEstimate}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          Text(
-                            data.manual
-                                ? '已人工校准'
-                                : data.automatic
-                                ? '自动对齐原音频'
-                                : '按分析区间起点显示 · 静音偏移待校准',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                          if (_results.length > 1)
+                          if (widget.expanded)
+                            Text(
+                              '下一和弦 ${data.next(position)?.displayLabel ?? '—'} · 调性 ${data.result.keyEstimate.isEmpty ? '未知' : data.result.keyEstimate}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          if (widget.expanded)
+                            Text(
+                              data.manual
+                                  ? '已人工校准'
+                                  : data.automatic
+                                  ? '自动对齐原音频'
+                                  : '按分析区间起点显示 · 静音偏移待校准',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          if (widget.expanded && _results.length > 1)
                             Text(
                               binding.startMs == 0 &&
                                       binding.endMs == binding.sourceDurationMs
@@ -172,14 +179,15 @@ class _VideoChordPlaybackStripState
                         ],
                       ),
                     ),
-                    if (showDiagrams)
+                    if (widget.expanded && showDiagrams)
                       ChordVoicingCard(
                         rawLabel: current?.rawLabel,
                         displayLabel: label,
                         thumbnail: true,
                         compact: widget.compact,
                       ),
-                    if (showDiagrams &&
+                    if (widget.expanded &&
+                        showDiagrams &&
                         !widget.compact &&
                         MediaQuery.sizeOf(context).width >= 600)
                       ChordVoicingCard(
@@ -187,31 +195,47 @@ class _VideoChordPlaybackStripState
                         displayLabel: data.next(position)?.displayLabel ?? '—',
                         thumbnail: true,
                       ),
-                    IconButton(
-                      key: const Key('video_chord_settings'),
-                      tooltip: '指法设置',
-                      onPressed: widget.enabled
-                          ? () => showModalBottomSheet<void>(
-                              context: context,
-                              isScrollControlled: true,
-                              useSafeArea: true,
-                              builder: (_) => ChordPracticeSheet(
-                                playback: data,
-                                controller: widget.controller,
-                              ),
-                            )
-                          : null,
-                      icon: const Icon(Icons.back_hand_outlined),
-                    ),
-                    TextButton(
-                      onPressed: widget.enabled
-                          ? () => widget.onCalibrate(selected.task)
-                          : null,
-                      child: const Text('校准'),
-                    ),
+                    if (widget.expanded)
+                      IconButton(
+                        key: const Key('video_chord_settings'),
+                        tooltip: '指法设置',
+                        onPressed: widget.enabled
+                            ? () => showModalBottomSheet<void>(
+                                context: context,
+                                isScrollControlled: true,
+                                useSafeArea: true,
+                                builder: (_) => ChordPracticeSheet(
+                                  playback: data,
+                                  controller: widget.controller,
+                                ),
+                              )
+                            : null,
+                        icon: const Icon(Icons.back_hand_outlined),
+                      ),
+                    if (widget.expanded)
+                      TextButton(
+                        onPressed: widget.enabled
+                            ? () => widget.onCalibrate(selected.task)
+                            : null,
+                        child: const Text('校准'),
+                      ),
+                    if (widget.onToggleExpanded != null)
+                      Semantics(
+                        expanded: widget.expanded,
+                        child: IconButton(
+                          key: const Key('video_chord_display_toggle'),
+                          tooltip: widget.expanded ? '收起和弦显示' : '展开和弦显示',
+                          onPressed: widget.onToggleExpanded,
+                          icon: Icon(
+                            widget.expanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-                if (widget.showTimeline)
+                if (widget.expanded && widget.showTimeline)
                   ScrollingChordLane(
                     playback: data,
                     positionMs: position,

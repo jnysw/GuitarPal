@@ -67,6 +67,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
   bool _preparingAnalysis = false;
   int _preparationRevision = 0;
   bool _choosingStems = false;
+  bool _mixerExpanded = false;
   final _expansion = ExpansibleController();
   AlgorithmOperation _operation = AlgorithmOperation.chords;
   String _endpoint = '', _stage = '';
@@ -1035,6 +1036,47 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     },
   );
 
+  Widget _stemControls(AlgorithmTaskRecord task) {
+    final enabled = !_busy && widget.enabled && !widget.recordingActive;
+    return ExpansionTile(
+      key: const Key('video_stem_controls'),
+      tilePadding: EdgeInsets.zero,
+      title: const Text('分轨控制'),
+      subtitle: Text(
+        widget.controller.stemsActive
+            ? '正在播放分轨 · ${_volumes.length} 轨'
+            : '当前位置播放原声 · 已载入 ${_volumes.length} 轨',
+      ),
+      initiallyExpanded: _mixerExpanded,
+      onExpansionChanged: (value) => _mixerExpanded = value,
+      expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 8,
+          children: [
+            TextButton(
+              key: const Key('video_change_practice_stems'),
+              onPressed: enabled ? () => _chooseStems(task) : null,
+              child: const Text('更换练习音轨'),
+            ),
+            TextButton(
+              key: const Key('video_mix_original'),
+              onPressed: enabled ? _useOriginal : null,
+              child: const Text('切回视频原声'),
+            ),
+            FilledButton.tonalIcon(
+              key: const Key('video_open_mixer'),
+              onPressed: enabled ? _openMixer : null,
+              icon: const Icon(Icons.open_in_full),
+              label: const Text('打开混音台'),
+            ),
+          ],
+        ),
+        _mixer(),
+      ],
+    );
+  }
+
   Future<void> _openMixer() async {
     final choose = await showModalBottomSheet<bool>(
       context: context,
@@ -1351,10 +1393,10 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
               t.mediaBindingJson != null,
         )
         .toList();
-    final stemAction = _stemAction;
+    final showingStems = _operation == AlgorithmOperation.separation;
+    final stemAction = showingStems ? _stemAction : null;
+    final rememberedTask = _rememberedTask;
     final content = <Widget>[
-      const Text('共用当前视频、播放进度、倍速与 A-B；无需再次导入或关联曲目。'),
-      const SizedBox(height: 8),
       SegmentedButton<AlgorithmOperation>(
         segments: const [
           ButtonSegment(value: AlgorithmOperation.chords, label: Text('扒和弦')),
@@ -1371,6 +1413,69 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
                 _userNavigated = true;
               }),
       ),
+      Column(
+        key: _downloadStatus,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
+          if (_preparingAnalysis)
+            TextButton.icon(
+              key: const Key('video_cancel_analysis_preparation'),
+              onPressed: () => setState(_cancelPreparation),
+              icon: const Icon(Icons.close),
+              label: const Text('取消本次分析'),
+            ),
+          if (_networkDownload && _downloadCancellation != null)
+            TextButton.icon(
+              key: const Key('video_pause_stem_download'),
+              onPressed: () => _downloadCancellation?.cancel(),
+              icon: const Icon(Icons.pause),
+              label: const Text('暂停下载，保留进度'),
+            ),
+          if (showingStems && _downloadNotice != null)
+            Semantics(liveRegion: true, child: Text(_downloadNotice!)),
+          if (!_busy && stemAction != null)
+            FilledButton.tonalIcon(
+              key: const Key('video_continue_stem_action'),
+              onPressed: !widget.enabled || widget.recordingActive
+                  ? null
+                  : () => _loadStems(
+                      stemAction.task,
+                      trackIds: stemAction.choice.ids,
+                      localOnly: stemAction.choice.localOnly,
+                    ),
+              icon: Icon(
+                stemAction.choice.localOnly ? Icons.graphic_eq : Icons.download,
+              ),
+              label: Text(
+                stemAction.choice.localOnly ? '载入已下载音轨' : '继续下载所选音轨',
+              ),
+            ),
+        ],
+      ),
+      if (showingStems) ...[
+        if (widget.controller.stemsLoaded &&
+            rememberedTask != null &&
+            _volumes.isNotEmpty)
+          _stemControls(rememberedTask),
+        if (_restoreNotice != null) Text(_restoreNotice!),
+        if (rememberedTask != null && !widget.controller.stemsLoaded)
+          TextButton(
+            key: const Key('video_mix_restore'),
+            onPressed: _busy || !widget.enabled
+                ? null
+                : () => _loadStems(rememberedTask),
+            child: const Text('恢复上次分轨'),
+          ),
+        if (_saveFailed) ...[
+          const Text('声音设置保存失败，重新打开时可能无法恢复'),
+          TextButton(
+            key: const Key('video_mix_retry_save'),
+            onPressed: _saved == null ? null : () => _persist(_saved!),
+            child: const Text('重试保存设置'),
+          ),
+        ],
+      ],
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('仅分析当前 A-B 区间'),
@@ -1399,85 +1504,6 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
           child: const Text('重试连接'),
         ),
       ],
-      Column(
-        key: _downloadStatus,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_busy) ...[Text(_stage), LinearProgressIndicator(value: _progress)],
-          if (_preparingAnalysis)
-            TextButton.icon(
-              key: const Key('video_cancel_analysis_preparation'),
-              onPressed: () => setState(_cancelPreparation),
-              icon: const Icon(Icons.close),
-              label: const Text('取消本次分析'),
-            ),
-          if (_networkDownload && _downloadCancellation != null)
-            TextButton.icon(
-              key: const Key('video_pause_stem_download'),
-              onPressed: () => _downloadCancellation?.cancel(),
-              icon: const Icon(Icons.pause),
-              label: const Text('暂停下载，保留进度'),
-            ),
-          if (_downloadNotice != null)
-            Semantics(liveRegion: true, child: Text(_downloadNotice!)),
-          if (!_busy && stemAction != null)
-            FilledButton.tonalIcon(
-              key: const Key('video_continue_stem_action'),
-              onPressed: !widget.enabled || widget.recordingActive
-                  ? null
-                  : () => _loadStems(
-                      stemAction.task,
-                      trackIds: stemAction.choice.ids,
-                      localOnly: stemAction.choice.localOnly,
-                    ),
-              icon: Icon(
-                stemAction.choice.localOnly ? Icons.graphic_eq : Icons.download,
-              ),
-              label: Text(
-                stemAction.choice.localOnly ? '载入已下载音轨' : '继续下载所选音轨',
-              ),
-            ),
-        ],
-      ),
-      if (_restoreNotice != null) Text(_restoreNotice!),
-      if (_rememberedTask != null && !widget.controller.stemsLoaded)
-        TextButton(
-          key: const Key('video_mix_restore'),
-          onPressed: _busy || !widget.enabled
-              ? null
-              : () => _loadStems(_rememberedTask!),
-          child: const Text('恢复上次分轨'),
-        ),
-      if (_saveFailed) ...[
-        const Text('声音设置保存失败，重新打开时可能无法恢复'),
-        TextButton(
-          key: const Key('video_mix_retry_save'),
-          onPressed: _saved == null ? null : () => _persist(_saved!),
-          child: const Text('重试保存设置'),
-        ),
-      ],
-      if (widget.controller.stemsLoaded &&
-          _rememberedTask != null &&
-          _volumes.isNotEmpty) ...[
-        const Divider(),
-        Text(widget.controller.stemsActive ? '当前播放：分轨（原视频已静音）' : '当前区间外播放原声'),
-        TextButton(
-          key: const Key('video_mix_original'),
-          onPressed: _busy || !widget.enabled ? null : _useOriginal,
-          child: const Text('切回视频原声'),
-        ),
-        FilledButton.tonalIcon(
-          key: const Key('video_open_mixer'),
-          onPressed: _busy || !widget.enabled ? null : _openMixer,
-          icon: const Icon(Icons.tune),
-          label: const Text('打开混音台'),
-        ),
-        ExpansionTile(
-          title: const Text('音轨音量、静音与独奏'),
-          initiallyExpanded: true,
-          children: [_mixer()],
-        ),
-      ],
       tasks.when(
         loading: () => const Text('正在读取本视频分析…'),
         error: (_, _) => const Text('分析记录读取失败，请稍后重新打开'),
@@ -1493,15 +1519,7 @@ class _VideoAnalysisPanelState extends ConsumerState<VideoAnalysisPanel>
     if (widget.embedded) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '和弦与分轨',
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 10),
-          ...content,
-        ],
+        children: content,
       );
     }
     return ExpansionTile(

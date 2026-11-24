@@ -221,7 +221,8 @@ void main() {
         }
 
         var controller = await open(stems: true);
-        await _tap(tester, find.text('和弦与分轨'));
+        expect(find.byKey(const Key('video_stem_volume_guitar')), findsNothing);
+        await _tap(tester, find.text('分轨控制'));
         await _until(
           tester,
           () => find
@@ -284,7 +285,7 @@ void main() {
         );
         await leave();
         controller = await open(stems: true);
-        await _tap(tester, find.text('和弦与分轨'));
+        await _tap(tester, find.text('分轨控制'));
         await _until(
           tester,
           () => find
@@ -311,7 +312,6 @@ void main() {
         expect((await preferences.load(sourceId))!.useStems, isFalse);
         await leave();
         controller = await open(stems: false);
-        await _tap(tester, find.text('和弦与分轨'));
         await _tap(tester, find.byKey(const Key('video_mix_restore')));
         await _until(
           tester,
@@ -319,6 +319,7 @@ void main() {
               controller.stemsLoaded &&
               find.text('正在准备当前视频的音轨…').evaluate().isEmpty,
         );
+        await _tap(tester, find.text('分轨控制'));
         await _tap(tester, find.byKey(const Key('video_stem_mute_guitar')));
         await controller.play();
         await _until(tester, () => controller.isPlaying);
@@ -333,9 +334,11 @@ void main() {
         );
         expect(network, 0);
         controller = await open(stems: true);
-        await _tap(tester, find.text('和弦与分轨'));
-        await _tap(tester, find.byKey(const Key('video_open_mixer')));
-        await _tap(tester, find.byKey(const Key('video_mixer_choose_stems')));
+        await _tap(tester, find.text('分轨控制'));
+        await _tap(
+          tester,
+          find.byKey(const Key('video_change_practice_stems')),
+        );
         await _until(tester, () => find.text('选择练习音轨').evaluate().isNotEmpty);
         if (const bool.fromEnvironment('CAPTURE_STEM_PICKER_QA')) {
           await _until(
@@ -376,7 +379,7 @@ void main() {
         }
         await leave();
         controller = await open(stems: true);
-        await _tap(tester, find.text('和弦与分轨'));
+        await _tap(tester, find.text('分轨控制'));
         await _until(
           tester,
           () => find

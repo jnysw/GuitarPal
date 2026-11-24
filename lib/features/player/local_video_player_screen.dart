@@ -52,6 +52,7 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
   bool _isFullscreen = false;
   bool _fullscreenTransitionInProgress = false;
   bool _recordingWorkflowActive = false;
+  bool _chordsExpanded = true;
   AlgorithmOperation? _requestedAnalysis;
   AlgorithmTaskRecord? _requestedChordCalibration;
   int _analysisRevision = 0;
@@ -66,6 +67,9 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
       return null;
     }
   }
+
+  void _toggleChordDisplay() =>
+      setState(() => _chordsExpanded = !_chordsExpanded);
 
   void _openAnalysis(
     AlgorithmOperation operation, {
@@ -562,6 +566,8 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                           path: path,
                           controller: _controller!,
                           compact: true,
+                          expanded: _chordsExpanded,
+                          onToggleExpanded: _toggleChordDisplay,
                           enabled: !_recordingWorkflowActive,
                           onCalibrate: (task) async {
                             await _toggleFullscreen();
@@ -596,6 +602,8 @@ class _LocalVideoPlayerScreenState extends ConsumerState<LocalVideoPlayerScreen>
                                         path: path,
                                         controller: _controller!,
                                         showTimeline: true,
+                                        expanded: _chordsExpanded,
+                                        onToggleExpanded: _toggleChordDisplay,
                                         enabled: !_recordingWorkflowActive,
                                         onCalibrate: (task) => _openAnalysis(
                                           AlgorithmOperation.chords,
