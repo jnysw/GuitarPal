@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/sync/sync_outbox.dart';
+import 'account_profile_editor.dart';
 import 'account_providers.dart';
 import 'application/auth_repository.dart';
 import 'domain/account_session.dart';
 import 'domain/local_data_inventory.dart';
+import 'widgets/account_avatar.dart';
 
 class AccountAndSyncScreen extends ConsumerStatefulWidget {
   const AccountAndSyncScreen({super.key});
@@ -430,7 +432,7 @@ class _AccountSessionCard extends StatelessWidget {
   }
 }
 
-class _AccountSessionContent extends StatelessWidget {
+class _AccountSessionContent extends ConsumerWidget {
   const _AccountSessionContent({
     required this.session,
     required this.signingOut,
@@ -446,8 +448,17 @@ class _AccountSessionContent extends StatelessWidget {
   final VoidCallback onChooseSignIn;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
+    final userId =
+        session.isSignedIn &&
+            ref.watch(accountProfileRepositoryProvider) != null
+        ? session.userId
+        : null;
+    final profile = userId == null
+        ? null
+        : ref.watch(accountProfileProvider(userId)).asData?.value;
+    final handle = profile?.handle;
     final (title, subtitle, icon) = switch (session.status) {
       AccountSessionStatus.local => (
         '当前使用本地模式',
@@ -462,8 +473,8 @@ class _AccountSessionContent extends StatelessWidget {
         Icons.login_rounded,
       ),
       AccountSessionStatus.signedIn => (
-        session.label,
-        session.email ?? '账号已连接，本机数据可以进入同步流程。',
+        session.displayName ?? '我的账号',
+        session.email ?? '已登录',
         Icons.verified_user_outlined,
       ),
       AccountSessionStatus.expired => (
@@ -483,11 +494,14 @@ class _AccountSessionContent extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: colors.primary,
-                  foregroundColor: colors.onPrimary,
-                  child: Icon(icon),
-                ),
+                if (session.isSignedIn)
+                  AccountAvatar(path: profile?.avatarPath, radius: 26)
+                else
+                  CircleAvatar(
+                    backgroundColor: colors.primary,
+                    foregroundColor: colors.onPrimary,
+                    child: Icon(icon),
+                  ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -499,6 +513,7 @@ class _AccountSessionContent extends StatelessWidget {
                             ?.copyWith(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 4),
+                      if (handle != null) Text('@$handle'),
                       Text(subtitle),
                     ],
                   ),
@@ -506,6 +521,15 @@ class _AccountSessionContent extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
+            if (userId != null)
+              FilledButton.tonalIcon(
+                key: const Key('account_edit_profile'),
+                onPressed: signingOut
+                    ? null
+                    : () => openAccountProfileEditor(context, ref, userId),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('编辑资料'),
+              ),
             if (session.status == AccountSessionStatus.signedIn)
               OutlinedButton.icon(
                 key: const Key('account_sign_out_button'),

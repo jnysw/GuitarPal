@@ -3,10 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'account_profile_editor.dart';
 import 'account_providers.dart';
 import 'domain/account_session.dart';
 import 'domain/practice_insights.dart';
 import 'practice_insights_providers.dart';
+import 'widgets/account_avatar.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -111,7 +113,7 @@ class ProfileScreen extends ConsumerWidget {
                           icon: Icons.person_outline_rounded,
                           title: '账号与同步',
                           subtitle: authConfigured
-                              ? 'Supabase 登录、本机数据迁移与同步设置'
+                              ? '登录方式、个人资料和同步设置'
                               : '了解登录、跨设备同步与录音隐私方案',
                           status: _accountStatusLabel(
                             accountSession,
@@ -169,7 +171,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-class _LocalProfileCard extends StatelessWidget {
+class _LocalProfileCard extends ConsumerWidget {
   const _LocalProfileCard({
     required this.session,
     required this.authConfigured,
@@ -181,18 +183,26 @@ class _LocalProfileCard extends StatelessWidget {
   final VoidCallback onOpenAccount;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
     final isSignedIn = session?.status == AccountSessionStatus.signedIn;
+    final userId =
+        isSignedIn && ref.watch(accountProfileRepositoryProvider) != null
+        ? session!.userId
+        : null;
+    final profile = userId == null
+        ? null
+        : ref.watch(accountProfileProvider(userId)).asData?.value;
+    final handle = profile?.handle;
     final isAuthenticating =
         session?.status == AccountSessionStatus.authenticating;
     final title = isSignedIn
-        ? session!.label
+        ? session!.displayName ?? '我的账号'
         : isAuthenticating
         ? '正在安全登录'
         : '本地练习空间';
     final subtitle = isSignedIn
-        ? session!.email ?? 'Supabase 账号已连接。'
+        ? (handle == null ? session!.email ?? '已登录' : '@$handle')
         : isAuthenticating
         ? '完成邮件或浏览器授权后会自动返回 GuitarPal。'
         : authConfigured
@@ -208,17 +218,15 @@ class _LocalProfileCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: colors.primary,
-                  foregroundColor: colors.onPrimary,
-                  child: Icon(
-                    isSignedIn
-                        ? Icons.verified_user_outlined
-                        : Icons.music_note_rounded,
-                    size: 30,
+                if (isSignedIn)
+                  AccountAvatar(path: profile?.avatarPath)
+                else
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: colors.primary,
+                    foregroundColor: colors.onPrimary,
+                    child: const Icon(Icons.music_note_rounded, size: 30),
                   ),
-                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -245,10 +253,16 @@ class _LocalProfileCard extends StatelessWidget {
             const SizedBox(height: 14),
             OutlinedButton.icon(
               key: const Key('profile_account_header_button'),
-              onPressed: onOpenAccount,
-              icon: const Icon(Icons.cloud_outlined),
+              onPressed: userId == null
+                  ? onOpenAccount
+                  : () => openAccountProfileEditor(context, ref, userId),
+              icon: Icon(
+                userId == null ? Icons.cloud_outlined : Icons.edit_outlined,
+              ),
               label: Text(
-                isSignedIn
+                userId != null
+                    ? '编辑资料'
+                    : isSignedIn
                     ? '管理账号与同步'
                     : authConfigured
                     ? '登录或管理同步'

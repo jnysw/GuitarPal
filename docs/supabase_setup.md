@@ -27,6 +27,12 @@ com.guitarpal.app://login-callback/
 
 当前实现不收集或保存用户密码。会话和 PKCE verifier 使用 Android Keystore / iOS Keychain 支持的安全存储，不使用普通 SharedPreferences。
 
+## 个人资料
+
+在 Supabase SQL Editor 中执行仓库的 `supabase/migrations/20261125000000_account_profiles.sql`。迁移会创建资料表和私有头像存储。完成后，已登录用户可在个人中心选择头像、设置唯一用户 ID，重新登录时会读取同一账号的资料。
+
+用户 ID 统一保存为小写，使用 3–20 位字母、数字或下划线，首位为字母或数字。Supabase Auth 的账号 UUID 继续用于数据归属。资料和头像访问限于当前账号。
+
 ## Google 登录
 
 Google 登录需要先在 Google Auth Platform 创建 **Web application** OAuth Client，再把以下 Supabase 回调加入 Google 的 Authorized redirect URIs：

@@ -1,8 +1,10 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app.dart';
 import 'features/profile/account_providers.dart';
+import 'features/profile/data/supabase_account_profiles.dart';
 import 'features/profile/data/supabase_auth_bootstrap.dart';
 import 'features/profile/data/supabase_auth_repository.dart';
 import 'features/profile/data/supabase_runtime_configuration.dart';
@@ -24,11 +26,15 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       overrides: [
-        if (configuredAuthRepository != null)
+        if (configuredAuthRepository != null) ...[
           authRepositoryProvider.overrideWith((ref) {
             ref.onDispose(configuredAuthRepository.dispose);
             return configuredAuthRepository;
           }),
+          accountProfileRepositoryProvider.overrideWithValue(
+            SupabaseAccountProfiles(Supabase.instance.client),
+          ),
+        ],
       ],
       child: const GuitarPalApp(),
     ),
