@@ -72,13 +72,15 @@ void main() {
         await _wait(
           tester,
           () =>
+              speedControl.evaluate().isNotEmpty &&
               tester.widget<DropdownButton<double>>(speedControl).onChanged !=
-              null,
+                  null,
         );
         tester.widget<DropdownButton<double>>(speedControl).onChanged!(.75);
         await _wait(
           tester,
           () =>
+              speedControl.evaluate().isNotEmpty &&
               tester.widget<DropdownButton<double>>(speedControl).value == .75,
         );
 
@@ -117,6 +119,10 @@ void main() {
 }
 
 const _iframeApiFixture = '''
+window.stop();
+if (typeof player !== 'undefined' && typeof player.destroy === 'function') {
+  player.destroy();
+}
 window.YT = {
   Player: class {
     constructor(element, options) {

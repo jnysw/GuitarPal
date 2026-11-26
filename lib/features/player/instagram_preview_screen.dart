@@ -93,6 +93,7 @@ class _InstagramPreviewScreenState extends State<InstagramPreviewScreen> {
             return NavigationDecision.prevent;
           },
           onWebResourceError: (error) {
+            if (error.errorCode == -999) return;
             if (error.isForMainFrame == true && mounted) {
               setState(() {
                 _failed = true;

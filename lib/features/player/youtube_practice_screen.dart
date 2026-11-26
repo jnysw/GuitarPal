@@ -128,6 +128,8 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
             return NavigationDecision.prevent;
           },
           onWebResourceError: (error) {
+            // WebKit also reports an intentionally cancelled navigation as an error.
+            if (error.errorCode == -999) return;
             if (error.isForMainFrame == true &&
                 mounted &&
                 revision == _loadRevision) {
