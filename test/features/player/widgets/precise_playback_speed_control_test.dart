@@ -4,6 +4,38 @@ import 'package:guitar_pal/features/player/widgets/precise_playback_speed_contro
 import 'package:guitar_pal/media/playback/playback_speed.dart';
 
 void main() {
+  testWidgets('steps between advertised rates and snaps typed values', (
+    tester,
+  ) async {
+    final requests = <double>[];
+    await tester.pumpWidget(
+      _testApp(
+        PrecisePlaybackSpeedControl(
+          value: .75,
+          enabled: true,
+          availableRates: const [.25, .5, .75, 1, 1.25, 1.5],
+          onChanged: (_) {},
+          onChangeEnd: requests.add,
+        ),
+      ),
+    );
+    expect(
+      find.byKey(PrecisePlaybackSpeedControlKeys.preset(.25)),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('上一档倍速'));
+    expect(requests, [.5]);
+    expect(find.text('0.75x'), findsWidgets);
+    await tester.tap(find.byKey(PrecisePlaybackSpeedControlKeys.exactValue));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(PrecisePlaybackSpeedControlKeys.input),
+      '1.37',
+    );
+    await tester.tap(find.byKey(PrecisePlaybackSpeedControlKeys.confirm));
+    await tester.pumpAndSettle();
+    expect(requests, [.5, 1.25]);
+  });
   testWidgets('uses the shared range, step, keys, and accessible labels', (
     tester,
   ) async {

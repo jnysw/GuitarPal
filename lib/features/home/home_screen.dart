@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../domain/practice_source/practice_source.dart';
+import '../../media/adapters/online_video_links.dart';
 import '../../domain/practice_plan/calendar_date.dart';
 import '../../domain/practice_plan/practice_plan.dart';
 import '../../domain/practice_plan/practice_plan_progress.dart';
@@ -410,12 +411,6 @@ class _RecentSourceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final canPractice =
-        (source.platform == SourcePlatform.bilibili &&
-            source.externalId != null) ||
-        (source.platform == SourcePlatform.local &&
-            source.kind == SourceKind.video &&
-            source.canonicalUri?.scheme == 'file');
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       leading: CircleAvatar(
@@ -431,7 +426,7 @@ class _RecentSourceTile extends StatelessWidget {
       ),
       subtitle: Text(
         '${_platformLabel(source.platform)} · '
-        '${canPractice ? '支持倍速与 A-B 循环' : '引用模式'}',
+        '${source.canPracticeInApp ? '支持倍速与 A-B 循环' : source.instagramPreview != null ? '可在 App 内预览' : '原平台打开'}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -536,6 +531,7 @@ String _platformLabel(SourcePlatform platform) {
     SourcePlatform.youtube => 'YouTube',
     SourcePlatform.bilibili => 'Bilibili',
     SourcePlatform.douyin => '抖音',
+    SourcePlatform.instagram => 'Instagram',
     SourcePlatform.xiaohongshu => '小红书',
     SourcePlatform.genericWeb => '网页链接',
   };
@@ -547,6 +543,7 @@ IconData _platformIcon(SourcePlatform platform) {
     SourcePlatform.youtube => Icons.play_circle_fill_rounded,
     SourcePlatform.bilibili => Icons.smart_display_rounded,
     SourcePlatform.douyin => Icons.music_note_rounded,
+    SourcePlatform.instagram => Icons.camera_alt_outlined,
     SourcePlatform.xiaohongshu => Icons.menu_book_rounded,
     SourcePlatform.genericWeb => Icons.public_rounded,
   };

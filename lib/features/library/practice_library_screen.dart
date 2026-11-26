@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../domain/practice_source/practice_source.dart';
+import '../../media/adapters/online_video_links.dart';
 import '../plans/practice_plan_providers.dart';
 import 'domain/practice_library_filter.dart';
 import 'presentation/source_artwork.dart';
@@ -238,7 +239,7 @@ class _PracticeLibraryScreenState extends ConsumerState<PracticeLibraryScreen> {
                       : Icons.search_off_rounded,
                   title: !isNarrowed ? '练习库还是空的' : '没有找到匹配内容',
                   message: !isNarrowed
-                      ? '导入本地视频，或从 B站、抖音、小红书、YouTube 分享内容到 GuitarPal。'
+                      ? '导入本地视频，或从 B站、小红书、YouTube、Instagram 分享内容到 GuitarPal。'
                       : '调整关键词或筛选条件后再试。',
                   action: !isNarrowed
                       ? FilledButton.icon(
@@ -400,7 +401,11 @@ class _LibrarySourceCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         '${_platformLabel(source.platform)} · '
-                        '${_canPracticeInApp(source) ? '可在 App 内练习' : '引用模式'}',
+                        '${source.canPracticeInApp
+                            ? '可在 App 内练习'
+                            : source.instagramPreview != null
+                            ? '可在 App 内预览'
+                            : '原平台打开'}',
                         style: Theme.of(context).textTheme.bodySmall
                             ?.copyWith(color: colors.onSurfaceVariant),
                       ),
@@ -631,7 +636,9 @@ class _LibraryFilterSheetState extends State<_LibraryFilterSheet> {
                   selected: _platform == null,
                   onSelected: (_) => setState(() => _platform = null),
                 ),
-                for (final platform in SourcePlatform.values)
+                for (final platform in SourcePlatform.values.where(
+                  (item) => item != SourcePlatform.douyin,
+                ))
                   ChoiceChip(
                     key: ValueKey('library_filter_platform_${platform.name}'),
                     label: Text(_platformLabel(platform)),
@@ -763,20 +770,13 @@ class _LibraryMessage extends StatelessWidget {
 
 enum _SourceAction { toggleCompleted, rename, delete }
 
-bool _canPracticeInApp(PracticeSource source) {
-  return (source.platform == SourcePlatform.bilibili &&
-          source.externalId != null) ||
-      (source.platform == SourcePlatform.local &&
-          source.kind == SourceKind.video &&
-          source.canonicalUri?.scheme == 'file');
-}
-
 String _platformLabel(SourcePlatform platform) {
   return switch (platform) {
     SourcePlatform.local => '本地视频',
     SourcePlatform.youtube => 'YouTube',
     SourcePlatform.bilibili => 'Bilibili',
     SourcePlatform.douyin => '抖音',
+    SourcePlatform.instagram => 'Instagram',
     SourcePlatform.xiaohongshu => '小红书',
     SourcePlatform.genericWeb => '网页',
   };

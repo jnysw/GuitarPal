@@ -19,6 +19,13 @@ class SourceResolver {
 
   Future<ResolvedSource> resolve(Uri originalUri) async {
     final original = _normalizer.normalize(originalUri);
+    final host = original.canonicalUri.host;
+    if (host == 'douyin.com' ||
+        host.endsWith('.douyin.com') ||
+        host == 'iesdouyin.com' ||
+        host.endsWith('.iesdouyin.com')) {
+      throw const FormatException('已停止导入抖音链接。可以导入本地视频，或使用其他支持的链接。');
+    }
     var playableUri = original.canonicalUri;
     final redirectExpander = redirectResolver;
     if (redirectExpander != null) {
@@ -29,13 +36,12 @@ class SourceResolver {
     final resolved = await adapter.resolve(canonical);
     SourceMetadata? metadata;
     try {
-      metadata = await metadataLoader?.load(canonical);
+      metadata = await metadataLoader?.load(resolved.canonicalUri);
     } on Object {
       // Preview metadata is optional and must never block importing a source.
     }
     return resolved.copyWith(
       originalUri: original.originalUri,
-      canonicalUri: canonical,
       title: metadata?.title,
       thumbnailUri: metadata?.thumbnailUri,
     );

@@ -45,6 +45,41 @@ void main() {
     expect(notifications, 1);
   });
 
+  test('end-of-media loops resume playback intent but an explicit pause is respected', () async {
+    await controller.activateLoopRange(
+      LoopRange(
+        start: const Duration(seconds: 2),
+        end: const Duration(seconds: 4),
+      ),
+    );
+    await controller.play();
+    bridge.emit({
+      'ready': true,
+      'playing': false,
+      'ended': true,
+      'positionMilliseconds': 4000,
+      'durationMilliseconds': 10000,
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 275));
+    expect(bridge.playCalls, 2);
+    await controller.pause();
+    bridge.emit({
+      'ready': true,
+      'playing': false,
+      'positionMilliseconds': 2000,
+      'durationMilliseconds': 10000,
+    });
+    bridge.emit({
+      'ready': true,
+      'playing': false,
+      'ended': true,
+      'positionMilliseconds': 4000,
+      'durationMilliseconds': 10000,
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 275));
+    expect(bridge.playCalls, 2);
+  });
+
   test('ignores invalid numeric fields and clamps reported speed', () {
     bridge.emit({
       'ready': true,

@@ -64,23 +64,45 @@ void main() {
     expect(find.text('第二周成果'), findsOneWidget);
     expect(find.text('成果时间线'), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('select_plan_outcome_older')),
+      160,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('select_plan_outcome_older')));
     await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('select_plan_outcome_newer')),
+      -160,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('select_plan_outcome_newer')));
     await tester.pump();
     expect(find.byKey(const Key('plan_outcome_comparison')), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('plan_outcome_compare_play_pause')),
+      -160,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('plan_outcome_compare_play_pause')));
     await tester.pump();
     expect(recorder.playedPath, older.filePath);
 
     recorder.position = const Duration(seconds: 2);
     await tester.pump(const Duration(milliseconds: 300));
+    await tester.ensureVisible(find.textContaining('较新 ·'));
+    await tester.pumpAndSettle();
     await tester.tap(find.textContaining('较新 ·'));
     await tester.pump();
     expect(recorder.playedPath, newer.filePath);
     expect(recorder.playedPosition, const Duration(seconds: 2));
 
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('plan_outcome_play_sequence')),
+      160,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('plan_outcome_play_sequence')));
     await tester.pump();
     expect(recorder.playedPath, older.filePath);

@@ -3,6 +3,7 @@ enum SourcePlatform {
   youtube,
   bilibili,
   douyin,
+  instagram,
   xiaohongshu,
   genericWeb,
 }

@@ -86,6 +86,7 @@ IconData _platformIcon(SourcePlatform platform) {
     SourcePlatform.youtube => Icons.play_circle_fill_rounded,
     SourcePlatform.bilibili => Icons.smart_display_rounded,
     SourcePlatform.douyin => Icons.music_note_rounded,
+    SourcePlatform.instagram => Icons.camera_alt_outlined,
     SourcePlatform.xiaohongshu => Icons.menu_book_rounded,
     SourcePlatform.genericWeb => Icons.public_rounded,
   };

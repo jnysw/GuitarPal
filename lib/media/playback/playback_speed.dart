@@ -17,3 +17,8 @@ double normalizePlaybackSpeed(double value) {
 String formatPlaybackSpeed(double value) {
   return '${normalizePlaybackSpeed(value).toStringAsFixed(2)}x';
 }
+
+/// Chooses the nearest rate advertised by a platform, preferring the slower
+/// rate when the requested value is exactly between two choices.
+double nearestPlaybackRate(double preferred, List<double> rates) => rates
+    .reduce((a, b) => (a - preferred).abs() <= (b - preferred).abs() ? a : b);

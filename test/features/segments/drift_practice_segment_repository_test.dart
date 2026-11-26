@@ -49,6 +49,10 @@ void main() {
 
     final segments = await repository.watchBySource('source-1').first;
     expect(segments.map((segment) => segment.id), ['segment-5', 'segment-20']);
+    expect((await repository.watchAll().first).map((segment) => segment.id), [
+      'segment-5',
+      'segment-20',
+    ]);
     expect(segments.first.note, '保持手腕放松');
     expect(segments.first.preferredSpeed, 0.75);
     expect(segments.last.note, isNull);

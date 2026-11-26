@@ -5,13 +5,13 @@ abstract interface class UriRedirectResolver {
   Future<Uri> resolve(Uri uri);
 }
 
-/// Expands public Bilibili share links using ordinary HTTPS redirects only.
+/// Expands public share links using ordinary HTTPS redirects only.
 ///
-/// Redirects are kept inside Bilibili-owned hosts and response bodies are not
+/// Redirects stay within the original platform and response bodies are not
 /// consumed as content. Any network or validation failure returns the input so
 /// importing a source still works in offline/reference mode.
-final class BilibiliShareRedirectResolver implements UriRedirectResolver {
-  BilibiliShareRedirectResolver({HttpClient? client})
+final class PlatformShareRedirectResolver implements UriRedirectResolver {
+  PlatformShareRedirectResolver({HttpClient? client})
     : _client = client ?? HttpClient();
 
   final HttpClient _client;
@@ -21,48 +21,63 @@ final class BilibiliShareRedirectResolver implements UriRedirectResolver {
 
   @override
   Future<Uri> resolve(Uri uri) async {
-    if (!_isShortShareUri(uri)) return uri;
+    final hosts = _redirectHosts(uri);
+    if (hosts == null || !_isAllowedDestination(uri, hosts)) return uri;
 
     var current = uri;
+    final budget = Stopwatch()..start();
     try {
       for (
         var redirectCount = 0;
         redirectCount < _maximumRedirects;
         redirectCount++
       ) {
-        final request = await _client.getUrl(current).timeout(_timeout);
+        final request = await _client
+            .getUrl(current)
+            .timeout(_timeout - budget.elapsed);
         request
           ..followRedirects = false
           ..headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
-        final response = await request.close().timeout(_timeout);
+        final response = await request.close().timeout(
+          _timeout - budget.elapsed,
+        );
         final location = response.headers.value(HttpHeaders.locationHeader);
-        await response.drain<void>().timeout(_timeout);
+        await response.listen((_) {}).cancel();
 
         if (!_isRedirect(response.statusCode) || location == null) {
           return current;
         }
 
         final next = current.resolve(location);
-        if (!_isAllowedDestination(next)) return uri;
+        if (!_isAllowedDestination(next, hosts)) return uri;
         current = next;
       }
-      return current;
+      return uri;
     } on Object {
       return uri;
     }
   }
 
-  bool _isShortShareUri(Uri uri) {
-    return uri.scheme == 'https' && _normalizedHost(uri) == 'b23.tv';
-  }
+  Set<String>? _redirectHosts(Uri uri) => switch (uri.host) {
+    'b23.tv' || 'www.b23.tv' => const {
+      'b23.tv',
+      'www.b23.tv',
+      'bilibili.com',
+      'www.bilibili.com',
+      'm.bilibili.com',
+    },
+    'www.instagram.com' || 'instagram.com' || 'm.instagram.com'
+        when uri.pathSegments.firstOrNull == 'share' =>
+      const {'www.instagram.com', 'instagram.com', 'm.instagram.com'},
+    _ => null,
+  };
 
-  bool _isAllowedDestination(Uri uri) {
-    if (uri.scheme != 'https' || uri.userInfo.isNotEmpty) return false;
-    final host = _normalizedHost(uri);
-    return host == 'b23.tv' ||
-        host == 'bilibili.com' ||
-        host.endsWith('.bilibili.com');
-  }
+  bool _isAllowedDestination(Uri uri, Set<String> hosts) =>
+      uri.scheme == 'https' &&
+      uri.port == 443 &&
+      uri.userInfo.isEmpty &&
+      (hosts.contains(uri.host) ||
+          (hosts.contains('b23.tv') && uri.host.endsWith('.bilibili.com')));
 
   bool _isRedirect(int statusCode) {
     return statusCode == HttpStatus.movedPermanently ||
@@ -71,9 +86,4 @@ final class BilibiliShareRedirectResolver implements UriRedirectResolver {
         statusCode == HttpStatus.temporaryRedirect ||
         statusCode == HttpStatus.permanentRedirect;
   }
-}
-
-String _normalizedHost(Uri uri) {
-  final host = uri.host.toLowerCase();
-  return host.startsWith('www.') ? host.substring(4) : host;
 }

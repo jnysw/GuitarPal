@@ -68,6 +68,9 @@ void main() {
     expect(find.text('0/5 次'), findsOneWidget);
     expect(find.byKey(const Key('practice_week_summary')), findsOneWidget);
     expect(find.text('本周进度'), findsOneWidget);
+    expect(find.byKey(const Key('plans_reminders_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('plan_reminder_plan-1')), findsOneWidget);
+    expect(find.text('设置提醒'), findsOneWidget);
 
     final recordButton = find.byKey(const ValueKey('plan_record_plan-1'));
     await tester.drag(find.byType(ListView), const Offset(0, -320));

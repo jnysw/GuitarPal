@@ -20,7 +20,7 @@ final sourceAdapterRegistryProvider = Provider<AdapterRegistry>((ref) {
   return AdapterRegistry(const [
     YouTubeAdapter(),
     BilibiliAdapter(),
-    DouyinAdapter(),
+    InstagramAdapter(),
     XiaohongshuAdapter(),
     GenericWebAdapter(),
   ]);
@@ -30,7 +30,7 @@ final sourceResolverProvider = Provider<SourceResolver>((ref) {
   return SourceResolver(
     ref.watch(sourceAdapterRegistryProvider),
     ref.watch(sourceUrlNormalizerProvider),
-    redirectResolver: BilibiliShareRedirectResolver(),
+    redirectResolver: PlatformShareRedirectResolver(),
     metadataLoader: ref.watch(sourceMetadataLoaderProvider),
   );
 });

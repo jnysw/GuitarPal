@@ -1,0 +1,266 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../media/playback/local_video_playback_controller.dart';
+import '../../chords/chord_providers.dart';
+import '../../segments/presentation/practice_segment_timecode.dart';
+import 'chord_practice_sheet.dart';
+import 'scrolling_chord_lane.dart';
+import '../../audio_tools/algorithm_providers.dart';
+import '../../audio_tools/domain/algorithm_task.dart';
+import '../../audio_tools/domain/legacy_algorithm_models.dart';
+import '../../audio_tools/domain/video_analysis_binding.dart';
+import '../../audio_tools/domain/video_chord_playback.dart';
+
+/// A live chord readout beside the video, with optional practice controls.
+class VideoChordPlaybackStrip extends ConsumerStatefulWidget {
+  const VideoChordPlaybackStrip({
+    super.key,
+    required this.sourceId,
+    required this.path,
+    required this.controller,
+    required this.onCalibrate,
+    this.compact = false,
+    this.showTimeline = true,
+    this.enabled = true,
+    this.expanded = true,
+    this.onToggleExpanded,
+  });
+  final String sourceId, path;
+  final LocalVideoPlaybackController controller;
+  final ValueChanged<AlgorithmTaskRecord> onCalibrate;
+  final VoidCallback? onToggleExpanded;
+  final bool compact, enabled, showTimeline, expanded;
+  @override
+  ConsumerState<VideoChordPlaybackStrip> createState() =>
+      _VideoChordPlaybackStripState();
+}
+
+class _VideoChordPlaybackStripState
+    extends ConsumerState<VideoChordPlaybackStrip> {
+  List<AlgorithmTaskRecord>? _cachedTasks;
+  final _results =
+      <({AlgorithmTaskRecord task, VideoChordPlayback playback})>[];
+  String? _cachedPath, _cachedSource;
+
+  @override
+  Widget build(BuildContext context) {
+    final tasks =
+        ref.watch(algorithmTasksProvider).asData?.value ??
+        const <AlgorithmTaskRecord>[];
+    if (!identical(tasks, _cachedTasks) ||
+        _cachedPath != widget.path ||
+        _cachedSource != widget.sourceId) {
+      _cachedTasks = tasks;
+      _cachedPath = widget.path;
+      _cachedSource = widget.sourceId;
+      _results.clear();
+      FileStat? stat;
+      final ranges = <(int, int)>{};
+      for (final task in tasks) {
+        if (task.linkedSourceId != widget.sourceId ||
+            task.operation != AlgorithmOperation.chords ||
+            task.resultJson == null ||
+            task.mediaBindingJson == null) {
+          continue;
+        }
+        try {
+          final binding = VideoAnalysisBinding.fromJson(
+            algorithmObject(jsonDecode(task.mediaBindingJson!)),
+          );
+          if (!binding.matches(
+            widget.sourceId,
+            widget.path,
+            stat ??= File(widget.path).statSync(),
+          )) {
+            continue;
+          }
+          final range = (binding.startMs, binding.endMs);
+          if (ranges.contains(range)) continue;
+          final result = LegacyChordResult.fromJson(
+            algorithmObject(jsonDecode(task.resultJson!)),
+          );
+          if (binding.manualChordZeroMs != null &&
+              binding.manualChordZeroMs! + result.duration.inMilliseconds >
+                  binding.endMs + 20) {
+            continue;
+          }
+          ranges.add(range);
+          _results.add((
+            task: task,
+            playback: VideoChordPlayback(result, binding),
+          ));
+        } on Object {
+          continue;
+        }
+      }
+    }
+    if (_results.isEmpty) return const SizedBox.shrink();
+    final showDiagrams =
+        ref.watch(chordPreferencesProvider).asData?.value.showDiagrams ?? false;
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        final position = widget.controller.position.inMilliseconds;
+        final loopController = widget.controller.loopController;
+        final loop = loopController.enabled ? loopController.range : null;
+        final covering = _results.where((entry) {
+          final binding = entry.playback.binding;
+          return position >= binding.startMs && position < binding.endMs;
+        });
+        final matchingLoop = loop == null
+            ? null
+            : covering.where((entry) {
+                final binding = entry.playback.binding;
+                return binding.startMs == loop.start.inMilliseconds &&
+                    binding.endMs == loop.end.inMilliseconds;
+              }).firstOrNull;
+        final selected = matchingLoop ?? covering.firstOrNull ?? _results.first;
+        final data = selected.playback;
+        final binding = data.binding;
+        final current = data.current(position);
+        final label = current?.displayLabel ?? '—';
+        final colors = Theme.of(context).colorScheme;
+        return Material(
+          color: colors.surfaceContainer,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '当前和弦 $label',
+                            key: const Key('video_current_chord'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: widget.compact || !widget.expanded
+                                  ? 18
+                                  : 22,
+                              fontWeight: FontWeight.bold,
+                              color: colors.primary,
+                            ),
+                          ),
+                          if (widget.expanded)
+                            Text(
+                              '下一和弦 ${data.next(position)?.displayLabel ?? '—'} · 调性 ${data.result.keyEstimate.isEmpty ? '未知' : data.result.keyEstimate}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          if (widget.expanded)
+                            Text(
+                              data.manual
+                                  ? '已人工校准'
+                                  : data.automatic
+                                  ? '自动对齐原音频'
+                                  : '按分析区间起点显示 · 静音偏移待校准',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          if (widget.expanded && _results.length > 1)
+                            Text(
+                              binding.startMs == 0 &&
+                                      binding.endMs == binding.sourceDurationMs
+                                  ? '整段分析'
+                                  : '${formatPracticeTimecode(Duration(milliseconds: binding.startMs))}–${formatPracticeTimecode(Duration(milliseconds: binding.endMs))} 的分析',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (widget.expanded && showDiagrams)
+                      ChordVoicingCard(
+                        rawLabel: current?.rawLabel,
+                        displayLabel: label,
+                        thumbnail: true,
+                        compact: widget.compact,
+                      ),
+                    if (widget.expanded &&
+                        showDiagrams &&
+                        !widget.compact &&
+                        MediaQuery.sizeOf(context).width >= 600)
+                      ChordVoicingCard(
+                        rawLabel: data.next(position)?.rawLabel,
+                        displayLabel: data.next(position)?.displayLabel ?? '—',
+                        thumbnail: true,
+                      ),
+                    if (widget.expanded)
+                      IconButton(
+                        key: const Key('video_chord_settings'),
+                        tooltip: '指法设置',
+                        onPressed: widget.enabled
+                            ? () => showModalBottomSheet<void>(
+                                context: context,
+                                isScrollControlled: true,
+                                useSafeArea: true,
+                                builder: (_) => ChordPracticeSheet(
+                                  playback: data,
+                                  controller: widget.controller,
+                                ),
+                              )
+                            : null,
+                        icon: const Icon(Icons.back_hand_outlined),
+                      ),
+                    if (widget.expanded)
+                      TextButton(
+                        onPressed: widget.enabled
+                            ? () => widget.onCalibrate(selected.task)
+                            : null,
+                        child: const Text('校准'),
+                      ),
+                    if (widget.onToggleExpanded != null)
+                      Semantics(
+                        expanded: widget.expanded,
+                        child: IconButton(
+                          key: const Key('video_chord_display_toggle'),
+                          tooltip: widget.expanded ? '收起和弦显示' : '展开和弦显示',
+                          onPressed: widget.onToggleExpanded,
+                          icon: Icon(
+                            widget.expanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (widget.expanded && widget.showTimeline)
+                  ScrollingChordLane(
+                    playback: data,
+                    positionMs: position,
+                    playing: widget.controller.isPlaying,
+                    compact: widget.compact,
+                    enabled: widget.enabled,
+                    onSeek: (target) async {
+                      if (!data.binding.matches(
+                            widget.sourceId,
+                            widget.path,
+                            await File(widget.path).stat(),
+                          ) ||
+                          !mounted) {
+                        return;
+                      }
+                      await widget.controller.seek(
+                        Duration(milliseconds: target),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

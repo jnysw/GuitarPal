@@ -1,15 +1,21 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/database/app_database.dart' as db;
+import '../../../core/sync/drift_sync_outbox_repository.dart';
+import '../../../core/sync/sync_outbox.dart';
 import '../../../domain/practice_plan/calendar_date.dart';
 import '../../../domain/practice_plan/practice_plan.dart' as domain;
 import '../../../domain/practice_plan/practice_plan_repository.dart';
 import '../../../domain/practice_plan/reminder_time.dart';
 
 class DriftPracticePlanRepository implements PracticePlanRepository {
-  const DriftPracticePlanRepository(this._database);
+  DriftPracticePlanRepository(this._database, {DateTime Function()? clock})
+    : _syncOutbox = DriftSyncOutboxRepository(_database),
+      _clock = clock ?? DateTime.now;
 
   final db.AppDatabase _database;
+  final DriftSyncOutboxRepository _syncOutbox;
+  final DateTime Function() _clock;
 
   @override
   Stream<List<domain.PracticePlan>> watchAll() {
@@ -42,36 +48,69 @@ class DriftPracticePlanRepository implements PracticePlanRepository {
 
   @override
   Future<void> save(domain.PracticePlan plan) async {
-    await _database
-        .into(_database.practicePlans)
-        .insertOnConflictUpdate(
-          db.PracticePlansCompanion(
-            id: Value(plan.id),
-            name: Value(plan.name),
-            sourceId: Value(plan.sourceId),
-            segmentId: Value(plan.segmentId),
-            goalType: Value(plan.goal.type.name),
-            targetLoops: Value(plan.goal.targetLoops),
-            targetDurationMilliseconds: Value(
-              plan.goal.targetDuration?.inMilliseconds,
+    await _database.transaction(() async {
+      await _database
+          .into(_database.practicePlans)
+          .insertOnConflictUpdate(
+            db.PracticePlansCompanion(
+              id: Value(plan.id),
+              name: Value(plan.name),
+              sourceId: Value(plan.sourceId),
+              segmentId: Value(plan.segmentId),
+              goalType: Value(plan.goal.type.name),
+              targetLoops: Value(plan.goal.targetLoops),
+              targetDurationMilliseconds: Value(
+                plan.goal.targetDuration?.inMilliseconds,
+              ),
+              startDay: Value(plan.startDate.dayKey),
+              endDay: Value(plan.endDate.dayKey),
+              repeatWeekdayMask: Value(_encodeWeekdays(plan.repeatWeekdays)),
+              reminderMinutesSinceMidnight: Value(
+                plan.reminderTime?.minutesSinceMidnight,
+              ),
+              createdAt: Value(plan.createdAt),
+              updatedAt: Value(plan.updatedAt),
             ),
-            startDay: Value(plan.startDate.dayKey),
-            endDay: Value(plan.endDate.dayKey),
-            repeatWeekdayMask: Value(_encodeWeekdays(plan.repeatWeekdays)),
-            reminderMinutesSinceMidnight: Value(
-              plan.reminderTime?.minutesSinceMidnight,
-            ),
-            createdAt: Value(plan.createdAt),
-            updatedAt: Value(plan.updatedAt),
-          ),
-        );
+          );
+      await _syncOutbox.enqueue(
+        entityType: SyncEntityType.practicePlan,
+        entityId: plan.id,
+        operation: SyncOperation.upsert,
+        changedAt: plan.updatedAt,
+      );
+    });
   }
 
   @override
   Future<void> delete(String id) async {
-    await (_database.delete(
-      _database.practicePlans,
-    )..where((row) => row.id.equals(id))).go();
+    await _database.transaction(() async {
+      final affectedSessionIds =
+          await (_database.selectOnly(_database.practiceSessions)
+                ..addColumns([_database.practiceSessions.id])
+                ..where(_database.practiceSessions.planId.equals(id)))
+              .map((row) => row.read(_database.practiceSessions.id)!)
+              .get();
+      final deleted = await (_database.delete(
+        _database.practicePlans,
+      )..where((row) => row.id.equals(id))).go();
+      if (deleted == 0) return;
+
+      final changedAt = _clock().toUtc();
+      await _syncOutbox.enqueue(
+        entityType: SyncEntityType.practicePlan,
+        entityId: id,
+        operation: SyncOperation.delete,
+        changedAt: changedAt,
+      );
+      for (final sessionId in affectedSessionIds) {
+        await _syncOutbox.enqueue(
+          entityType: SyncEntityType.practiceSession,
+          entityId: sessionId,
+          operation: SyncOperation.upsert,
+          changedAt: changedAt,
+        );
+      }
+    });
   }
 
   domain.PracticePlan _toDomain(db.PracticePlan row) {

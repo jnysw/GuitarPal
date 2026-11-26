@@ -1,4 +1,4 @@
-enum PracticeRecordingKind { segmentTake, planOutcome }
+enum PracticeRecordingKind { segmentTake, planOutcome, performanceTake }
 
 class PracticeRecording {
   static const Object _unchangedPlanId = Object();
@@ -22,7 +22,14 @@ class PracticeRecording {
     this.segmentId,
     this.referenceEnd,
     this.note,
+    this.performanceContextJson,
   }) {
+    if (kind == PracticeRecordingKind.performanceTake &&
+        (performanceContextJson == null ||
+            performanceContextJson!.isEmpty ||
+            performanceContextJson!.length > 65536)) {
+      throw ArgumentError('演奏录音需要有效的伴奏与同步快照');
+    }
     if (id.trim().isEmpty) {
       throw ArgumentError.value(id, 'id', 'must not be empty');
     }
@@ -88,6 +95,7 @@ class PracticeRecording {
   final double referenceSpeed;
   final String title;
   final String? note;
+  final String? performanceContextJson;
   final DateTime recordedAt;
 
   PracticeRecording copyWith({
@@ -100,6 +108,7 @@ class PracticeRecording {
     Object? referenceEnd = _unchangedReferenceEnd,
     double? referenceSpeed,
     String? title,
+    String? performanceContextJson,
     Object? note = _unchangedNote,
   }) {
     return PracticeRecording(
@@ -125,6 +134,8 @@ class PracticeRecording {
       title: title ?? this.title,
       note: identical(note, _unchangedNote) ? this.note : note as String?,
       recordedAt: recordedAt,
+      performanceContextJson:
+          performanceContextJson ?? this.performanceContextJson,
     );
   }
 

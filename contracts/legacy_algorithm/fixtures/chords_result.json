@@ -1,0 +1,18 @@
+{
+  "job_id": "contract_job_1",
+  "status": "completed",
+  "audio_filename": "测试.wav",
+  "duration_seconds": 8.0,
+  "tempo_bpm": 120.0,
+  "key": "C major",
+  "progression": "I → vi → ?",
+  "chord_count": 2,
+  "segments": [
+    {"chord": "C", "roman": "I", "start": 0, "end": 3.25, "duration": 3.25, "confidence": 1.0},
+    {"chord": "A:min", "roman": "vi", "start": 3.25, "end": 7, "duration": 3.75, "confidence": 1.0},
+    {"chord": "X", "roman": "?", "start": 7, "end": 8, "duration": 1, "confidence": 1.0}
+  ],
+  "raw_chords": null,
+  "processing_time_seconds": 12.34,
+  "created_at": "2026-10-27T03:00:12.340Z"
+}

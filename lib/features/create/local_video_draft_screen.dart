@@ -127,6 +127,7 @@ class _LocalVideoDraftScreenState extends ConsumerState<LocalVideoDraftScreen> {
         appBar: AppBar(title: const Text('确认本地视频')),
         body: SafeArea(
           child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
             child: Center(
               child: ConstrainedBox(
@@ -134,23 +135,20 @@ class _LocalVideoDraftScreenState extends ConsumerState<LocalVideoDraftScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    AspectRatio(
-                      aspectRatio: _previewAspectRatio(draft),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: colors.inverseSurface,
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Center(
-                          child: Icon(
-                            Icons.video_file_rounded,
-                            size: 64,
-                            color: colors.inversePrimary,
-                          ),
-                        ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: colors.primaryContainer,
+                        child: const Icon(Icons.video_file_outlined),
+                      ),
+                      title: const Text('视频已选好'),
+                      subtitle: Text(
+                        draft.file.displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 12),
                     TextField(
                       key: const Key('local_video_title_field'),
                       controller: titleController,
@@ -165,7 +163,11 @@ class _LocalVideoDraftScreenState extends ConsumerState<LocalVideoDraftScreen> {
                     const SizedBox(height: 4),
                     Card(
                       margin: EdgeInsets.zero,
-                      child: Column(
+                      child: ExpansionTile(
+                        title: const Text('文件信息'),
+                        subtitle: Text(
+                          '${_formatDuration(draft.file.duration)} · ${_formatFileSize(draft.file.sizeBytes)}',
+                        ),
                         children: [
                           _MetadataTile(
                             icon: Icons.insert_drive_file_outlined,
@@ -211,7 +213,7 @@ class _LocalVideoDraftScreenState extends ConsumerState<LocalVideoDraftScreen> {
                           const SizedBox(width: 10),
                           const Expanded(
                             child: Text(
-                              '保存时会把视频移入 GuitarPal 的私有目录；不会修改或删除相册、下载目录中的原文件。',
+                              '保存后可离线练习，原视频仍保留在原位置。和弦分析与分轨由你在练习页手动开始。',
                             ),
                           ),
                         ],
@@ -238,26 +240,24 @@ class _LocalVideoDraftScreenState extends ConsumerState<LocalVideoDraftScreen> {
                         label: const Text('保存并加入计划'),
                       )
                     else
-                      Row(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              key: const Key('save_local_video'),
-                              onPressed: _isSaving
-                                  ? null
-                                  : () => _save(startNow: false),
-                              child: const Text('保存到练习库'),
-                            ),
+                          FilledButton.icon(
+                            key: const Key('start_local_video'),
+                            onPressed: _isSaving
+                                ? null
+                                : () => _save(startNow: true),
+                            icon: const Icon(Icons.play_arrow),
+                            label: const Text('保存并开始练习'),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton(
-                              key: const Key('start_local_video'),
-                              onPressed: _isSaving
-                                  ? null
-                                  : () => _save(startNow: true),
-                              child: const Text('保存并开始'),
-                            ),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            key: const Key('save_local_video'),
+                            onPressed: _isSaving
+                                ? null
+                                : () => _save(startNow: false),
+                            child: const Text('先保存到练习库'),
                           ),
                         ],
                       ),
@@ -330,15 +330,6 @@ class _MissingDraftView extends StatelessWidget {
       ),
     );
   }
-}
-
-double _previewAspectRatio(LocalVideoDraft draft) {
-  final width = draft.file.width;
-  final height = draft.file.height;
-  if (width == null || height == null || width <= 0 || height <= 0) {
-    return 16 / 9;
-  }
-  return (width / height).clamp(0.65, 2.2);
 }
 
 String _formatDuration(Duration duration) {

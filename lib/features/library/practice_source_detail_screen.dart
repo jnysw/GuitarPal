@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/platform/text_share_gateway.dart';
 import '../../domain/practice_segment/practice_segment.dart';
 import '../../domain/practice_source/practice_source.dart';
+import '../../media/adapters/online_video_links.dart';
 import '../recordings/presentation/practice_recording_list.dart';
 import '../segments/practice_segment_providers.dart';
 import '../segments/presentation/practice_segment_card.dart';
@@ -46,12 +48,7 @@ class _SourceDetailView extends ConsumerWidget {
 
   final PracticeSource source;
 
-  bool get _canPracticeInline =>
-      (source.platform == SourcePlatform.bilibili &&
-          source.externalId != null) ||
-      (source.platform == SourcePlatform.local &&
-          source.kind == SourceKind.video &&
-          source.canonicalUri?.scheme == 'file');
+  bool get _canPracticeInline => source.canPracticeInApp;
 
   Future<void> _openOriginal(BuildContext context, WidgetRef ref) async {
     try {
@@ -460,7 +457,7 @@ class _SourceDetailView extends ConsumerWidget {
                             ],
                           ),
                           const SizedBox(height: 20),
-                          if (_canPracticeInline)
+                          if (_canPracticeInline || source.instagramPreview != null)
                             FilledButton.icon(
                               key: const Key('source_detail_start_practice'),
                               onPressed: () => context.push(
@@ -468,7 +465,7 @@ class _SourceDetailView extends ConsumerWidget {
                                 '${Uri.encodeComponent(source.id)}/practice',
                               ),
                               icon: const Icon(Icons.play_arrow_rounded),
-                              label: const Text('开始练习'),
+                              label: Text(_canPracticeInline ? '开始练习' : '预览帖子'),
                             )
                           else
                             Container(
@@ -478,9 +475,36 @@ class _SourceDetailView extends ConsumerWidget {
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Text(
-                                '此来源当前为引用模式。可以保存在练习库并打开原内容，App 内播放将在对应平台适配后开放。',
+                                '可将此链接留在练习库，并在原平台观看。',
                               ),
                             ),
+                          if (kDebugMode &&
+                              source.platform == SourcePlatform.local &&
+                              source.kind == SourceKind.video) ...[
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              key: const Key('source_detail_performance'),
+                              onPressed: () => context.push(
+                                Uri(
+                                  path: '/performance/prepare',
+                                  queryParameters: {'sourceId': source.id},
+                                ).toString(),
+                              ),
+                              icon: const Icon(Icons.headphones),
+                              label: const Text('去演奏 · 准备伴奏'),
+                            ),
+                            TextButton.icon(
+                              key: const Key('source_detail_performance_takes'),
+                              onPressed: () => context.push(
+                                Uri(
+                                  path: '/performance/takes',
+                                  queryParameters: {'sourceId': source.id},
+                                ).toString(),
+                              ),
+                              icon: const Icon(Icons.library_music_outlined),
+                              label: const Text('演奏录音'),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           OutlinedButton.icon(
                             key: const Key('source_detail_add_to_plan'),
@@ -1028,6 +1052,7 @@ String _platformLabel(SourcePlatform platform) {
     SourcePlatform.youtube => 'YouTube',
     SourcePlatform.bilibili => 'Bilibili',
     SourcePlatform.douyin => '抖音',
+    SourcePlatform.instagram => 'Instagram',
     SourcePlatform.xiaohongshu => '小红书',
     SourcePlatform.genericWeb => '网页链接',
   };
@@ -1039,6 +1064,7 @@ IconData _platformIcon(SourcePlatform platform) {
     SourcePlatform.youtube => Icons.play_circle_fill_rounded,
     SourcePlatform.bilibili => Icons.smart_display_rounded,
     SourcePlatform.douyin => Icons.music_note_rounded,
+    SourcePlatform.instagram => Icons.camera_alt_outlined,
     SourcePlatform.xiaohongshu => Icons.menu_book_rounded,
     SourcePlatform.genericWeb => Icons.public_rounded,
   };

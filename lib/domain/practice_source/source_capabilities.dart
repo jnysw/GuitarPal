@@ -49,7 +49,20 @@ class SourceCapabilities {
     canImportLocalCopy: true,
   );
 
-  static const bilibiliWeb = SourceCapabilities(
+  static const embeddedPreview = SourceCapabilities(
+    canOpen: true,
+    canPlayInline: true,
+    canPlay: false,
+    canPause: false,
+    canSeek: false,
+    canChangeSpeed: false,
+    canLoop: false,
+    canReadPosition: false,
+    canReadDuration: false,
+    canImportLocalCopy: false,
+  );
+
+  static const controlledWeb = SourceCapabilities(
     canOpen: true,
     canPlayInline: true,
     canPlay: true,
