@@ -329,10 +329,19 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
               ? Center(child: OpenOriginalSourceButton(source: widget.source))
               : LayoutBuilder(
                   builder: (_, constraints) {
-                    final normalHeight = (constraints.maxWidth * 9 / 16).clamp(
-                      200.0,
-                      420.0,
-                    );
+                    final sideBySide =
+                        !_fullscreen &&
+                        constraints.maxWidth >= 620 &&
+                        constraints.maxWidth > constraints.maxHeight;
+                    final playerWidth = sideBySide
+                        ? constraints.maxWidth * .55
+                        : constraints.maxWidth;
+                    final normalHeight = (playerWidth * 9 / 16)
+                        .clamp(
+                          200.0,
+                          (constraints.maxHeight * .6).clamp(200.0, 420.0),
+                        )
+                        .toDouble();
                     final footerHeight = (constraints.maxHeight - 200).clamp(
                       48.0,
                       104.0,
@@ -346,16 +355,18 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
                         Positioned(
                           top: 0,
                           left: 0,
-                          right: 0,
-                          height: playerHeight,
+                          width: playerWidth,
+                          height: sideBySide
+                              ? constraints.maxHeight
+                              : playerHeight,
                           child: WebViewWidget(
                             key: const Key('youtube_web_surface'),
                             controller: _web!,
                           ),
                         ),
                         Positioned(
-                          top: playerHeight,
-                          left: 0,
+                          top: sideBySide ? 0 : playerHeight,
+                          left: sideBySide ? playerWidth : 0,
                           right: 0,
                           bottom: 0,
                           child: ListenableBuilder(
