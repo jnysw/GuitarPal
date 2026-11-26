@@ -9,6 +9,7 @@ import '../../domain/practice_plan/practice_plan.dart';
 import '../../domain/practice_plan/practice_plan_progress.dart';
 import '../../domain/practice_plan/practice_week_summary.dart';
 import '../../domain/practice_source/practice_source.dart';
+import '../../media/adapters/online_video_links.dart';
 import '../library/practice_source_providers.dart';
 import '../segments/practice_segment_providers.dart';
 import 'practice_plan_providers.dart';
@@ -516,12 +517,7 @@ class _PlanCard extends ConsumerWidget {
       _ => null,
     };
     final status = _planStatus(plan, today, progress);
-    final canPracticeInline =
-        (sourceValue?.platform == SourcePlatform.bilibili &&
-            sourceValue?.externalId != null) ||
-        (sourceValue?.platform == SourcePlatform.local &&
-            sourceValue?.kind == SourceKind.video &&
-            sourceValue?.canonicalUri?.scheme == 'file');
+    final canPracticeInline = sourceValue?.canPracticeInApp == true;
 
     return Card(
       key: ValueKey('plan_card_${plan.id}'),

@@ -3,12 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/practice_segment/practice_segment.dart';
 import '../../domain/practice_source/practice_source.dart';
+import '../../media/adapters/online_video_links.dart';
 import '../library/practice_source_providers.dart';
 import '../plans/practice_plan_providers.dart';
 import '../profile/app_settings_providers.dart';
 import '../segments/practice_segment_providers.dart';
 import 'bilibili_web_player_screen.dart';
+import 'instagram_preview_screen.dart';
 import 'local_video_player_screen.dart';
+import 'widgets/open_original_source_button.dart';
+import 'youtube_practice_screen.dart';
 
 class PracticePlayerRouteScreen extends ConsumerWidget {
   const PracticePlayerRouteScreen({
@@ -139,12 +143,32 @@ class PracticePlayerScreen extends StatelessWidget {
       );
     }
 
+    if (source.youtubeId case final videoId?) {
+      return YouTubePracticeScreen(
+        source: source,
+        videoId: videoId,
+        initialSegment: initialSegment,
+        planId: planId,
+        defaultPlaybackSpeed: defaultPlaybackSpeed,
+      );
+    }
+
+    if (source.instagramPreview case final post?) {
+      return InstagramPreviewScreen(source: source, post: post);
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(source.title)),
-      body: const Center(
+      body: Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('这个来源目前使用引用模式，App 内播放器将在对应 Adapter 就绪后开放。'),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('此链接可从原平台查看。', textAlign: TextAlign.center),
+              OpenOriginalSourceButton(source: source),
+            ],
+          ),
         ),
       ),
     );

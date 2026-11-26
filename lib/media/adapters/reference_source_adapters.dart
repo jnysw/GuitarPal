@@ -1,5 +1,6 @@
 import '../../domain/practice_source/practice_source.dart';
 import '../../domain/practice_source/source_capabilities.dart';
+import 'online_video_links.dart';
 import 'practice_source_adapter.dart';
 
 abstract base class ReferenceSourceAdapter implements PracticeSourceAdapter {
@@ -13,22 +14,27 @@ abstract base class ReferenceSourceAdapter implements PracticeSourceAdapter {
 
   String? extractExternalId(Uri uri) => null;
 
+  Uri canonicalUri(Uri uri) => uri;
+
+  SourceCapabilities capabilitiesFor(Uri uri) => capabilities;
+
   @override
   Future<ResolvedSource> resolve(Uri uri) async {
     return ResolvedSource(
       platform: platform,
       kind: SourceKind.webReference,
       originalUri: uri,
-      canonicalUri: uri,
+      canonicalUri: canonicalUri(uri),
       externalId: extractExternalId(uri),
       title: defaultTitle,
-      capabilities: capabilities,
+      capabilities: capabilitiesFor(uri),
     );
   }
 
   @override
   Future<SourceCapabilities> getCapabilities(PracticeSource source) async {
-    return capabilities;
+    final uri = source.canonicalUri ?? source.originalUri;
+    return uri == null ? capabilities : capabilitiesFor(uri);
   }
 }
 
@@ -42,21 +48,22 @@ final class YouTubeAdapter extends ReferenceSourceAdapter {
   String get defaultTitle => 'YouTube 练习内容';
 
   @override
-  bool canHandle(Uri uri) {
-    final host = _normalizedHost(uri);
-    return host == 'youtu.be' ||
-        host == 'youtube.com' ||
-        host == 'm.youtube.com';
-  }
+  bool canHandle(Uri uri) => isYouTubeHost(uri.host);
 
   @override
-  String? extractExternalId(Uri uri) {
-    if (_normalizedHost(uri) == 'youtu.be') {
-      return uri.pathSegments.firstOrNull;
-    }
-    final queryId = uri.queryParameters['v'];
-    if (queryId != null && queryId.isNotEmpty) return queryId;
-    return _segmentAfter(uri, const {'shorts', 'embed', 'live'});
+  String? extractExternalId(Uri uri) => youtubeVideoId(uri);
+
+  @override
+  SourceCapabilities capabilitiesFor(Uri uri) => youtubeVideoId(uri) == null
+      ? SourceCapabilities.reference
+      : SourceCapabilities.controlledWeb;
+
+  @override
+  Uri canonicalUri(Uri uri) {
+    final id = youtubeVideoId(uri);
+    if (id == null) return uri;
+    final start = uri.queryParameters['t'] ?? uri.queryParameters['start'];
+    return Uri.https('www.youtube.com', '/watch', {'v': id, 't': ?start});
   }
 }
 
@@ -70,7 +77,7 @@ final class BilibiliAdapter extends ReferenceSourceAdapter {
   String get defaultTitle => 'Bilibili 练习内容';
 
   @override
-  SourceCapabilities get capabilities => SourceCapabilities.bilibiliWeb;
+  SourceCapabilities get capabilities => SourceCapabilities.controlledWeb;
 
   @override
   bool canHandle(Uri uri) {
@@ -105,13 +112,47 @@ final class DouyinAdapter extends ReferenceSourceAdapter {
     final host = _normalizedHost(uri);
     return host == 'douyin.com' ||
         host.endsWith('.douyin.com') ||
+        host == 'iesdouyin.com' ||
         host.endsWith('.iesdouyin.com');
   }
 
   @override
   String? extractExternalId(Uri uri) {
-    return _segmentAfter(uri, const {'video'});
+    final id = _segmentAfter(uri, const {'video', 'note'});
+    return id != null && RegExp(r'^\d+$').hasMatch(id) ? id : null;
   }
+
+  @override
+  Uri canonicalUri(Uri uri) {
+    final id = extractExternalId(uri);
+    if (id == null) return uri;
+    final kind = uri.pathSegments.contains('note') ? 'note' : 'video';
+    return Uri.https('www.douyin.com', '/$kind/$id');
+  }
+}
+
+final class InstagramAdapter extends ReferenceSourceAdapter {
+  const InstagramAdapter();
+
+  @override
+  SourcePlatform get platform => SourcePlatform.instagram;
+
+  @override
+  String get defaultTitle => 'Instagram 练习内容';
+
+  @override
+  bool canHandle(Uri uri) => isInstagramHost(uri.host);
+
+  @override
+  Uri canonicalUri(Uri uri) => instagramPostUri(uri) ?? uri;
+
+  @override
+  String? extractExternalId(Uri uri) => instagramPostUri(uri)?.pathSegments[1];
+
+  @override
+  SourceCapabilities capabilitiesFor(Uri uri) => instagramPostUri(uri) == null
+      ? SourceCapabilities.reference
+      : SourceCapabilities.embeddedPreview;
 }
 
 final class XiaohongshuAdapter extends ReferenceSourceAdapter {

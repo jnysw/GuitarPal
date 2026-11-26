@@ -178,7 +178,7 @@ class _ConfirmationView extends StatelessWidget {
               ),
               _CapabilityRow(
                 available: source.capabilities.canPlayInline,
-                label: 'App 内播放',
+                label: source.capabilities.canLoop ? 'App 内播放' : 'App 内预览',
               ),
               _CapabilityRow(
                 available: source.capabilities.canLoop,
@@ -235,7 +235,7 @@ class _ConfirmationView extends StatelessWidget {
                                 source.externalId == null
                             ? null
                             : onStart,
-                        child: const Text('保存并开始'),
+                        child: Text(source.capabilities.canLoop ? '保存并开始' : '保存并预览'),
                       ),
                     ),
                   ],
@@ -330,6 +330,7 @@ String _platformLabel(SourcePlatform platform) {
     SourcePlatform.youtube => 'YouTube',
     SourcePlatform.bilibili => 'Bilibili',
     SourcePlatform.douyin => '抖音',
+    SourcePlatform.instagram => 'Instagram',
     SourcePlatform.xiaohongshu => '小红书',
     SourcePlatform.genericWeb => '网页链接',
   };

@@ -29,13 +29,12 @@ class SourceResolver {
     final resolved = await adapter.resolve(canonical);
     SourceMetadata? metadata;
     try {
-      metadata = await metadataLoader?.load(canonical);
+      metadata = await metadataLoader?.load(resolved.canonicalUri);
     } on Object {
       // Preview metadata is optional and must never block importing a source.
     }
     return resolved.copyWith(
       originalUri: original.originalUri,
-      canonicalUri: canonical,
       title: metadata?.title,
       thumbnailUri: metadata?.thumbnailUri,
     );

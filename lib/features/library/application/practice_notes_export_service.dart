@@ -97,6 +97,7 @@ String _platformLabel(SourcePlatform platform) {
     SourcePlatform.youtube => 'YouTube',
     SourcePlatform.bilibili => 'B站',
     SourcePlatform.douyin => '抖音',
+    SourcePlatform.instagram => 'Instagram',
     SourcePlatform.xiaohongshu => '小红书',
     SourcePlatform.genericWeb => '网页链接',
   };

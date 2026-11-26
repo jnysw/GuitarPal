@@ -213,7 +213,7 @@ class _CreatePracticeScreenState extends ConsumerState<CreatePracticeScreen> {
                     ),
                   ] else ...[
                     const Text(
-                      '粘贴 B站、抖音、小红书、YouTube 或网页链接，也可以粘贴完整分享文案。不同平台的播放能力有所不同；和弦分析与分轨请使用本地视频。',
+                      '粘贴 B站、抖音、小红书、YouTube、Instagram 或网页链接，也可以粘贴完整分享文案。不同平台的播放能力有所不同；和弦分析与分轨请使用本地视频。',
                     ),
                     const SizedBox(height: 16),
                     TextField(

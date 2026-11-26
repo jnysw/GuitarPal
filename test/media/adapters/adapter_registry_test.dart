@@ -13,6 +13,7 @@ void main() {
       YouTubeAdapter(),
       BilibiliAdapter(),
       DouyinAdapter(),
+      InstagramAdapter(),
       XiaohongshuAdapter(),
       GenericWebAdapter(),
     ]),
@@ -21,7 +22,7 @@ void main() {
 
   test('resolves supported platforms before generic web', () async {
     final cases = <Uri, (SourcePlatform, bool)>{
-      Uri.parse('https://youtu.be/video123'): (SourcePlatform.youtube, false),
+      Uri.parse('https://youtu.be/M7lc1UVf-VE'): (SourcePlatform.youtube, true),
       Uri.parse('https://www.bilibili.com/video/BV1test123'): (
         SourcePlatform.bilibili,
         true,
@@ -33,6 +34,10 @@ void main() {
       Uri.parse('https://www.xiaohongshu.com/explore/66abc'): (
         SourcePlatform.xiaohongshu,
         false,
+      ),
+      Uri.parse('https://www.instagram.com/reel/Cso5eUUvWC4/?igsh=example'): (
+        SourcePlatform.instagram,
+        true,
       ),
       Uri.parse('https://example.com/lesson'): (
         SourcePlatform.genericWeb,
@@ -50,18 +55,71 @@ void main() {
 
   test('extracts public external ids without network requests', () async {
     final youtube = await resolver.resolve(
-      Uri.parse('https://www.youtube.com/watch?v=abc123&utm_source=share'),
+      Uri.parse('https://www.youtube.com/watch?v=M7lc1UVf-VE&utm_source=share'),
     );
     final bilibili = await resolver.resolve(
       Uri.parse('https://www.bilibili.com/video/BV1xyZ987'),
     );
 
-    expect(youtube.externalId, 'abc123');
+    expect(youtube.externalId, 'M7lc1UVf-VE');
     expect(bilibili.externalId, 'BV1xyZ987');
     expect(
       youtube.canonicalUri.toString(),
-      'https://www.youtube.com/watch?v=abc123',
+      'https://www.youtube.com/watch?v=M7lc1UVf-VE',
     );
+  });
+
+  test('keeps only the video and start time from a YouTube share', () async {
+    final source = await resolver.resolve(
+      Uri.parse('https://m.youtube.com/shorts/M7lc1UVf-VE?si=share&t=1m2s'),
+    );
+    expect(
+      source.canonicalUri.toString(),
+      'https://www.youtube.com/watch?v=M7lc1UVf-VE&t=1m2s',
+    );
+    expect(source.capabilities.canChangeSpeed, isTrue);
+    expect(source.capabilities.canLoop, isTrue);
+    for (final url in [
+      'https://www.youtube.com/watch?v=wrong',
+      'https://www.youtube.com/playlist?list=PL9',
+      'https://www.youtube.com.evil.example/watch?v=M7lc1UVf-VE',
+    ]) {
+      final nonVideo = await resolver.resolve(Uri.parse(url));
+      expect(nonVideo.capabilities.canPlayInline, isFalse);
+    }
+  });
+
+  test('public Instagram links preview without practice controls', () async {
+    final source = await resolver.resolve(
+      Uri.parse('https://www.instagram.com/reel/Cso5eUUvWC4/?igsh=share'),
+    );
+    expect(
+      source.canonicalUri.toString(),
+      'https://www.instagram.com/reel/Cso5eUUvWC4/',
+    );
+    expect(source.externalId, 'Cso5eUUvWC4');
+    expect(source.capabilities.canPlayInline, isTrue);
+    expect(source.capabilities.canChangeSpeed, isFalse);
+    expect(source.capabilities.canLoop, isFalse);
+  });
+
+  test('resolved Douyin links keep the original share URL and reference capability', () async {
+    final shortLink = Uri.parse('https://v.douyin.com/sample/');
+    final service = SourceResolver(
+      AdapterRegistry(const [DouyinAdapter(), GenericWebAdapter()]),
+      SourceUrlNormalizer(),
+      redirectResolver: _FakeRedirectResolver(
+        Uri.parse('https://www.iesdouyin.com/share/video/7390123?from=share'),
+      ),
+    );
+    final source = await service.resolve(shortLink);
+    expect(source.originalUri, shortLink);
+    expect(
+      source.canonicalUri.toString(),
+      'https://www.douyin.com/video/7390123',
+    );
+    expect(source.externalId, '7390123');
+    expect(source.capabilities.canPlayInline, isFalse);
   });
 
   test('expands a Bilibili short share link before adapting it', () async {

@@ -150,6 +150,7 @@ class PracticeLibraryService {
       'YouTube 练习内容',
       'Bilibili 练习内容',
       '抖音练习内容',
+      'Instagram 练习内容',
       '小红书练习内容',
       '网页练习内容',
     }.contains(title);
