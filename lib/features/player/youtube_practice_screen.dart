@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -21,7 +22,9 @@ import '../segments/practice_segment_providers.dart';
 import '../segments/presentation/practice_segment_editor_sheet.dart';
 import '../segments/presentation/practice_segment_progress_slider.dart';
 import '../segments/presentation/practice_segment_timecode.dart';
+import 'widgets/online_practice_segments.dart';
 import 'widgets/open_original_source_button.dart';
+import 'widgets/precise_playback_speed_control.dart';
 
 class YouTubePracticeScreen extends ConsumerStatefulWidget {
   const YouTubePracticeScreen({
@@ -45,6 +48,7 @@ class YouTubePracticeScreen extends ConsumerStatefulWidget {
 
 class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
     with WidgetsBindingObserver {
+  static const _display = MethodChannel('com.guitarpal/playback_display');
   late final PracticePlaybackSessionRecorder _session;
   WebViewController? _web;
   YouTubePlaybackController? _player;
@@ -53,6 +57,8 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
   bool _persistedDuration = false;
   bool _foreground = true;
   int _loadRevision = 0;
+  int _displayRevision = 0;
+  bool _fullscreen = false;
 
   Uri get _origin => Uri.https(
     defaultTargetPlatform == TargetPlatform.iOS
@@ -202,45 +208,51 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
     }
   }
 
-  Future<void> _saveLoop() async {
-    final player = _player!;
-    final range = player.loop.range;
-    if (range == null) return;
-    await player.pause();
-    if (!mounted) return;
-    final draft = await showPracticeSegmentEditorSheet(
-      context: context,
-      mode: PracticeSegmentEditorMode.create,
-      initialValue: PracticeSegmentEditorResult(
-        title:
-            '片段 ${formatPracticeTimecode(range.start)}–${formatPracticeTimecode(range.end)}',
-        start: range.start,
-        end: range.end,
-        preferredSpeed: player.speed,
-      ),
-    );
-    if (!mounted || draft == null) return;
+  Future<void> _toggleFullscreen() async {
+    setState(() => _fullscreen = !_fullscreen);
+    await _syncDisplay(_fullscreen);
+  }
+
+  Future<void> _syncDisplay(bool fullscreen) async {
+    final revision = ++_displayRevision;
     try {
-      final saved = await ref
-          .read(practiceSegmentServiceProvider)
-          .create(
-            sourceId: widget.source.id,
-            title: draft.title,
-            start: draft.start,
-            end: draft.end,
-            note: draft.note,
-            preferredSpeed: draft.preferredSpeed,
-            sourceDuration: player.duration,
-          );
-      if (!mounted) return;
-      _message('片段已保存');
-      await _activate(saved);
-    } on FormatException catch (error) {
-      if (mounted) _message(error.message);
+      await SystemChrome.setPreferredOrientations(
+        fullscreen
+            ? const [
+                DeviceOrientation.landscapeLeft,
+                DeviceOrientation.landscapeRight,
+              ]
+            : const [],
+      );
+      if (_displayRevision != revision) return;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await _display.invokeMethod<void>('setFullscreen', fullscreen);
+      } else {
+        await SystemChrome.setEnabledSystemUIMode(
+          fullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+        );
+      }
     } on Object {
-      if (mounted) _message('暂时无法保存片段');
+      // The layout still expands on devices that manage orientation themselves.
     }
   }
+
+  Future<void> _showSpeed(YouTubePlaybackController player) =>
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ListenableBuilder(
+              listenable: player,
+              builder: (_, _) => _speed(player),
+            ),
+          ),
+        ),
+      );
 
   void _message(String message) {
     ScaffoldMessenger.of(context)
@@ -275,6 +287,7 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _loadTimeout?.cancel();
+    if (_fullscreen) unawaited(_syncDisplay(false));
     _player?.dispose();
     unawaited(_saveSession(finish: true));
     super.dispose();
@@ -286,46 +299,200 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
     final segments =
         ref.watch(practiceSegmentsProvider(widget.source.id)).asData?.value ??
         const [];
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.source.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      body: SafeArea(
-        child: player == null
-            ? Center(child: OpenOriginalSourceButton(source: widget.source))
-            : LayoutBuilder(
-                builder: (context, constraints) => ListView(
-                  children: [
-                    SizedBox(
-                      height: math.max(200, constraints.maxWidth * 9 / 16),
-                      child: WebViewWidget(controller: _web!),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      child: ListenableBuilder(
-                        listenable: player,
-                        builder: (_, _) => _controls(player, segments),
-                      ),
-                    ),
-                  ],
+    return PopScope(
+      canPop: !_fullscreen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _fullscreen) unawaited(_toggleFullscreen());
+      },
+      child: Scaffold(
+        backgroundColor: _fullscreen ? Colors.black : null,
+        appBar: _fullscreen
+            ? null
+            : AppBar(
+                title: Text(
+                  widget.source.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+                actions: [
+                  if (player != null)
+                    IconButton(
+                      key: const Key('youtube_app_fullscreen'),
+                      onPressed: _toggleFullscreen,
+                      tooltip: '全屏练习',
+                      icon: const Icon(Icons.fullscreen_rounded),
+                    ),
+                ],
               ),
+        body: SafeArea(
+          child: player == null
+              ? Center(child: OpenOriginalSourceButton(source: widget.source))
+              : LayoutBuilder(
+                  builder: (_, constraints) {
+                    final normalHeight = (constraints.maxWidth * 9 / 16).clamp(
+                      200.0,
+                      420.0,
+                    );
+                    final footerHeight = (constraints.maxHeight - 200).clamp(
+                      48.0,
+                      104.0,
+                    );
+                    final playerHeight = _fullscreen
+                        ? math.max(0.0, constraints.maxHeight - footerHeight)
+                        : math.min(normalHeight, constraints.maxHeight);
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: playerHeight,
+                          child: WebViewWidget(
+                            key: const Key('youtube_web_surface'),
+                            controller: _web!,
+                          ),
+                        ),
+                        Positioned(
+                          top: playerHeight,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: ListenableBuilder(
+                            listenable: player,
+                            builder: (_, _) => _fullscreen
+                                ? _fullscreenControls(player, segments)
+                                : ListView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      8,
+                                      16,
+                                      24,
+                                    ),
+                                    children: [_controls(player, segments)],
+                                  ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+        ),
       ),
     );
   }
+
+  Widget _fullscreenControls(
+    YouTubePlaybackController player,
+    List<PracticeSegment> segments,
+  ) {
+    return Theme(
+      data: ThemeData.dark(),
+      child: Material(
+        color: const Color(0xff171717),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _playPause(player),
+                  Expanded(
+                    child: Text(
+                      _timeLine(player),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: player.loop.enabled ? '暂停 A-B 循环' : '开启 A-B 循环',
+                    isSelected: player.loop.enabled,
+                    icon: const Icon(Icons.repeat_rounded),
+                    selectedIcon: const Icon(Icons.repeat_on_rounded),
+                    onPressed: player.canSeek && player.loop.range != null
+                        ? () => player.toggleLoop(!player.loop.enabled)
+                        : null,
+                  ),
+                  TextButton(
+                    onPressed: player.ready ? () => _showSpeed(player) : null,
+                    child: Text('${player.speed.toStringAsFixed(2)}x'),
+                  ),
+                  IconButton(
+                    key: const Key('youtube_exit_fullscreen'),
+                    onPressed: _toggleFullscreen,
+                    tooltip: '退出全屏',
+                    icon: const Icon(Icons.fullscreen_exit_rounded),
+                  ),
+                ],
+              ),
+              _progress(player, segments, fullscreen: true),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _timeLine(YouTubePlaybackController player) =>
+      '${formatPracticeTimecode(player.position)} / ${formatPracticeTimecode(player.duration)}';
+
+  Widget _playPause(YouTubePlaybackController player) => IconButton(
+    onPressed: player.ready ? player.playPause : null,
+    tooltip: player.isPlaying ? '暂停' : '播放',
+    icon: Icon(
+      player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+    ),
+  );
+
+  Widget _progress(
+    YouTubePlaybackController player,
+    List<PracticeSegment> segments, {
+    bool fullscreen = false,
+  }) => PracticeSegmentProgressSlider(
+    duration: player.duration,
+    position: player.position,
+    segments: segments,
+    enabled: player.canSeek,
+    onChanged: (_) {},
+    onChangeEnd: (value) =>
+        unawaited(player.seek(Duration(milliseconds: value.round()))),
+    onSegmentTap: _activate,
+    sliderKey: Key(
+      fullscreen
+          ? 'youtube_fullscreen_position_slider'
+          : 'youtube_position_slider',
+    ),
+    semanticLabel: fullscreen ? '全屏播放进度' : '播放进度',
+  );
+
+  Widget _speed(YouTubePlaybackController player) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      PrecisePlaybackSpeedControl(
+        key: const Key('youtube_playback_speed'),
+        value: player.speed,
+        enabled: player.ready,
+        availableRates: player.rates,
+        onChanged: (_) {},
+        onChangeEnd: (value) => unawaited(player.setSpeed(value)),
+      ),
+      Text(
+        player.rates.length > 1 ? '按此视频提供的倍速档位调节' : '此视频当前只提供一个倍速档位',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    ],
+  );
 
   Widget _controls(
     YouTubePlaybackController player,
     List<PracticeSegment> segments,
   ) {
-    String time(Duration? value) =>
-        formatPracticeTimecode(value ?? Duration.zero);
-    String marker(Duration? value) => value == null ? '未设置' : time(value);
+    String marker(Duration? value) =>
+        value == null ? '未设置' : formatPracticeTimecode(value);
     final loop = player.loop;
+    final range = loop.range;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -340,50 +507,15 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
         else ...[
           Row(
             children: [
-              IconButton(
-                onPressed: player.playPause,
-                tooltip: player.isPlaying ? '暂停' : '播放',
-                icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
-              ),
-              Expanded(
-                child: Text(
-                  '${time(player.position)} / ${time(player.duration)}',
-                ),
-              ),
-              DropdownButton<double>(
-                key: const Key('youtube_playback_speed'),
-                value: player.rates.contains(player.speed)
-                    ? player.speed
-                    : null,
-                hint: Text('${player.speed}×'),
-                onChanged: player.rates.length < 2
-                    ? null
-                    : (value) {
-                        if (value != null) unawaited(player.setSpeed(value));
-                      },
-                items: [
-                  for (final rate in player.rates)
-                    DropdownMenuItem(
-                      value: rate,
-                      child: Text(
-                        '${rate == rate.round() ? rate.toInt() : rate}×',
-                      ),
-                    ),
-                ],
-              ),
+              _playPause(player),
+              Expanded(child: Text(_timeLine(player))),
             ],
           ),
-          PracticeSegmentProgressSlider(
-            duration: player.duration,
-            position: player.position,
-            segments: segments,
-            enabled: player.canSeek,
-            onChanged: (value) {},
-            onChangeEnd: (value) =>
-                unawaited(player.seek(Duration(milliseconds: value.round()))),
-            onSegmentTap: _activate,
-            sliderKey: const Key('youtube_position_slider'),
-          ),
+          _progress(player, segments),
+          _speed(player),
+          const Divider(height: 24),
+          Text('A-B 循环', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 4,
@@ -395,31 +527,41 @@ class _YouTubePracticeState extends ConsumerState<YouTubePracticeScreen>
               OutlinedButton(
                 onPressed: player.canSeek && loop.start != null
                     ? () {
-                        if (!player.setB()) _message('请把 B 点设在 A 点之后');
+                        if (!player.setB()) _message('B 点必须晚于 A 点');
                       }
                     : null,
                 child: Text('B ${marker(loop.end)}'),
               ),
-              if (loop.range != null)
-                TextButton(onPressed: _saveLoop, child: const Text('保存片段')),
+              IconButton(
+                tooltip: '清除循环区间',
+                icon: const Icon(Icons.delete_outline_rounded),
+                onPressed: loop.start == null ? null : player.clearLoop,
+              ),
             ],
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('A-B 循环'),
+            title: const Text('循环播放区间'),
+            subtitle: Text('已完成 ${loop.completedLoops} 次'),
             value: loop.enabled,
-            onChanged: loop.range == null ? null : player.toggleLoop,
+            onChanged: range == null ? null : player.toggleLoop,
           ),
-          for (final segment in segments)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              enabled: player.canSeek,
-              title: Text(segment.title),
-              subtitle: Text('${time(segment.start)}–${time(segment.end)}'),
-              leading: const Icon(Icons.bookmark_outline),
-              onTap: () => _activate(segment),
-            ),
         ],
+        const Divider(height: 24),
+        OnlinePracticeSegments(
+          source: widget.source,
+          duration: player.duration,
+          initialValue: range == null
+              ? null
+              : PracticeSegmentEditorResult(
+                  title: '片段 ${marker(range.start)}–${marker(range.end)}',
+                  start: range.start,
+                  end: range.end,
+                  preferredSpeed: player.speed,
+                ),
+          onBeforeEdit: player.pause,
+          onActivate: player.canSeek ? _activate : null,
+        ),
         OpenOriginalSourceButton(source: widget.source),
       ],
     );

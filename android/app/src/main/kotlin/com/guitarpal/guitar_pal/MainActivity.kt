@@ -3,6 +3,9 @@ package com.guitarpal.guitar_pal
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -10,6 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var pendingSharedText: String? = null
     private var shareChannel: MethodChannel? = null
+    private var playbackDisplayChannel: MethodChannel? = null
     private var localVideoImportPlugin: LocalVideoImportPlugin? = null
     private var practiceReminderPlugin: PracticeReminderPlugin? = null
     private var appSettingsPlugin: AppSettingsPlugin? = null
@@ -30,6 +34,19 @@ class MainActivity : FlutterActivity() {
             LOCAL_VIDEO_PLAYER_VIEW_TYPE,
             LocalVideoPlayerFactory(flutterEngine.dartExecutor.binaryMessenger),
         )
+        playbackDisplayChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PLAYBACK_DISPLAY_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                if (call.method == "setFullscreen") {
+                    setPlaybackFullscreen(call.arguments == true)
+                    result.success(null)
+                } else {
+                    result.notImplemented()
+                }
+            }
+        }
         shareChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             SHARE_CHANNEL,
@@ -148,6 +165,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        playbackDisplayChannel?.setMethodCallHandler(null)
+        playbackDisplayChannel = null
         shareChannel?.setMethodCallHandler(null)
         shareChannel = null
         localVideoImportPlugin?.dispose()
@@ -169,6 +188,18 @@ class MainActivity : FlutterActivity() {
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
+    private fun setPlaybackFullscreen(fullscreen: Boolean) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        val bars = WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars()
+        if (fullscreen) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(bars)
+        } else {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            controller.show(bars)
+        }
+    }
+
     private fun extractSharedText(intent: Intent?): String? {
         if (intent?.action != Intent.ACTION_SEND || intent.type != "text/plain") {
             return null
@@ -180,6 +211,7 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        private const val PLAYBACK_DISPLAY_CHANNEL = "com.guitarpal/playback_display"
         private const val SHARE_CHANNEL = "com.guitarpal/share"
         private const val LOCAL_VIDEO_PLAYER_VIEW_TYPE = "com.guitarpal/local_video_player"
     }

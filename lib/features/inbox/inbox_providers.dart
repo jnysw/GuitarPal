@@ -20,7 +20,6 @@ final sourceAdapterRegistryProvider = Provider<AdapterRegistry>((ref) {
   return AdapterRegistry(const [
     YouTubeAdapter(),
     BilibiliAdapter(),
-    DouyinAdapter(),
     InstagramAdapter(),
     XiaohongshuAdapter(),
     GenericWebAdapter(),

@@ -9,6 +9,8 @@ import 'package:guitar_pal/core/database/database_providers.dart';
 import 'package:guitar_pal/domain/practice_source/practice_source.dart' as domain;
 import 'package:guitar_pal/features/library/data/drift_practice_source_repository.dart';
 import 'package:guitar_pal/features/player/practice_player_screen.dart';
+import 'package:guitar_pal/features/player/widgets/precise_playback_speed_control.dart';
+import 'package:guitar_pal/features/segments/presentation/practice_segment_editor_sheet.dart';
 import 'package:guitar_pal/features/segments/presentation/practice_segment_progress_slider.dart';
 
 void main() {
@@ -68,21 +70,16 @@ void main() {
         await _wait(tester, () => pause.hitTestable().evaluate().isNotEmpty);
         await tester.tap(pause);
         await _wait(tester, () => play.hitTestable().evaluate().isNotEmpty);
-        final speedControl = find.byKey(const Key('youtube_playback_speed'));
-        await _wait(
-          tester,
-          () =>
-              speedControl.evaluate().isNotEmpty &&
-              tester.widget<DropdownButton<double>>(speedControl).onChanged !=
-                  null,
-        );
-        tester.widget<DropdownButton<double>>(speedControl).onChanged!(.75);
-        await _wait(
-          tester,
-          () =>
-              speedControl.evaluate().isNotEmpty &&
-              tester.widget<DropdownButton<double>>(speedControl).value == .75,
-        );
+        final slow = find.byKey(PrecisePlaybackSpeedControlKeys.preset(.75));
+        Future<void> tapWhenVisible(Finder target) async {
+          await _wait(tester, () => target.evaluate().isNotEmpty);
+          await tester.ensureVisible(target);
+          await _wait(tester, () => target.hitTestable().evaluate().isNotEmpty);
+          await tester.tap(target);
+        }
+
+        await tapWhenVisible(slow);
+        await _wait(tester, () => tester.widget<ChoiceChip>(slow).selected);
 
         final progress = find.byType(PracticeSegmentProgressSlider);
         PracticeSegmentProgressSlider slider() =>
@@ -98,17 +95,47 @@ void main() {
 
         await seekTo(5000);
         final a = find.widgetWithText(OutlinedButton, 'A 未设置');
-        await tester.ensureVisible(a);
-        await tester.tap(a);
+        await tapWhenVisible(a);
         await seekTo(10000);
         final b = find.widgetWithText(OutlinedButton, 'B 未设置');
-        await tester.ensureVisible(b);
-        await tester.tap(b);
-        final loop = find.widgetWithText(SwitchListTile, 'A-B 循环');
+        await tapWhenVisible(b);
+        final loop = find.widgetWithText(SwitchListTile, '循环播放区间');
         await _wait(tester, () => tester.widget<SwitchListTile>(loop).value);
-        await tester.ensureVisible(play);
-        await tester.tap(play);
+        await tapWhenVisible(play);
         await _wait(tester, () => slider().position.inMilliseconds < 8000);
+
+        final saveSegment = find.byKey(const Key('online_create_segment'));
+        await tapWhenVisible(saveSegment);
+        final save = find.byKey(PracticeSegmentEditorKeys.save);
+        await tapWhenVisible(save);
+        await _wait(tester, () => find.text('片段已保存').evaluate().isNotEmpty);
+        expect(
+          (await database.select(database.practiceSegments).get()).length,
+          1,
+        );
+
+        final surface = find.byKey(const Key('youtube_web_surface'));
+        final element = tester.element(surface);
+        await tester.tap(find.byKey(const Key('youtube_app_fullscreen')));
+        final exit = find.byKey(const Key('youtube_exit_fullscreen'));
+        final fullSlider = find.byKey(
+          const Key('youtube_fullscreen_position_slider'),
+        );
+        await _wait(tester, () => exit.hitTestable().evaluate().isNotEmpty);
+        expect(tester.element(surface), same(element));
+        expect(tester.widget<Slider>(fullSlider).onChanged, isNotNull);
+        expect(find.byTooltip('暂停 A-B 循环'), findsOneWidget);
+        final fullSpeed = find.widgetWithText(TextButton, '0.75x');
+        await tapWhenVisible(fullSpeed);
+        await _wait(tester, () => slow.hitTestable().evaluate().isNotEmpty);
+        expect(tester.widget<ChoiceChip>(slow).selected, isTrue);
+        Navigator.of(tester.element(slow)).pop();
+        await _wait(tester, () => slow.evaluate().isEmpty);
+        await seekTo(6500);
+        await tapWhenVisible(exit);
+        await _wait(tester, () => slow.evaluate().isNotEmpty);
+        expect(tester.element(surface), same(element));
+        expect(tester.widget<ChoiceChip>(slow).selected, isTrue);
       } finally {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump(const Duration(milliseconds: 400));

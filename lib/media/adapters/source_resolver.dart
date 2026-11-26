@@ -19,6 +19,13 @@ class SourceResolver {
 
   Future<ResolvedSource> resolve(Uri originalUri) async {
     final original = _normalizer.normalize(originalUri);
+    final host = original.canonicalUri.host;
+    if (host == 'douyin.com' ||
+        host.endsWith('.douyin.com') ||
+        host == 'iesdouyin.com' ||
+        host.endsWith('.iesdouyin.com')) {
+      throw const FormatException('已停止导入抖音链接。可以导入本地视频，或使用其他支持的链接。');
+    }
     var playableUri = original.canonicalUri;
     final redirectExpander = redirectResolver;
     if (redirectExpander != null) {

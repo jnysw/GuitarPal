@@ -16,7 +16,7 @@ abstract final class PrecisePlaybackSpeedControlKeys {
   static const confirm = Key('precise_playback_speed_confirm');
 
   static Key preset(double value) {
-    final hundredths = (normalizePlaybackSpeed(value) * 100).round();
+    final hundredths = (value * 100).round();
     return ValueKey('precise_playback_speed_preset_$hundredths');
   }
 }
@@ -35,6 +35,7 @@ class PrecisePlaybackSpeedControl extends StatefulWidget {
     required this.onChanged,
     this.onChangeEnd,
     this.presets = const [0.50, 0.75, 1.00, 1.25, 1.50, 2.00],
+    this.availableRates,
     this.sliderKey,
     this.label = '练习倍速',
     super.key,
@@ -51,6 +52,9 @@ class PrecisePlaybackSpeedControl extends StatefulWidget {
   /// Values are normalized to the same 0.01 step as the slider.
   final List<double> presets;
 
+  /// Sorted discrete settings returned by an online player.
+  final List<double>? availableRates;
+
   /// Overrides the default stable slider key when multiple controls coexist.
   final Key? sliderKey;
 
@@ -61,21 +65,32 @@ class PrecisePlaybackSpeedControl extends StatefulWidget {
 
 class _PrecisePlaybackSpeedControlState
     extends State<PrecisePlaybackSpeedControl> {
-  late double _draftValue = normalizePlaybackSpeed(widget.value);
+  late double _draftValue = _normalize(widget.value);
   bool _isDragging = false;
+
+  List<double>? get _rates =>
+      widget.availableRates?.isNotEmpty == true ? widget.availableRates : null;
+
+  double _normalize(double value) {
+    final rates = _rates;
+    return rates == null
+        ? normalizePlaybackSpeed(value)
+        : nearestPlaybackRate(value, rates);
+  }
+
+  String _format(double value) => '${value.toStringAsFixed(2)}x';
 
   @override
   void didUpdateWidget(covariant PrecisePlaybackSpeedControl oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final oldValue = normalizePlaybackSpeed(oldWidget.value);
-    final newValue = normalizePlaybackSpeed(widget.value);
-    if (!_isDragging && oldValue != newValue) {
+    final newValue = _normalize(widget.value);
+    if (!_isDragging && (oldWidget.value != widget.value || _rates != null)) {
       _draftValue = newValue;
     }
   }
 
   void _preview(double value) {
-    final normalized = normalizePlaybackSpeed(value);
+    final normalized = _normalize(value);
     if (_draftValue != normalized) {
       setState(() => _draftValue = normalized);
     }
@@ -83,19 +98,20 @@ class _PrecisePlaybackSpeedControlState
   }
 
   void _commit(double value) {
-    final normalized = normalizePlaybackSpeed(value);
-    if (_draftValue != normalized) {
-      setState(() => _draftValue = normalized);
+    final normalized = _normalize(value);
+    final displayed = _rates == null ? normalized : _normalize(widget.value);
+    if (_draftValue != displayed) {
+      setState(() => _draftValue = displayed);
     }
     widget.onChanged(normalized);
     widget.onChangeEnd?.call(normalized);
   }
 
   void _finishDrag(double value) {
-    final normalized = normalizePlaybackSpeed(value);
+    final normalized = _normalize(value);
     setState(() {
       _isDragging = false;
-      _draftValue = normalized;
+      _draftValue = _rates == null ? normalized : _normalize(widget.value);
     });
     widget.onChangeEnd?.call(normalized);
   }
@@ -103,7 +119,8 @@ class _PrecisePlaybackSpeedControlState
   Future<void> _showExactValueDialog() async {
     final result = await showDialog<double>(
       context: context,
-      builder: (context) => _ExactPlaybackSpeedDialog(value: _draftValue),
+      builder: (context) =>
+          _ExactPlaybackSpeedDialog(value: _draftValue, rates: _rates),
     );
     if (!mounted || result == null) return;
     _commit(result);
@@ -122,9 +139,23 @@ class _PrecisePlaybackSpeedControlState
 
   @override
   Widget build(BuildContext context) {
-    final canDecrease = widget.enabled && _draftValue > minPlaybackSpeed;
-    final canIncrease = widget.enabled && _draftValue < maxPlaybackSpeed;
-    final presets = _normalizedPresets;
+    final rates = _rates;
+    final enabled = widget.enabled && (rates == null || rates.length > 1);
+    final rateIndex = rates?.indexOf(_normalize(_draftValue)) ?? 0;
+    final canDecrease =
+        enabled &&
+        (rates == null ? _draftValue > minPlaybackSpeed : rateIndex > 0);
+    final canIncrease =
+        enabled &&
+        (rates == null
+            ? _draftValue < maxPlaybackSpeed
+            : rateIndex < rates.length - 1);
+    final presets = rates ?? _normalizedPresets;
+    final sliderMax = rates == null
+        ? maxPlaybackSpeed
+        : (rates.length - 1).clamp(1, rates.length).toDouble();
+    double fromSlider(double value) =>
+        rates == null ? value : rates[value.round().clamp(0, rates.length - 1)];
 
     return Semantics(
       key: PrecisePlaybackSpeedControlKeys.control,
@@ -140,13 +171,14 @@ class _PrecisePlaybackSpeedControlState
               Expanded(child: Text(widget.label)),
               Semantics(
                 button: true,
-                enabled: widget.enabled,
-                label: '当前倍速 ${formatPlaybackSpeed(_draftValue)}，输入精确值',
+                enabled: enabled,
+                label:
+                    '当前倍速 ${_format(_draftValue)}，${rates == null ? '输入精确值' : '输入目标倍速'}',
                 excludeSemantics: true,
                 child: TextButton(
                   key: PrecisePlaybackSpeedControlKeys.exactValue,
-                  onPressed: widget.enabled ? _showExactValueDialog : null,
-                  child: Text(formatPlaybackSpeed(_draftValue)),
+                  onPressed: enabled ? _showExactValueDialog : null,
+                  child: Text(_format(_draftValue)),
                 ),
               ),
             ],
@@ -155,9 +187,13 @@ class _PrecisePlaybackSpeedControlState
             children: [
               IconButton(
                 key: PrecisePlaybackSpeedControlKeys.decrement,
-                tooltip: '降低倍速 0.01',
+                tooltip: rates == null ? '降低倍速 0.01' : '上一档倍速',
                 onPressed: canDecrease
-                    ? () => _commit(_draftValue - playbackSpeedStep)
+                    ? () => _commit(
+                        rates == null
+                            ? _draftValue - playbackSpeedStep
+                            : rates[rateIndex - 1],
+                      )
                     : null,
                 icon: const Icon(Icons.remove),
               ),
@@ -166,25 +202,35 @@ class _PrecisePlaybackSpeedControlState
                   key:
                       widget.sliderKey ??
                       PrecisePlaybackSpeedControlKeys.slider,
-                  value: _draftValue,
-                  min: minPlaybackSpeed,
-                  max: maxPlaybackSpeed,
-                  divisions: playbackSpeedDivisions,
-                  label: formatPlaybackSpeed(_draftValue),
+                  value: rates == null ? _draftValue : rateIndex.toDouble(),
+                  min: rates == null ? minPlaybackSpeed : 0,
+                  max: sliderMax,
+                  divisions: rates == null
+                      ? playbackSpeedDivisions
+                      : sliderMax.toInt(),
+                  label: _format(_draftValue),
                   semanticFormatterCallback: (value) =>
-                      '${normalizePlaybackSpeed(value).toStringAsFixed(2)} 倍速',
-                  onChangeStart: widget.enabled
+                      '${_normalize(fromSlider(value)).toStringAsFixed(2)} 倍速',
+                  onChangeStart: enabled
                       ? (_) => setState(() => _isDragging = true)
                       : null,
-                  onChanged: widget.enabled ? _preview : null,
-                  onChangeEnd: widget.enabled ? _finishDrag : null,
+                  onChanged: enabled
+                      ? (value) => _preview(fromSlider(value))
+                      : null,
+                  onChangeEnd: enabled
+                      ? (value) => _finishDrag(fromSlider(value))
+                      : null,
                 ),
               ),
               IconButton(
                 key: PrecisePlaybackSpeedControlKeys.increment,
-                tooltip: '提高倍速 0.01',
+                tooltip: rates == null ? '提高倍速 0.01' : '下一档倍速',
                 onPressed: canIncrease
-                    ? () => _commit(_draftValue + playbackSpeedStep)
+                    ? () => _commit(
+                        rates == null
+                            ? _draftValue + playbackSpeedStep
+                            : rates[rateIndex + 1],
+                      )
                     : null,
                 icon: const Icon(Icons.add),
               ),
@@ -199,9 +245,9 @@ class _PrecisePlaybackSpeedControlState
                 for (final preset in presets)
                   ChoiceChip(
                     key: PrecisePlaybackSpeedControlKeys.preset(preset),
-                    label: Text(formatPlaybackSpeed(preset)),
+                    label: Text(_format(preset)),
                     selected: preset == _draftValue,
-                    onSelected: widget.enabled ? (_) => _commit(preset) : null,
+                    onSelected: enabled ? (_) => _commit(preset) : null,
                   ),
               ],
             ),
@@ -213,9 +259,10 @@ class _PrecisePlaybackSpeedControlState
 }
 
 class _ExactPlaybackSpeedDialog extends StatefulWidget {
-  const _ExactPlaybackSpeedDialog({required this.value});
+  const _ExactPlaybackSpeedDialog({required this.value, this.rates});
 
   final double value;
+  final List<double>? rates;
 
   @override
   State<_ExactPlaybackSpeedDialog> createState() =>
@@ -225,7 +272,7 @@ class _ExactPlaybackSpeedDialog extends StatefulWidget {
 class _ExactPlaybackSpeedDialogState extends State<_ExactPlaybackSpeedDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _controller = TextEditingController(
-    text: normalizePlaybackSpeed(widget.value).toStringAsFixed(2),
+    text: widget.value.toStringAsFixed(2),
   );
 
   @override
@@ -243,8 +290,10 @@ class _ExactPlaybackSpeedDialogState extends State<_ExactPlaybackSpeedDialog> {
 
     final parsed = double.tryParse(value);
     if (parsed == null || !parsed.isFinite) return '请输入有效数字';
-    if (parsed < minPlaybackSpeed || parsed > maxPlaybackSpeed) {
-      return '请输入 0.50 到 2.00 之间的数字';
+    final minimum = widget.rates?.first ?? minPlaybackSpeed;
+    final maximum = widget.rates?.last ?? maxPlaybackSpeed;
+    if (parsed < minimum || parsed > maximum) {
+      return '请输入 ${minimum.toStringAsFixed(2)} 到 ${maximum.toStringAsFixed(2)} 之间的数字';
     }
     return null;
   }
@@ -252,14 +301,14 @@ class _ExactPlaybackSpeedDialogState extends State<_ExactPlaybackSpeedDialog> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     final value = double.parse(_controller.text.trim());
-    Navigator.of(context).pop(normalizePlaybackSpeed(value));
+    Navigator.of(context).pop(value);
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       key: PrecisePlaybackSpeedControlKeys.dialog,
-      title: const Text('输入精确倍速'),
+      title: Text(widget.rates == null ? '输入精确倍速' : '输入目标倍速'),
       content: Form(
         key: _formKey,
         child: TextFormField(
@@ -270,10 +319,11 @@ class _ExactPlaybackSpeedDialogState extends State<_ExactPlaybackSpeedDialog> {
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
           ],
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '倍速',
             hintText: '例如 1.37',
             suffixText: 'x',
+            helperText: widget.rates == null ? null : '会选择最接近的可用档位',
           ),
           textInputAction: TextInputAction.done,
           onFieldSubmitted: (_) => _submit(),

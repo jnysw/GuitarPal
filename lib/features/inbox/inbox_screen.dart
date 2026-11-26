@@ -74,7 +74,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       body: SafeArea(
         child: resolved.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => const _ResolveErrorView(),
+          error: (error, _) => _ResolveErrorView(
+            message: error is FormatException
+                ? error.message
+                : '暂时无法识别该来源，你可以稍后重试。',
+          ),
           data: (source) => _ConfirmationView(
             source: source,
             isSaving: _isSaving,
@@ -235,7 +239,9 @@ class _ConfirmationView extends StatelessWidget {
                                 source.externalId == null
                             ? null
                             : onStart,
-                        child: Text(source.capabilities.canLoop ? '保存并开始' : '保存并预览'),
+                        child: Text(
+                          source.capabilities.canLoop ? '保存并开始' : '保存并预览',
+                        ),
                       ),
                     ),
                   ],
@@ -282,14 +288,16 @@ class _CapabilityRow extends StatelessWidget {
 }
 
 class _ResolveErrorView extends StatelessWidget {
-  const _ResolveErrorView();
+  const _ResolveErrorView({required this.message});
+
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Text('暂时无法识别该来源，你可以稍后重试。'),
+        padding: const EdgeInsets.all(24),
+        child: Text(message, textAlign: TextAlign.center),
       ),
     );
   }

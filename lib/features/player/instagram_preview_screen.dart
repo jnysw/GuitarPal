@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../../domain/practice_source/practice_source.dart';
 import '../../media/adapters/online_video_links.dart';
+import 'widgets/online_practice_segments.dart';
 import 'widgets/open_original_source_button.dart';
 
 class InstagramPreviewScreen extends StatefulWidget {
@@ -134,6 +136,33 @@ $html
 <script async src="https://www.instagram.com/embed.js"></script>
 </html>''';
 
+  Future<void> _showPracticeSegments() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (context) => FractionallySizedBox(
+      heightFactor: .8,
+      child: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          children: [
+            const Text('Instagram 预览只提供原帖控件。可手动保存 A/B 时间、推荐倍速和笔记。'),
+            const SizedBox(height: 12),
+            OnlinePracticeSegments(source: widget.source),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => this.context.go('/create'),
+              icon: const Icon(Icons.video_library_outlined),
+              label: const Text('导入本地视频练习'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   @override
   void dispose() {
     _client.close();
@@ -173,9 +202,21 @@ $html
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: OpenOriginalSourceButton(
-              source: widget.source,
-              label: '打开 Instagram',
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  key: const Key('instagram_practice_segments'),
+                  onPressed: _showPracticeSegments,
+                  icon: const Icon(Icons.bookmarks_outlined),
+                  label: const Text('练习片段'),
+                ),
+                OpenOriginalSourceButton(
+                  source: widget.source,
+                  label: '打开 Instagram',
+                ),
+              ],
             ),
           ),
         ],

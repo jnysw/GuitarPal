@@ -98,39 +98,6 @@ final class BilibiliAdapter extends ReferenceSourceAdapter {
   }
 }
 
-final class DouyinAdapter extends ReferenceSourceAdapter {
-  const DouyinAdapter();
-
-  @override
-  SourcePlatform get platform => SourcePlatform.douyin;
-
-  @override
-  String get defaultTitle => '抖音练习内容';
-
-  @override
-  bool canHandle(Uri uri) {
-    final host = _normalizedHost(uri);
-    return host == 'douyin.com' ||
-        host.endsWith('.douyin.com') ||
-        host == 'iesdouyin.com' ||
-        host.endsWith('.iesdouyin.com');
-  }
-
-  @override
-  String? extractExternalId(Uri uri) {
-    final id = _segmentAfter(uri, const {'video', 'note'});
-    return id != null && RegExp(r'^\d+$').hasMatch(id) ? id : null;
-  }
-
-  @override
-  Uri canonicalUri(Uri uri) {
-    final id = extractExternalId(uri);
-    if (id == null) return uri;
-    final kind = uri.pathSegments.contains('note') ? 'note' : 'video';
-    return Uri.https('www.douyin.com', '/$kind/$id');
-  }
-}
-
 final class InstagramAdapter extends ReferenceSourceAdapter {
   const InstagramAdapter();
 

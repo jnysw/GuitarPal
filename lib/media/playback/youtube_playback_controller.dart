@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'loop_controller.dart';
+import 'playback_speed.dart';
 
 class YouTubePlaybackController extends ChangeNotifier {
   YouTubePlaybackController(this._execute);
@@ -89,9 +90,7 @@ class YouTubePlaybackController extends ChangeNotifier {
   }
 
   Future<void> setSpeed(double preferred) {
-    final closest = rates.reduce(
-      (a, b) => (a - preferred).abs() <= (b - preferred).abs() ? a : b,
-    );
+    final closest = nearestPlaybackRate(preferred, rates);
     return closest == speed ? Future.value() : _command('speed($closest)');
   }
 
@@ -110,6 +109,11 @@ class YouTubePlaybackController extends ChangeNotifier {
 
   void toggleLoop(bool enabled) {
     if (!loop.setEnabled(enabled)) return;
+    notifyListeners();
+  }
+
+  void clearLoop() {
+    loop.clear();
     notifyListeners();
   }
 

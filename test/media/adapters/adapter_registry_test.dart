@@ -12,7 +12,6 @@ void main() {
     AdapterRegistry(const [
       YouTubeAdapter(),
       BilibiliAdapter(),
-      DouyinAdapter(),
       InstagramAdapter(),
       XiaohongshuAdapter(),
       GenericWebAdapter(),
@@ -26,10 +25,6 @@ void main() {
       Uri.parse('https://www.bilibili.com/video/BV1test123'): (
         SourcePlatform.bilibili,
         true,
-      ),
-      Uri.parse('https://www.douyin.com/video/7390123'): (
-        SourcePlatform.douyin,
-        false,
       ),
       Uri.parse('https://www.xiaohongshu.com/explore/66abc'): (
         SourcePlatform.xiaohongshu,
@@ -103,23 +98,17 @@ void main() {
     expect(source.capabilities.canLoop, isFalse);
   });
 
-  test('resolved Douyin links keep the original share URL and reference capability', () async {
-    final shortLink = Uri.parse('https://v.douyin.com/sample/');
-    final service = SourceResolver(
-      AdapterRegistry(const [DouyinAdapter(), GenericWebAdapter()]),
-      SourceUrlNormalizer(),
-      redirectResolver: _FakeRedirectResolver(
-        Uri.parse('https://www.iesdouyin.com/share/video/7390123?from=share'),
-      ),
-    );
-    final source = await service.resolve(shortLink);
-    expect(source.originalUri, shortLink);
-    expect(
-      source.canonicalUri.toString(),
+  test('rejects Douyin shares before the generic adapter', () async {
+    for (final url in [
+      'https://v.douyin.com/sample/',
       'https://www.douyin.com/video/7390123',
-    );
-    expect(source.externalId, '7390123');
-    expect(source.capabilities.canPlayInline, isFalse);
+      'https://www.iesdouyin.com/share/video/7390123',
+    ]) {
+      await expectLater(
+        resolver.resolve(Uri.parse(url)),
+        throwsFormatException,
+      );
+    }
   });
 
   test('expands a Bilibili short share link before adapting it', () async {

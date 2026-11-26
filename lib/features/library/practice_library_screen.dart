@@ -239,7 +239,7 @@ class _PracticeLibraryScreenState extends ConsumerState<PracticeLibraryScreen> {
                       : Icons.search_off_rounded,
                   title: !isNarrowed ? '练习库还是空的' : '没有找到匹配内容',
                   message: !isNarrowed
-                      ? '导入本地视频，或从 B站、抖音、小红书、YouTube、Instagram 分享内容到 GuitarPal。'
+                      ? '导入本地视频，或从 B站、小红书、YouTube、Instagram 分享内容到 GuitarPal。'
                       : '调整关键词或筛选条件后再试。',
                   action: !isNarrowed
                       ? FilledButton.icon(
@@ -401,7 +401,11 @@ class _LibrarySourceCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         '${_platformLabel(source.platform)} · '
-                        '${source.canPracticeInApp ? '可在 App 内练习' : source.instagramPreview != null ? '可在 App 内预览' : '原平台打开'}',
+                        '${source.canPracticeInApp
+                            ? '可在 App 内练习'
+                            : source.instagramPreview != null
+                            ? '可在 App 内预览'
+                            : '原平台打开'}',
                         style: Theme.of(context).textTheme.bodySmall
                             ?.copyWith(color: colors.onSurfaceVariant),
                       ),
@@ -632,7 +636,9 @@ class _LibraryFilterSheetState extends State<_LibraryFilterSheet> {
                   selected: _platform == null,
                   onSelected: (_) => setState(() => _platform = null),
                 ),
-                for (final platform in SourcePlatform.values)
+                for (final platform in SourcePlatform.values.where(
+                  (item) => item != SourcePlatform.douyin,
+                ))
                   ChoiceChip(
                     key: ValueKey('library_filter_platform_${platform.name}'),
                     label: Text(_platformLabel(platform)),

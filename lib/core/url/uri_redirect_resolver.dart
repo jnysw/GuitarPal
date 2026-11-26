@@ -66,15 +66,6 @@ final class PlatformShareRedirectResolver implements UriRedirectResolver {
       'www.bilibili.com',
       'm.bilibili.com',
     },
-    'v.douyin.com' => const {
-      'v.douyin.com',
-      'www.douyin.com',
-      'douyin.com',
-      'm.douyin.com',
-      'www.iesdouyin.com',
-      'm.iesdouyin.com',
-      'iesdouyin.com',
-    },
     'www.instagram.com' || 'instagram.com' || 'm.instagram.com'
         when uri.pathSegments.firstOrNull == 'share' =>
       const {'www.instagram.com', 'instagram.com', 'm.instagram.com'},
